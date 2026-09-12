@@ -1,0 +1,103 @@
+{
+  "format": "voisee-insert-design",
+  "version": 7,
+  "savedAt": "2026-01-01T00:00:00.000Z",
+  "design": {
+    "units": "in",
+    "snapEnabled": false,
+    "deckX": 76.2,
+    "deckY": 76.2,
+    "deckW": 457.2,
+    "deckH": 457.2,
+    "perimeterType": "folded",
+    "perimeterWall": 38.1,
+    "perimeterFlange": 12.7,
+    "perimeterRelief": 3.5,
+    "joistAxis": "vertical",
+    "joistFolds": 4,
+    "joistHeight": 12.7,
+    "joistDepth": 6.35,
+    "joistLockWidth": 25.4,
+    "joistSlotClearance": 0.4,
+    "perimeterSides": {
+      "top": true,
+      "right": true,
+      "bottom": true,
+      "left": true
+    },
+    "tabWidth": 5,
+    "tabCount": 2,
+    "material": 3,
+    "boardFinish": "kraft",
+    "grainDirection": "y",
+    "minimumWeb": 6,
+    "toolpathOrder": "optimized",
+    "foldCompensation": "none",
+    "foldRadiusFactor": 1,
+    "foldKFactor": 0.5,
+    "foldDeduction": 0,
+    "foldDirections": {},
+    "machineProfiles": [
+      {
+        "id": "default",
+        "name": "Drag knife",
+        "fabricationMode": "knife",
+        "safeZ": 3,
+        "cutDepth": 3.2,
+        "scoreDepth": 0.9,
+        "scoreTool": "knife",
+        "cutFeed": 800,
+        "scoreFeed": 1000,
+        "plungeFeed": 250,
+        "bladeOffset": 0.25,
+        "overcut": 1.5,
+        "cornerStep": 10,
+        "bitWidth": 6.35,
+        "spindleSpeed": 18000
+      }
+    ],
+    "sheets": [
+      {
+        "id": "deck",
+        "name": "Deck",
+        "machineProfileId": "default"
+      }
+    ],
+    "activeSheetId": "deck",
+    "selectedId": null,
+    "pockets": [
+      {
+        "purpose": "product",
+        "shape": "rectangle",
+        "cornerRadius": 6.35,
+        "profile": null,
+        "x": 135.6,
+        "y": 119,
+        "w": 254.7,
+        "h": 149.4,
+        "wallDepth": 25.4,
+        "flange": 10,
+        "relief": 3.5,
+        "pullDiameter": 38.1,
+        "pullDepth": 19,
+        "pulls": {
+          "top": false,
+          "right": false,
+          "bottom": false,
+          "left": false
+        },
+        "flangeEnabled": true,
+        "sides": {
+          "top": true,
+          "right": true,
+          "bottom": true,
+          "left": true
+        },
+        "id": "pocket-1",
+        "name": "Folded pocket 1"
+      }
+    ],
+    "selectedRiserId": null,
+    "risers": []
+  }
+}

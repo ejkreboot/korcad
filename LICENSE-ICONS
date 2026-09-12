@@ -1,0 +1,10 @@
+The icons in src/lib/components/icons/paths.ts are outlines from Google's
+Material Symbols (Rounded, 24px), vendored as SVG path data so the editor
+keeps working offline and makes no third-party requests.
+
+Material Symbols is licensed under the Apache License, Version 2.0:
+
+    https://github.com/google/material-design-icons
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unmodified glyph outlines; only the delivery format differs.
