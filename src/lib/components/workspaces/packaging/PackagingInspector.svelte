@@ -408,7 +408,7 @@
 					value={support.sheetId}
 					onchange={(e) => actions.resizeSupport(support.id, { sheetId: e.currentTarget.value })}
 				>
-					{#each design.sheets as sheet (sheet.id)}
+					{#each design.sheets.filter((candidate) => candidate.workspace === 'packaging') as sheet (sheet.id)}
 						<option value={sheet.id}>{sheet.name}</option>
 					{/each}
 				</select>

@@ -67,7 +67,8 @@ test('renames a profile without disturbing the sheets that use it', async ({ pag
 test('cuts a new sheet on the machine already in use', async ({ page }) => {
 	await gotoEditor(page);
 	await page.getByRole('tab', { name: 'Deck' }).waitFor();
-	await page.getByRole('button', { name: 'Add a parts sheet' }).click();
+	await page.getByRole('button', { name: 'Add a sheet' }).click();
+	await page.getByRole('menuitem', { name: /Folded Packaging sheet/ }).click();
 
 	await expect.poll(async () => (await draft(page)).sheets?.length).toBe(2);
 	const saved = await draft(page);

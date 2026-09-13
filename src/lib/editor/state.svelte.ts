@@ -1,5 +1,5 @@
 import type { DesignState, MachineSettings, Sheet, StockSettings } from '$lib/core/design/types.js';
-import type { Selection } from '$lib/core/design/workspace.js';
+import type { Selection, WorkspaceId } from '$lib/core/design/workspace.js';
 import { machineProfileFor, sheetView } from '$lib/core/design/machine.js';
 import { createDefaultDesign } from '$lib/features/document.js';
 import {
@@ -164,13 +164,15 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 			design = { ...design, activeSheetId: sheetId };
 		},
 
-		addSheet(name?: string) {
-			// A new sheet is cut on the machine the operator is already working on,
-			// and drawn in the same workspace.
-			const workspaceId = activeSheet(design).workspace;
+		/**
+		 * Adds a sheet and shows it. It is cut on the machine the operator is
+		 * already working on, and drawn in the given workspace, or the active
+		 * sheet's.
+		 */
+		addSheet(workspaceId: WorkspaceId = activeSheet(design).workspace, name?: string) {
 			const sheet: Sheet = {
 				id: newId(),
-				name: name ?? `Parts ${design.sheets.length}`,
+				name: name ?? workspaceById(workspaceId).newSheetName(design),
 				workspace: workspaceId,
 				machineProfileId: machine.id
 			};

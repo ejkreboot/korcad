@@ -327,7 +327,7 @@ export function validate(document: DesignState): string[] {
 		) {
 			errors.push(`${r.name}: stands taller than the space under the top deck`);
 		}
-		if (!design.sheets.some((sheet) => sheet.id === r.sheetId)) {
+		if (!design.sheets.some((sheet) => sheet.id === r.sheetId && sheet.workspace === 'packaging')) {
 			errors.push(`${r.name}: manufacturing sheet is missing`);
 		}
 

@@ -1,5 +1,7 @@
 import type { DesignState } from '$lib/core/design/types.js';
-import type { Selection } from '$lib/core/design/workspace.js';
+import type { DocumentHost } from '../workspaces.js';
+
+export type { DocumentHost };
 import { constrainSupportFlat, placeSupport } from './placement.js';
 import type { PackagingData, Pocket, Support } from './types.js';
 import { packagingSheetView, withPackaging, type PackagingView } from './view.js';
@@ -104,17 +106,6 @@ export function releaseSheet(design: DesignState, sheetId: string): DesignState 
 		supports: data.supports.filter((support) => support.sheetId !== sheetId)
 	}));
 }
-
-/** What packaging's actions need from the editor. `EditorState` satisfies it. */
-export type DocumentHost = {
-	readonly design: DesignState;
-	readonly selection: Selection | null;
-	/** Applies a change as one undo step. */
-	update(change: (design: DesignState) => DesignState): void;
-	/** Applies a change mid-gesture, without history. */
-	preview(change: (design: DesignState) => DesignState): void;
-	select(selection: Selection | null): void;
-};
 
 const selectedId = (host: DocumentHost, kind: PackagingSelectionKind): string | null =>
 	host.selection?.kind === kind ? host.selection.id : null;

@@ -257,7 +257,8 @@ test('adds a support, which lands on its own parts sheet', async ({ page }) => {
 
 test('adds, renames and removes a sheet', async ({ page }) => {
 	await gotoEditor(page);
-	await page.getByRole('button', { name: 'Add a parts sheet' }).click();
+	await page.getByRole('button', { name: 'Add a sheet' }).click();
+	await page.getByRole('menuitem', { name: /Folded Packaging sheet/ }).click();
 	const tab = page.getByRole('tab', { name: 'Parts 1' });
 	await expect(tab).toBeVisible();
 	await expect(tab).toHaveAttribute('aria-selected', 'true');

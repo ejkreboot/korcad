@@ -39,9 +39,11 @@ export function placeSupport(
 	const width = localBounds.right - localBounds.left;
 	const height = localBounds.top - localBounds.bottom;
 
+	// Only packaging sheets hold nets; another workspace's sheet is not free stock.
+	const packagingSheets = design.sheets.filter((sheet) => sheet.workspace === 'packaging');
 	const sheets = [
-		...design.sheets.filter((sheet) => sheet.id === design.activeSheetId),
-		...design.sheets.filter((sheet) => sheet.id !== design.activeSheetId)
+		...packagingSheets.filter((sheet) => sheet.id === design.activeSheetId),
+		...packagingSheets.filter((sheet) => sheet.id !== design.activeSheetId)
 	];
 
 	const fitsAt = (sheet: Sheet, left: number, bottom: number): boolean => {

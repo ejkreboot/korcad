@@ -63,6 +63,8 @@ src/
       constants.ts
       units.ts                   mm internally; display/parse for the UI
       geometry/primitives.ts
+      geometry/outline.ts        shape outlines, regular polygons, holding tabs (splitSide, splitClosedContour)
+      geometry/contour.ts        outline distance, containment, self-intersection
       design/
         types.ts                 DesignState, sheets, stock, paths, machine settings
         workspace.ts             WorkspaceDataMap, augmented by each feature
@@ -104,6 +106,16 @@ src/
       manipulation.ts            pointer deltas -> deck, opening, and support changes
       assembly.ts                buildAssembly: design -> assembly description
       validation.ts              manufacturability diagnostics
+    features/solid/              flat parts with holes and slots, built on core
+      types.ts                   SolidEntity, SolidData (per sheet); augments the map
+      view.ts                    SolidView, solidData, withSolidSheet
+      defaults.ts, normalize.ts  entity defaults; reads workspaces.solid
+      geometry.ts                entityOutline, solidGeometry: holes inside, parts outside
+      validation.ts              fits the sheet, minimum web, containment, self-intersection
+      actions.ts                 Solid's verbs, pure and bound to the editor
+      manipulation.ts            move and corner-resize of an entity box
+      presets.ts                 part and hole presets, with their icons
+      workspace.ts               SOLID_WORKSPACE: Solid's registry entry
 
     editor/                      transient editor state; may use browser APIs
       state.svelte.ts            the single owner of the design document
@@ -133,11 +145,15 @@ src/
           PackagingInspector.svelte       opening, support, and deck panels
           PackagingMaterialFields.svelte  fold allowance
           PackagingAssemblyViewer.svelte  3D viewer lifecycle and support drags
+        solid/
+          canvas.ts              press and draft; moving a part carries its holes
+          SolidCanvasLayer.svelte         hit targets, handles, part labels
+          SolidInspector.svelte           the selected part or hole, or the plate
 
   routes/+page.svelte            the editor shell
 
 tests/
-  unit/{core,features,packaging,editor}/
+  unit/{core,features,packaging,solid,editor}/
   fixtures/{designs,expected-gcode}/
 e2e/
   helpers.ts                     shared navigation that waits for hydration
@@ -147,6 +163,7 @@ e2e/
   simulation.e2e.ts              toolpath playback and tool changes
   machine-profiles.e2e.ts        profile editing and per-sheet machines
   document-format.e2e.ts         the saved shape, unreadable drafts, selection outside it
+  solid-workspace.e2e.ts         Solid tools, cut-only export, parts carrying holes
 ```
 
 Two layering rules matter more than the tree itself:
@@ -255,6 +272,15 @@ under `workspaces[id]`, present only when the document uses that workspace.
   stock, profiles, and sheets, then hands `workspaces[id]` to each registered
   reader. `normalizeState` and `parseDesign` live in `features/document.ts`,
   because only that layer knows every workspace; import them from there.
+- **Solid data is sheet-scoped.** `workspaces.solid.sheets[sheetId].entities`
+  holds one plate's parts (`kind: 'profile'`, cut `outside`, stage
+  `part-release`) and holes (`kind: 'hole'`, cut `inside`, stage `interior`).
+  Normalization gives every Solid sheet an entry and drops data for any other
+  sheet. On a drag knife a part's release cut is broken by holding tabs into
+  open runs chained with `solid-profile:<id>`; on a router it is one closed
+  contour with no tabs, because core compensation offsets closed outlines only.
+- **A workspace keeps to its own sheets.** Packaging's tray placement, support
+  sheet validation, and sheet picker only consider sheets tagged `packaging`.
 - **Packaging data is document-scoped.** One `PackagingData` spans every sheet
   tagged `packaging`: the deck sheet (named by `deckSheetId`, never assumed to be
   `'deck'`) carries pockets and tray openings, and each support is cut from the
@@ -516,6 +542,9 @@ Done:
     and canvas reach a workspace only through `features/workspaces.ts` and
     `components/workspaces/index.ts`; packaging's verbs are pure functions in
     `features/packaging/actions.ts`.
+15. The Solid workspace (slice 5): parts, holes, and slots on sheet-scoped plates, chosen when
+    adding a sheet; `splitSide` and the shape outlines promoted to `core/geometry/outline.ts`;
+    cut-only export and no fold legend or 3D on a workspace without those capabilities.
 
 Not yet ported from the reference implementation:
 
@@ -526,29 +555,19 @@ Not yet ported from the reference implementation:
 
 The goal is a general 2D CAD/CAM app for hobbyist CNC in which packaging stays a
 first-class workspace. Two orthogonal concepts: a **workspace** (vocabulary,
-entities, material behaviour — `packaging` today, `solid` next) chosen per
+entities, material behaviour — `packaging` and `solid`) chosen per
 sheet, and a **machine profile** (process and postprocessor) referenced per
 sheet. Stock size is fixed at 24 in for now.
 
 Next, in order. Each step leaves check, lint, unit, build, and e2e green, with
 goldens byte-identical.
 
-1. **Slice 5 — the Solid workspace.** Sheet-scoped data (each plate is
-   independent). Entities: outer profile (rectangle, rounded, ellipse,
-   polygon), hole, slot. Profiles cut `outside`, holes `inside` — the first real
-   use of `CamIntent.offsetSide`. Holding tabs on outer profiles, reusing
-   packaging's `splitSide` and `cutoutPoints` once promoted to shared code.
-   Validators: fits the sheet, respects `minimumWeb`, no self-intersection. No
-   fold UI, crease pass, or 3D toggle on a Solid sheet — absent, not disabled.
-   Register it in both registries: a `Workspace` entry and a `WorkspaceUi`
-   entry (inspector, canvas layer and controller; no `AssemblyViewer`).
-   Choosing the workspace when adding a sheet. Decide what an unknown workspace
-   tag does; normalization currently re-tags it as `packaging`.
-2. **Workspace switcher and profiles UI.** A Fusion-style switcher, and adding,
+1. **Workspace switcher and profiles UI.** A Fusion-style switcher, and adding,
    duplicating, and deleting machine profiles (only rename and edit exist).
-   E2E: switching workspace changes the tools; a Solid part with a hole exports
-   G-code; packaging sheets behave exactly as before.
-3. **Slice 6 — cleanup.** Move deck-shaped fields out of
+   E2E: switching workspace changes the tools; packaging sheets behave exactly
+   as before. (Adding a Solid sheet, its tools, and cut-only export are
+   already covered by `solid-workspace.e2e.ts`.)
+2. **Slice 6 — cleanup.** Move deck-shaped fields out of
    `core/assembly/model.ts` (then split the Three.js lifecycle out of
    `PackagingAssemblyViewer.svelte` into a generic viewer that builds through
    `workspace.assembly`) and `MIN_FLAT_PANEL` out of `core/constants.ts`;
@@ -558,6 +577,12 @@ goldens byte-identical.
 Deferred beyond this round: configurable stock size; laser and vinyl profiles
 and `engrave`/`mark`/`drill` operations; geometric canvas hit testing (dataset
 hit targets stay); a third workspace.
+
+Not yet scheduled: holding tabs on a routed part. Core CAM would have to
+compensate an interrupted contour — offset the closed outline, then lift over
+each tab — rather than offsetting open runs, which have no inside or outside,
+and whose direction routing may reverse. Until then Solid hides the tab field
+on a router and releases the part in one cut.
 
 Flagged for cleanup, not yet scheduled: packaging's role-string derivation of
 CAM intent (see Packaging Is A Feature Module → Legacy Hangover).

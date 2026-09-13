@@ -1,5 +1,6 @@
 import type { PackagingPath } from './paths.js';
 import { arcPoints, point, type Point } from '$lib/core/geometry/primitives.js';
+import { shapeOutline, splitSide } from '$lib/core/geometry/outline.js';
 import { clamp } from '$lib/core/units.js';
 import { flatPanel, bendDeduction, type FoldSettings } from './fold.js';
 import type { Side } from '$lib/core/design/types.js';
@@ -46,46 +47,7 @@ function flatPocket(pocket: Pocket, settings: FoldSettings): Pocket {
 
 // ---- shared edge helpers -------------------------------------------------
 
-export type Span = { readonly points: readonly [Point, Point]; readonly tab: boolean };
-
-/**
- * Splits an edge into alternating cut spans and holding tabs, with the tabs
- * spaced evenly along the edge. Holding tabs keep a released part attached to
- * the sheet until the operator removes it.
- */
-export function splitSide(a: Point, b: Point, tabCount: number, tabWidth: number): Span[] {
-	if (!tabCount || !tabWidth) return [{ points: [a, b], tab: false }];
-	const dx = b.x - a.x;
-	const dy = b.y - a.y;
-	const length = Math.hypot(dx, dy);
-	const ux = dx / length;
-	const uy = dy / length;
-	const tabs = Array.from(
-		{ length: tabCount },
-		(_, index) => (length * (index + 1)) / (tabCount + 1)
-	);
-	const spans: Span[] = [];
-	let cursor = 0;
-	tabs.forEach((center) => {
-		const t0 = clamp(center - tabWidth / 2, cursor, length);
-		const t1 = clamp(center + tabWidth / 2, t0, length);
-		if (t0 > cursor) {
-			spans.push({
-				points: [point(a.x + ux * cursor, a.y + uy * cursor), point(a.x + ux * t0, a.y + uy * t0)],
-				tab: false
-			});
-		}
-		spans.push({
-			points: [point(a.x + ux * t0, a.y + uy * t0), point(a.x + ux * t1, a.y + uy * t1)],
-			tab: true
-		});
-		cursor = t1;
-	});
-	if (cursor < length) {
-		spans.push({ points: [point(a.x + ux * cursor, a.y + uy * cursor), b], tab: false });
-	}
-	return spans;
-}
+export { splitSide, type Span } from '$lib/core/geometry/outline.js';
 
 /**
  * A narrow slot running from `outer` to `inner`, clipped to `bounds`. Corner
@@ -215,54 +177,12 @@ export function cutoutPoints(pocket: Pocket): Point[] {
 		// Imported profiles are wound consistently so compensation offsets inward.
 		return area >= 0 ? points : points.reverse();
 	}
-	if (pocket.shape === 'ellipse') {
-		const cx = pocket.x + pocket.w / 2;
-		const cy = pocket.y + pocket.h / 2;
-		return Array.from({ length: 49 }, (_, index) => {
-			const angle = (Math.PI * 2 * index) / 48;
-			return point(cx + Math.cos(angle) * pocket.w * 0.5, cy + Math.sin(angle) * pocket.h * 0.5);
-		});
-	}
-	if (pocket.shape === 'rounded') {
-		const radius = Math.min(
-			pocket.cornerRadius || Math.min(pocket.w, pocket.h) / 2,
-			pocket.w / 2,
-			pocket.h / 2
-		);
-		return [
-			...arcPoints(pocket.x + radius, pocket.y + radius, radius, Math.PI, Math.PI * 1.5, 8),
-			...arcPoints(
-				pocket.x + pocket.w - radius,
-				pocket.y + radius,
-				radius,
-				Math.PI * 1.5,
-				Math.PI * 2,
-				8
-			).slice(1),
-			...arcPoints(
-				pocket.x + pocket.w - radius,
-				pocket.y + pocket.h - radius,
-				radius,
-				0,
-				Math.PI / 2,
-				8
-			).slice(1),
-			...arcPoints(
-				pocket.x + radius,
-				pocket.y + pocket.h - radius,
-				radius,
-				Math.PI / 2,
-				Math.PI,
-				8
-			).slice(1)
-		];
-	}
-	return [
-		point(pocket.x, pocket.y),
-		point(pocket.x + pocket.w, pocket.y),
-		point(pocket.x + pocket.w, pocket.y + pocket.h),
-		point(pocket.x, pocket.y + pocket.h)
-	];
+	// Every other shape is a basic outline, shared with the other workspaces.
+	return shapeOutline(
+		pocket.shape === 'profile' ? 'rectangle' : pocket.shape,
+		pocket,
+		pocket.cornerRadius
+	);
 }
 
 const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];

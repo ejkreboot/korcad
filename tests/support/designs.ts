@@ -9,6 +9,7 @@ import {
 	type PackagingView
 } from '$lib/features/packaging/view.js';
 import type { DragView } from '$lib/features/packaging/manipulation.js';
+import { createSolidEntity } from '$lib/features/solid/defaults.js';
 
 /**
  * Any field of the document, written flat the way tests think about it:
@@ -277,4 +278,81 @@ export function view(design: DesignState, sheetId: string = design.activeSheetId
 /** What a canvas drag reads: the sheet view plus the snap toggle, off by default. */
 export function dragView(design: DesignState, snapEnabled = false): DragView {
 	return { ...view(design), snapEnabled };
+}
+
+/**
+ * A Solid plate beside the default packaging deck, active: a rounded part
+ * 200 x 120 mm with a round hole and a slot, and a hexagonal part beside it.
+ * Everything is clear of the sheet edge and of the minimum web.
+ */
+export function solidDesign(
+	fabricationMode: MachineSettings['fabricationMode'] = 'router'
+): DesignState {
+	const base = withMachine(createDefaultDesign(), { fabricationMode });
+	const plate: Sheet = {
+		id: 'plate',
+		name: 'Plate 1',
+		workspace: 'solid',
+		machineProfileId: DEFAULT_MACHINE_PROFILE_ID
+	};
+	return {
+		...base,
+		sheets: [...base.sheets, plate],
+		activeSheetId: 'plate',
+		workspaces: {
+			...base.workspaces,
+			solid: {
+				sheets: {
+					plate: {
+						entities: [
+							createSolidEntity({
+								id: 'bracket',
+								name: 'Bracket',
+								kind: 'profile',
+								shape: 'rounded',
+								x: 50,
+								y: 50,
+								w: 200,
+								h: 120,
+								cornerRadius: 10,
+								tabCount: 4
+							}),
+							createSolidEntity({
+								id: 'bore',
+								name: 'Bore',
+								kind: 'hole',
+								shape: 'ellipse',
+								x: 80,
+								y: 90,
+								w: 40,
+								h: 40
+							}),
+							createSolidEntity({
+								id: 'adjust',
+								name: 'Adjust slot',
+								kind: 'hole',
+								shape: 'slot',
+								x: 150,
+								y: 100,
+								w: 70,
+								h: 20
+							}),
+							createSolidEntity({
+								id: 'nut',
+								name: 'Nut plate',
+								kind: 'profile',
+								shape: 'polygon',
+								x: 300,
+								y: 50,
+								w: 100,
+								h: 100,
+								sides: 6,
+								tabCount: 3
+							})
+						]
+					}
+				}
+			}
+		}
+	};
 }

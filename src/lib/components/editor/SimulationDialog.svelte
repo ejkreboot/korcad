@@ -272,8 +272,10 @@
 
 	<p class="sim-legend">
 		<span class="key cut">Cut</span>
-		<span class="key score-down">Down fold</span>
-		<span class="key score-up">Up fold</span>
+		{#if editor.workspace.capabilities.folding}
+			<span class="key score-down">Down fold</span>
+			<span class="key score-up">Up fold</span>
+		{/if}
 		<span class="key travel">Raised travel</span>
 	</p>
 	<p class="sim-disclaimer">

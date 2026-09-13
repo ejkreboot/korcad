@@ -85,6 +85,13 @@
 		const options = editor.workspace.gcodeOptions(editor.design, editor.design.activeSheetId);
 		const program = (operation: 'crease' | 'cut') =>
 			generateGcode(paths, editor.view, operation, options);
+		if (!editor.workspace.capabilities.folding) {
+			// Nothing folds, so there is no crease pass: one program cuts the sheet.
+			download(`${baseName}.nc`, program('cut'), 'text/plain');
+			error = '';
+			notice = 'Cut program exported.';
+			return;
+		}
 		download(`${baseName}-01-crease.nc`, program('crease'), 'text/plain');
 		download(`${baseName}-02-cut.nc`, program('cut'), 'text/plain');
 		error = '';
