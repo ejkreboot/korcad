@@ -8,7 +8,7 @@ import {
 	packagingSheetView,
 	type PackagingView
 } from '$lib/features/packaging/view.js';
-import type { DragView } from '$lib/editor/manipulation.js';
+import type { DragView } from '$lib/features/packaging/manipulation.js';
 
 /**
  * Any field of the document, written flat the way tests think about it:

@@ -101,6 +101,7 @@ src/
       anchoring.ts               what a dropped support becomes anchored to
       placement.ts               finding room for a net on a sheet
       presets.ts                 cutout and support presets, with their icons
+      manipulation.ts            pointer deltas -> deck, opening, and support changes
       assembly.ts                buildAssembly: design -> assembly description
       validation.ts              manufacturability diagnostics
 
@@ -109,7 +110,6 @@ src/
       tools.svelte.ts            active tool, snap, viewport, view mode, deck opacity
       history.ts
       viewport.ts
-      manipulation.ts            pointer deltas -> design changes
       persistence.ts             local drafts and design-file import/export
 
     viewer/assembly-scene.ts     the only module that imports Three.js
@@ -118,14 +118,21 @@ src/
       icons/
         paths.ts                 vendored Material Symbols path data
         Icon.svelte              inline SVG glyph
-      editor/
-        Canvas.svelte            2D SVG editor
-        AssemblyViewer.svelte    3D viewer lifecycle and gestures
+      editor/                    the shell: no workspace imports (workspace-boundary.spec.ts)
+        Canvas.svelte            2D sheet: grid, zoom/pan, paths, draft rectangle
         SimulationDialog.svelte  toolpath playback
-        Inspector.svelte
-        Toolbar.svelte
+        Inspector.svelte         Material and Machine panels, then the workspace's
+        Toolbar.svelte           the active workspace's tools
         CollapsiblePanel.svelte
         SheetTabs.svelte
+      workspaces/
+        index.ts                 UI registry: inspector, canvas layer and controller, 3D viewer
+        packaging/
+          canvas.ts              what a press or a drawn rectangle does
+          PackagingCanvasLayer.svelte     deck, hit targets, handles, labels
+          PackagingInspector.svelte       opening, support, and deck panels
+          PackagingMaterialFields.svelte  fold allowance
+          PackagingAssemblyViewer.svelte  3D viewer lifecycle and support drags
 
   routes/+page.svelte            the editor shell
 
@@ -300,7 +307,9 @@ Consequences for anything that reads a machine setting:
 - The editor exposes `editor.view` (the active sheet's `SheetView`),
   `editor.workspace` (its registry entry), and `editor.machine` (its profile).
   Components read those rather than resolving profiles themselves. Packaging
-  components get `PackagingView` from `packagingActions(editor).view`.
+  components get `PackagingView` from `packagingActions(editor).view`, which
+  throws without packaging data — so only packaging UI, mounted for a packaging
+  sheet through `components/workspaces/index.ts`, may call it.
 - **G-code for a packaging sheet goes through `packagingGcode`.** Core
   `generateGcode` knows nothing about folds; packaging passes its fold-allowance
   line in `GcodeOptions.headerNotes`, printed where it always was.
@@ -503,6 +512,10 @@ Done:
     as design files, and a registry seam in `features/workspaces.ts` (document version 8).
 13. Compatibility cleanup: the migration pipeline, old-shape readers, `netVersion`, and the
     bare-draft fallback removed; a file of any other version is rejected.
+14. Registry wiring (slice 4): the editor state, toolbar, export, persistence, inspector,
+    and canvas reach a workspace only through `features/workspaces.ts` and
+    `components/workspaces/index.ts`; packaging's verbs are pure functions in
+    `features/packaging/actions.ts`.
 
 Not yet ported from the reference implementation:
 
@@ -520,44 +533,25 @@ sheet. Stock size is fixed at 24 in for now.
 Next, in order. Each step leaves check, lint, unit, build, and e2e green, with
 goldens byte-identical.
 
-1. **Slice 4 — registry wiring.** The state/registry half is done:
-   `Workspace` in `features/workspaces.ts` carries `capabilities`, `tools`,
-   `defaults`, `reconcile`, `geometry`, `validate`, optional `assembly`,
-   `gcodeOptions`, plus `labels`, `selectionExists`, `selectionBounds`,
-   `protectsSheet`, and `releaseSheet`, which the shell and sheet tabs needed.
-   The editor state, toolbar, export, and persistence no longer import
-   packaging; `reconcileDocument` and `validateDocument` run every workspace
-   present. The editor's primitive is `update`/`preview` over the document (not
-   only a workspace's data, because placing a tray may add a sheet), and
-   packaging's verbs live in `features/packaging/actions.ts`. Remaining:
-   - The UI half, `components/workspaces/index.ts`, maps a workspace to its
-     inspector panels and canvas layer. Move the packaging panels out of
-     `Inspector.svelte` and the packaging overlays out of `Canvas.svelte`;
-     the canvas keeps grid, zoom/pan, paths, and the draft rectangle, and
-     turns a finished draft into an entity through the workspace (today it
-     still calls packaging's presets). `AssemblyViewer` should build through
-     `workspace.assembly`. `DECK_OPACITIES` and `editor/manipulation.ts`'s
-     packaging drags move to the packaging UI; the legend's fold swatches
-     follow `capabilities.folding`.
-   - Known hazard: `packagingActions(editor).view` and `packagingData` throw
-     when a document has no packaging data. `Inspector`, `Canvas`, and
-     `AssemblyViewer` still call it unconditionally; only packaging UI mounted
-     for a packaging sheet may.
-2. **Slice 5 — the Solid workspace.** Sheet-scoped data (each plate is
+1. **Slice 5 — the Solid workspace.** Sheet-scoped data (each plate is
    independent). Entities: outer profile (rectangle, rounded, ellipse,
    polygon), hole, slot. Profiles cut `outside`, holes `inside` — the first real
    use of `CamIntent.offsetSide`. Holding tabs on outer profiles, reusing
    packaging's `splitSide` and `cutoutPoints` once promoted to shared code.
    Validators: fits the sheet, respects `minimumWeb`, no self-intersection. No
    fold UI, crease pass, or 3D toggle on a Solid sheet — absent, not disabled.
+   Register it in both registries: a `Workspace` entry and a `WorkspaceUi`
+   entry (inspector, canvas layer and controller; no `AssemblyViewer`).
    Choosing the workspace when adding a sheet. Decide what an unknown workspace
    tag does; normalization currently re-tags it as `packaging`.
-3. **Workspace switcher and profiles UI.** A Fusion-style switcher, and adding,
+2. **Workspace switcher and profiles UI.** A Fusion-style switcher, and adding,
    duplicating, and deleting machine profiles (only rename and edit exist).
    E2E: switching workspace changes the tools; a Solid part with a hole exports
    G-code; packaging sheets behave exactly as before.
-4. **Slice 6 — cleanup.** Move deck-shaped fields out of
-   `core/assembly/model.ts` and `MIN_FLAT_PANEL` out of `core/constants.ts`;
+3. **Slice 6 — cleanup.** Move deck-shaped fields out of
+   `core/assembly/model.ts` (then split the Three.js lifecycle out of
+   `PackagingAssemblyViewer.svelte` into a generic viewer that builds through
+   `workspace.assembly`) and `MIN_FLAT_PANEL` out of `core/constants.ts`;
    promote sheet nesting (`placement.ts`) once both workspaces use it; leave
    `mounting.ts`/`anchoring.ts` in packaging. Update this file and `README.md`.
 
@@ -694,7 +688,7 @@ is paid for again on each later turn. Be deliberate about both.
 **Read only the parts of large files you need.**
 
 - Several modules are hundreds of lines (`Inspector.svelte`, `Canvas.svelte`,
-  `AssemblyViewer.svelte`, `SimulationDialog.svelte`,
+  `PackagingAssemblyViewer.svelte`, `PackagingInspector.svelte`, `SimulationDialog.svelte`,
   `features/packaging/assembly.ts`, `perimeter.ts`, `validation.ts`). Locate
   the relevant symbol with `grep -n` first, then read that range with an offset
   and limit rather than the whole file.

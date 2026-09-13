@@ -30,7 +30,7 @@ import {
 	MIN_COMPONENT,
 	MIN_DECK,
 	type DeckOriginal
-} from '$lib/editor/manipulation.js';
+} from '$lib/features/packaging/manipulation.js';
 import { patchDesign, dragView } from '../../support/designs.js';
 import { designHistorySignature, createHistory } from '$lib/editor/history.js';
 

@@ -13,7 +13,6 @@
 	import { resolveDrop, supportUnderPoint } from '$lib/features/packaging/anchoring.js';
 	import { packagingView } from '$lib/features/packaging/view.js';
 	import { supportAssemblyOrigin } from '$lib/features/packaging/mounting.js';
-	import { DECK_OPACITIES } from '$lib/editor/tools.svelte.js';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
 	import { packagingActions } from '$lib/features/packaging/actions.js';
 	import type { ToolState } from '$lib/editor/tools.svelte.js';
@@ -22,6 +21,17 @@
 	import { display } from '$lib/core/units.js';
 
 	let { editor, tools }: { editor: EditorState; tools: ToolState } = $props();
+
+	/**
+	 * How solid the deck is drawn. Anything below 1 lets the operator see the
+	 * supports that sit inside the box.
+	 */
+	const DECK_OPACITIES = [
+		{ value: 1, label: 'Solid' },
+		{ value: 0.58, label: 'Translucent' },
+		{ value: 0.22, label: 'Ghosted' },
+		{ value: 0, label: 'Hidden' }
+	] as const;
 	const actions = $derived(packagingActions(editor));
 
 	/**

@@ -13,8 +13,8 @@
 		saveDraft,
 		slugify
 	} from '$lib/editor/persistence.js';
-	import AssemblyViewer from '$lib/components/editor/AssemblyViewer.svelte';
 	import Canvas from '$lib/components/editor/Canvas.svelte';
+	import { workspaceUi } from '$lib/components/workspaces/index.js';
 	import Icon from '$lib/components/icons/Icon.svelte';
 	import Inspector from '$lib/components/editor/Inspector.svelte';
 	import SheetTabs from '$lib/components/editor/SheetTabs.svelte';
@@ -28,6 +28,7 @@
 	let notice = $state('Local-first. Nothing leaves this browser.');
 	let error = $state('');
 
+	const ui = $derived(workspaceUi(editor.workspace.id));
 	const baseName = $derived(
 		`${slugify(editor.design.sheets.find((s) => s.id === editor.design.activeSheetId)?.name ?? 'sheet')}`
 	);
@@ -145,8 +146,8 @@
 
 		<SheetTabs {editor} />
 
-		{#if tools.viewMode === 'assembly' && editor.workspace.capabilities.assembly}
-			<AssemblyViewer {editor} {tools} />
+		{#if tools.viewMode === 'assembly' && ui.AssemblyViewer}
+			<ui.AssemblyViewer {editor} {tools} />
 		{:else}
 			<Canvas {editor} {tools} />
 		{/if}
@@ -154,8 +155,10 @@
 		<footer class="workspace-foot">
 			<div class="legend">
 				<span><i class="swatch cut"></i>Through cut</span>
-				<span><i class="swatch score-down"></i>Down fold</span>
-				<span><i class="swatch score-up"></i>Up fold</span>
+				{#if editor.workspace.capabilities.folding}
+					<span><i class="swatch score-down"></i>Down fold</span>
+					<span><i class="swatch score-up"></i>Up fold</span>
+				{/if}
 				<span><i class="swatch tab"></i>Holding tab</span>
 			</div>
 			<div class="foot-right">

@@ -19,17 +19,6 @@ export type Tool = 'select' | (string & {});
 /** The flat cutting sheet, or the assembled 3D preview of the same design. */
 export type ViewMode = 'flat' | 'assembly';
 
-/**
- * How solid the deck is drawn in the assembly view. Anything below 1 lets the
- * operator see the supports that sit inside the box.
- */
-export const DECK_OPACITIES = [
-	{ value: 1, label: 'Solid' },
-	{ value: 0.58, label: 'Translucent' },
-	{ value: 0.22, label: 'Ghosted' },
-	{ value: 0, label: 'Hidden' }
-] as const;
-
 /** Transient editor state: the active tool, the cursor, and the viewport. */
 export function createToolState() {
 	let tool = $state<Tool>('select');
@@ -39,6 +28,7 @@ export function createToolState() {
 	let view = $state<View>(fitView());
 	let panArmed = $state(false);
 	let viewMode = $state<ViewMode>('flat');
+	/** How solid the assembly preview draws the lid; below 1 shows what is inside. */
 	let deckOpacity = $state(1);
 	// A drawing aid rather than a property of the design, so it is not saved.
 	let snapEnabled = $state(false);

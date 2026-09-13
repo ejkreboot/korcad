@@ -1,14 +1,10 @@
 import { SHEET } from '$lib/core/constants.js';
 import { round, snap, snapWithin } from '$lib/core/units.js';
-import type { PackagingData, Pocket, Support } from '$lib/features/packaging/types.js';
-import type { PackagingView } from '$lib/features/packaging/view.js';
-import { perimeterExtents } from '$lib/features/packaging/perimeter.js';
-import { riserFlatBounds } from '$lib/features/packaging/supports.js';
-import {
-	supportAssemblyOrigin,
-	supportParent,
-	supportPlacementLimits
-} from '$lib/features/packaging/mounting.js';
+import type { PackagingData, Pocket, Support } from './types.js';
+import type { PackagingView } from './view.js';
+import { perimeterExtents } from './perimeter.js';
+import { riserFlatBounds } from './supports.js';
+import { supportAssemblyOrigin, supportParent, supportPlacementLimits } from './mounting.js';
 import type { Point } from '$lib/core/geometry/primitives.js';
 
 /**
