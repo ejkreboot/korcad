@@ -69,6 +69,7 @@ src/
         types.ts                 DesignState, sheets, stock, paths, machine settings
         workspace.ts             WorkspaceDataMap, augmented by each feature
         machine.ts               machine profiles and per-sheet views
+        profiles.ts              add, duplicate, assign, and delete profiles
         defaults.ts              generic defaults: stock, machine profile
         normalize.ts             generic document reading; workspaces read their own
       cam/
@@ -135,6 +136,7 @@ src/
         SimulationDialog.svelte  toolpath playback
         Inspector.svelte         Material and Machine panels, then the workspace's
         Toolbar.svelte           the active workspace's tools
+        WorkspaceSwitcher.svelte shows a sheet of the chosen workspace, adding one if needed
         CollapsiblePanel.svelte
         SheetTabs.svelte
       workspaces/
@@ -164,6 +166,7 @@ e2e/
   machine-profiles.e2e.ts        profile editing and per-sheet machines
   document-format.e2e.ts         the saved shape, unreadable drafts, selection outside it
   solid-workspace.e2e.ts         Solid tools, cut-only export, parts carrying holes
+  workspace-switcher.e2e.ts      switching workspace; adding, duplicating, deleting profiles
 ```
 
 Two layering rules matter more than the tree itself:
@@ -545,6 +548,10 @@ Done:
 15. The Solid workspace (slice 5): parts, holes, and slots on sheet-scoped plates, chosen when
     adding a sheet; `splitSide` and the shape outlines promoted to `core/geometry/outline.ts`;
     cut-only export and no fold legend or 3D on a workspace without those capabilities.
+16. Workspace switcher and profiles UI: the toolbar names the active workspace and switches to
+    a sheet of another, adding one when there is none, and disarms a tool left from the old
+    workspace; the Machine panel adds, duplicates, assigns, and deletes profiles, and a
+    deletion names the sheets that move to another machine before it happens.
 
 Not yet ported from the reference implementation:
 
@@ -562,12 +569,7 @@ sheet. Stock size is fixed at 24 in for now.
 Next, in order. Each step leaves check, lint, unit, build, and e2e green, with
 goldens byte-identical.
 
-1. **Workspace switcher and profiles UI.** A Fusion-style switcher, and adding,
-   duplicating, and deleting machine profiles (only rename and edit exist).
-   E2E: switching workspace changes the tools; packaging sheets behave exactly
-   as before. (Adding a Solid sheet, its tools, and cut-only export are
-   already covered by `solid-workspace.e2e.ts`.)
-2. **Slice 6 — cleanup.** Move deck-shaped fields out of
+1. **Slice 6 — cleanup.** Move deck-shaped fields out of
    `core/assembly/model.ts` (then split the Three.js lifecycle out of
    `PackagingAssemblyViewer.svelte` into a generic viewer that builds through
    `workspace.assembly`) and `MIN_FLAT_PANEL` out of `core/constants.ts`;

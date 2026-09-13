@@ -1,12 +1,19 @@
 import type { DesignState, MachineSettings, Sheet, StockSettings } from '$lib/core/design/types.js';
 import type { Selection, WorkspaceId } from '$lib/core/design/workspace.js';
 import { machineProfileFor, sheetView } from '$lib/core/design/machine.js';
+import {
+	addProfile,
+	assignProfile,
+	deleteProfile,
+	duplicateProfile
+} from '$lib/core/design/profiles.js';
 import { createDefaultDesign } from '$lib/features/document.js';
 import {
 	activeSheet,
 	activeWorkspace,
 	presentWorkspaces,
 	reconcileDocument,
+	sheetForWorkspace,
 	validateDocument,
 	workspaceById
 } from '$lib/features/workspaces.js';
@@ -80,6 +87,30 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 	/** Whether a workspace needs this sheet, so it may not be renamed or removed. */
 	const protectsSheet = (id: string) =>
 		presentWorkspaces(design).some((candidate) => candidate.protectsSheet(design, id));
+
+	/**
+	 * Adds a sheet and shows it. It is cut on the machine the operator is
+	 * already working on, and drawn in the given workspace, or the active
+	 * sheet's.
+	 */
+	function addSheet(workspaceId: WorkspaceId = activeSheet(design).workspace, name?: string): void {
+		const sheet: Sheet = {
+			id: newId(),
+			name: name ?? workspaceById(workspaceId).newSheetName(design),
+			workspace: workspaceId,
+			machineProfileId: machine.id
+		};
+		const workspaces =
+			design.workspaces[workspaceId] === undefined
+				? { ...design.workspaces, [workspaceId]: workspaceById(workspaceId).defaults() }
+				: design.workspaces;
+		apply({
+			...design,
+			workspaces,
+			sheets: [...design.sheets, sheet],
+			activeSheetId: sheet.id
+		});
+	}
 
 	return {
 		get design() {
@@ -159,34 +190,37 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 				)
 			});
 		},
+		/** Cuts the active sheet on another existing profile. */
+		assignMachineProfile(profileId: string) {
+			apply(assignProfile(design, design.activeSheetId, profileId));
+		},
+		/** Adds a stock drag-knife profile and cuts the active sheet on it. */
+		addMachineProfile() {
+			apply(addProfile(design, design.activeSheetId, newId()));
+		},
+		/** Copies the active sheet's profile and cuts the active sheet on the copy. */
+		duplicateMachineProfile() {
+			apply(duplicateProfile(design, design.activeSheetId, newId()));
+		},
+		/** Deletes the active sheet's profile; its sheets move to the first remaining one. */
+		deleteMachineProfile() {
+			apply(deleteProfile(design, machine.id));
+		},
+		/**
+		 * Shows a sheet drawn in another workspace, adding one when the document
+		 * has none. Only adding a sheet makes an undo step.
+		 */
+		switchWorkspace(id: WorkspaceId) {
+			const sheetId = sheetForWorkspace(design, id);
+			if (sheetId === null) addSheet(id);
+			else design = { ...design, activeSheetId: sheetId };
+		},
 		/** Changing sheet is a view change, so it skips history. */
 		setActiveSheet(sheetId: string) {
 			design = { ...design, activeSheetId: sheetId };
 		},
 
-		/**
-		 * Adds a sheet and shows it. It is cut on the machine the operator is
-		 * already working on, and drawn in the given workspace, or the active
-		 * sheet's.
-		 */
-		addSheet(workspaceId: WorkspaceId = activeSheet(design).workspace, name?: string) {
-			const sheet: Sheet = {
-				id: newId(),
-				name: name ?? workspaceById(workspaceId).newSheetName(design),
-				workspace: workspaceId,
-				machineProfileId: machine.id
-			};
-			const workspaces =
-				design.workspaces[workspaceId] === undefined
-					? { ...design.workspaces, [workspaceId]: workspaceById(workspaceId).defaults() }
-					: design.workspaces;
-			apply({
-				...design,
-				workspaces,
-				sheets: [...design.sheets, sheet],
-				activeSheetId: sheet.id
-			});
-		},
+		addSheet,
 		/** A sheet a workspace cannot do without, such as the packaging deck, is locked. */
 		canEditSheet(id: string) {
 			return !protectsSheet(id);

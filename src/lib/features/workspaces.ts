@@ -48,6 +48,8 @@ export type WorkspaceCapabilities = {
 export type Workspace<Id extends WorkspaceId = WorkspaceId> = WorkspaceReader & {
 	readonly id: Id;
 	readonly label: string;
+	/** Shown beside the label in the workspace switcher. */
+	readonly icon: IconName;
 	/**
 	 * Whether the workspace's data spans every sheet tagged with it, or each
 	 * sheet is independent. Packaging is document-scoped: a tray's deck opening
@@ -143,4 +145,14 @@ export function reconcileDocument(design: DesignState): DesignState {
  */
 export function validateDocument(design: DesignState): string[] {
 	return presentWorkspaces(design).flatMap((workspace) => workspace.validate(design));
+}
+
+/**
+ * The sheet to show when switching to a workspace: the active sheet if it is
+ * already drawn there, else the first sheet that is, else `null` when the
+ * document has none and one must be added.
+ */
+export function sheetForWorkspace(design: DesignState, id: WorkspaceId): string | null {
+	if (activeSheet(design).workspace === id) return design.activeSheetId;
+	return design.sheets.find((sheet) => sheet.workspace === id)?.id ?? null;
 }

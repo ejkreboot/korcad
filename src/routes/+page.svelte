@@ -47,6 +47,17 @@
 		saveDraft(editor.design);
 	});
 
+	// A tool belongs to a workspace, so one armed on another sheet's workspace
+	// must not stay armed where it means nothing.
+	let toolWorkspace = editor.workspace.id;
+	$effect(() => {
+		const id = editor.workspace.id;
+		if (id !== toolWorkspace) {
+			toolWorkspace = id;
+			tools.select();
+		}
+	});
+
 	/** Frames the current selection, or the whole sheet when nothing is selected. */
 	function zoomFit(event: MouseEvent): void {
 		const bounds =

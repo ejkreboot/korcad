@@ -334,6 +334,35 @@ input[type='number'] {
 	font-weight: 650;
 }
 
+/* ---- machine profiles ---- */
+
+.profile-actions {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+/* ---- workspace switcher ---- */
+
+/* Named in words, unlike the icon tools beside it: it says where you are. */
+.button.switcher {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--ink);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.button.switcher :global(.icon:first-child) {
+	color: var(--accent);
+}
+
+.menu button[aria-checked='true'] strong {
+	color: var(--accent);
+}
+
 /* ---- toolbar menus ---- */
 
 .button.active {

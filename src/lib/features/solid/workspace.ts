@@ -18,6 +18,7 @@ function labels(design: DesignState, sheetId: string) {
 export const SOLID_WORKSPACE: Workspace<'solid'> = {
 	id: 'solid',
 	label: 'Solid',
+	icon: 'category',
 	newSheetName: (design) =>
 		`Plate ${design.sheets.filter((sheet) => sheet.workspace === 'solid').length + 1}`,
 	dataScope: 'sheet',

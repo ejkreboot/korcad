@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { display, parseDisplay } from '$lib/core/units.js';
 	import type { MachineSettings, StockSettings } from '$lib/core/design/types.js';
+	import { profileDeletion } from '$lib/core/design/profiles.js';
 	import { workspaceUi } from '$lib/components/workspaces/index.js';
 	import CollapsiblePanel from './CollapsiblePanel.svelte';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
@@ -25,6 +26,23 @@
 	function setStock(key: NumericKey<StockSettings>, raw: string): void {
 		const value = parseDisplay(raw, units);
 		if (Number.isFinite(value)) editor.setStock(key, value);
+	}
+	/**
+	 * Deleting a profile moves its sheets onto another machine, which changes
+	 * what they cut, so the operator is told which sheets and which machine
+	 * before it happens.
+	 */
+	function deleteProfile(): void {
+		const deletion = profileDeletion(design, machine.id);
+		if (!deletion) return;
+		const sheets = deletion.movedSheets.join(', ');
+		if (
+			confirm(
+				`Delete the ${machine.name} profile? ${sheets} will be cut on ${deletion.replacement.name} instead.`
+			)
+		) {
+			editor.deleteMachineProfile();
+		}
 	}
 	/** Writes a machine setting onto the profile the active sheet is cut on. */
 	function setMachine(key: keyof MachineSettings, raw: string): void {
@@ -102,6 +120,29 @@
 			{sheetName} is cut on. Sheets sharing this profile change with it.
 		</p>
 		<div class="form-grid">
+			<label class="field wide">
+				Cut on
+				<select
+					value={machine.id}
+					onchange={(e) => editor.assignMachineProfile(e.currentTarget.value)}
+				>
+					{#each design.machineProfiles as profile (profile.id)}
+						<option value={profile.id}>{profile.name}</option>
+					{/each}
+				</select>
+			</label>
+			<div class="field wide profile-actions" role="group" aria-label="Machine profiles">
+				<button class="button" onclick={() => editor.addMachineProfile()}>New</button>
+				<button class="button" onclick={() => editor.duplicateMachineProfile()}>Duplicate</button>
+				<button
+					class="button"
+					disabled={design.machineProfiles.length < 2}
+					title={design.machineProfiles.length < 2
+						? 'A design always keeps one profile'
+						: `Delete ${machine.name}`}
+					onclick={deleteProfile}>Delete</button
+				>
+			</div>
 			<label class="field wide">
 				Profile name
 				<input

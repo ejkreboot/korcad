@@ -66,6 +66,7 @@ function selectionBounds(design: DesignState, selection: Selection, sheetId: str
 export const PACKAGING_WORKSPACE: Workspace<'packaging'> = {
 	id: 'packaging',
 	label: 'Folded Packaging',
+	icon: 'inventory_2',
 	// The deck is sheet zero, so the first parts sheet is `Parts 1`.
 	newSheetName: (design) =>
 		`Parts ${design.sheets.filter((sheet) => sheet.workspace === 'packaging').length}`,

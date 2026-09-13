@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Icon from '$lib/components/icons/Icon.svelte';
+	import WorkspaceSwitcher from './WorkspaceSwitcher.svelte';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
 	import type { ToolState } from '$lib/editor/tools.svelte.js';
 
@@ -45,6 +46,10 @@
 	anyone hovering, without the row growing wide enough to wrap.
 -->
 <div class="toolbar" role="toolbar" aria-label="Editor commands">
+	<div class="group">
+		<WorkspaceSwitcher {editor} />
+	</div>
+
 	<div class="group">
 		<button
 			class="button icon"

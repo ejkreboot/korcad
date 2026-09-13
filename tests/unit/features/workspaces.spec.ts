@@ -13,6 +13,7 @@ import {
 	activeWorkspace,
 	PACKAGING_WORKSPACE,
 	presentWorkspaces,
+	sheetForWorkspace,
 	reconcileDocument,
 	validateDocument,
 	WORKSPACES
@@ -21,6 +22,7 @@ import {
 	FIXTURE_DESIGNS,
 	foldedDesign,
 	patchDesign,
+	solidDesign,
 	supportDesign,
 	withMachine
 } from '../../support/designs.js';
@@ -57,6 +59,14 @@ describe('the registry', () => {
 		expect(activeWorkspace(design)).toBe(PACKAGING_WORKSPACE);
 		expect(presentWorkspaces(design)).toEqual([PACKAGING_WORKSPACE]);
 		expect(presentWorkspaces({ ...design, workspaces: {} })).toEqual([]);
+	});
+
+	it('finds the sheet to show when switching workspace', () => {
+		const design = solidDesign();
+		expect(sheetForWorkspace(design, 'solid')).toBe('plate');
+		expect(sheetForWorkspace(design, 'packaging')).toBe('deck');
+		expect(sheetForWorkspace(createDefaultDesign(), 'packaging')).toBe('deck');
+		expect(sheetForWorkspace(createDefaultDesign(), 'solid')).toBeNull();
 	});
 
 	it('creates the data a new document starts with', () => {
