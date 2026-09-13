@@ -1,10 +1,16 @@
 import { point } from '$lib/core/geometry/primitives.js';
-import type { DesignState, Geometry } from '$lib/core/design/types.js';
+import type { DesignPath, DesignState, Geometry } from '$lib/core/design/types.js';
 import type { Support } from './types.js';
 import type { PackagingView } from './view.js';
-import type { PackagingGeometry, PackagingPath } from './paths.js';
+import {
+	DECK_OUTLINE,
+	INTERIOR_HOLE,
+	partReleaseIntent,
+	pocketOwner,
+	supportOwner,
+	type PackagingGeometry
+} from './paths.js';
 import { packagingSheetView } from './view.js';
-import { annotateCamIntent } from './cam-intent.js';
 import { annotateFoldPaths } from './folds.js';
 import { cutoutPoints, openingCutPoints, pocketPaths } from './geometry.js';
 import { exteriorPaths } from './perimeter.js';
@@ -20,7 +26,7 @@ export function trayOpeningPath(
 	tray: Support,
 	design: Pick<PackagingView, 'deckX' | 'deckY'>,
 	role = 'tray-opening'
-): PackagingPath {
+): DesignPath {
 	const x = design.deckX + tray.assemblyX;
 	const y = design.deckY + tray.assemblyY;
 	return {
@@ -30,8 +36,9 @@ export function trayOpeningPath(
 		),
 		type: 'cut',
 		closed: true,
-		riserId: tray.id,
-		role
+		cam: partReleaseIntent(tray, true),
+		role,
+		owner: supportOwner(tray)
 	};
 }
 
@@ -78,15 +85,17 @@ export function allGeometry(document: DesignState, sheetId = document.activeShee
 							{ ...pocket, sides: NO_SIDES }
 						)
 					: cutoutPoints(pocket);
-			return {
+			const opening: DesignPath = {
 				points,
-				type: 'cut' as const,
+				type: 'cut',
 				closed: true,
-				pocketId: pocket.id,
-				role: 'router-opening'
+				cam: INTERIOR_HOLE,
+				role: 'router-opening',
+				owner: pocketOwner(pocket)
 			};
+			return opening;
 		});
-		const deck: PackagingPath = {
+		const deck: DesignPath = {
 			points: [
 				point(design.deckX, design.deckY),
 				point(design.deckX + design.deckW, design.deckY),
@@ -95,10 +104,11 @@ export function allGeometry(document: DesignState, sheetId = document.activeShee
 			],
 			type: 'cut',
 			closed: true,
+			cam: DECK_OUTLINE,
 			role: 'router-deck-perimeter'
 		};
 		return {
-			paths: annotateCamIntent([...openings, ...trayOpenings, deck], design),
+			paths: [...openings, ...trayOpenings, deck],
 			tabs: []
 		};
 	}
@@ -113,14 +123,11 @@ export function allGeometry(document: DesignState, sheetId = document.activeShee
 
 	const paths = [...interior, ...supports, ...exterior.paths];
 	return {
-		paths: annotateCamIntent(
-			annotateFoldPaths(
-				[
-					...paths.filter((path) => path.type === 'score'),
-					...paths.filter((path) => path.type === 'cut')
-				],
-				design
-			),
+		paths: annotateFoldPaths(
+			[
+				...paths.filter((path) => path.type === 'score'),
+				...paths.filter((path) => path.type === 'cut')
+			],
 			design
 		),
 		tabs: exterior.tabs

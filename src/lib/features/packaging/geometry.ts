@@ -1,4 +1,13 @@
-import type { PackagingPath } from './paths.js';
+import type { DesignPath } from '$lib/core/design/types.js';
+import {
+	closedPath,
+	foldIntent,
+	INTERIOR_HOLE,
+	line,
+	ownerGroup,
+	pocketOwner,
+	type PathMeta
+} from './paths.js';
 import { arcPoints, point, type Point } from '$lib/core/geometry/primitives.js';
 import { shapeOutline, splitSide } from '$lib/core/geometry/outline.js';
 import { clamp } from '$lib/core/units.js';
@@ -12,26 +21,6 @@ type Bounds = {
 	readonly bottom: number;
 	readonly top: number;
 };
-
-type PathMeta = Omit<PackagingPath, 'points' | 'type' | 'closed'>;
-
-const line = (
-	a: Point,
-	b: Point,
-	type: PackagingPath['type'],
-	meta: PathMeta = {}
-): PackagingPath => ({
-	points: [a, b],
-	type,
-	closed: false,
-	...meta
-});
-
-const closedPath = (
-	points: readonly Point[],
-	type: PackagingPath['type'],
-	meta: PathMeta = {}
-): PackagingPath => ({ points, type, closed: true, ...meta });
 
 // ---- fold allowance ------------------------------------------------------
 
@@ -59,7 +48,7 @@ function boundedReliefSlot(
 	width: number,
 	bounds: Bounds,
 	meta: PathMeta
-): PackagingPath {
+): DesignPath {
 	const dx = inner.x - outer.x;
 	const dy = inner.y - outer.y;
 	const length = Math.hypot(dx, dy) || 1;
@@ -79,13 +68,13 @@ function boundedReliefSlot(
 	);
 }
 
-function reliefSlot(outer: Point, inner: Point, width: number, pocket: Pocket): PackagingPath {
+function reliefSlot(outer: Point, inner: Point, width: number, pocket: Pocket): DesignPath {
 	return boundedReliefSlot(
 		outer,
 		inner,
 		width,
 		{ left: pocket.x, right: pocket.x + pocket.w, bottom: pocket.y, top: pocket.y + pocket.h },
-		{ pocketId: pocket.id, role: 'corner-relief' }
+		{ cam: INTERIOR_HOLE, role: 'corner-relief', owner: pocketOwner(pocket) }
 	);
 }
 
@@ -129,7 +118,7 @@ export function openingCutPoints(inner: Bounds, pocket: Pocket): Point[] {
  * edge and continues `pullDepth` into the wall, stopping short of the flange
  * fold so the wall keeps a continuous hinge.
  */
-export function wallFingerPull(pocket: Pocket, side: Side): PackagingPath {
+export function wallFingerPull(pocket: Pocket, side: Side): DesignPath {
 	const radius = pocket.pullDiameter / 2;
 	const depth = clamp(pocket.pullDepth, 1, Math.max(1, pocket.wallDepth - pocket.relief / 2));
 	const centers: Record<Side, Point> = {
@@ -161,7 +150,11 @@ export function wallFingerPull(pocket: Pocket, side: Side): PackagingPath {
 		points.push(local(radius * Math.cos(angle), -radius * Math.sin(angle)));
 	}
 	points.push(local(radius, depth), local(-radius, depth));
-	return closedPath(points, 'cut', { pocketId: pocket.id, role: `finger-pull-${side}` });
+	return closedPath(points, 'cut', {
+		cam: INTERIOR_HOLE,
+		role: `finger-pull-${side}`,
+		owner: pocketOwner(pocket)
+	});
 }
 
 /** The outline of a non-folded cutout, by shape. */
@@ -192,10 +185,16 @@ const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
  * cut; a rectangular one may additionally carry inward-folding walls, glue
  * flanges, corner relief slots, and finger pulls.
  */
-export function pocketPaths(nominalPocket: Pocket, settings: FoldSettings): PackagingPath[] {
+export function pocketPaths(nominalPocket: Pocket, settings: FoldSettings): DesignPath[] {
 	const p = flatPocket(nominalPocket, settings);
 	if (p.shape !== 'rectangle') {
-		return [closedPath(cutoutPoints(p), 'cut', { pocketId: p.id, role: 'central-cutout' })];
+		return [
+			closedPath(cutoutPoints(p), 'cut', {
+				cam: INTERIOR_HOLE,
+				role: 'central-cutout',
+				owner: pocketOwner(p)
+			})
+		];
 	}
 	const f = p.flangeEnabled ? p.flange : 0;
 	const inset = {
@@ -212,9 +211,19 @@ export function pocketPaths(nominalPocket: Pocket, settings: FoldSettings): Pack
 	};
 	if (inner.right <= inner.left || inner.top <= inner.bottom) return [];
 
-	const paths: PackagingPath[] = [];
+	const owner = pocketOwner(p);
+	const fold = (role: string): PathMeta => ({
+		cam: foldIntent(ownerGroup(owner), role),
+		role,
+		owner
+	});
+	const paths: DesignPath[] = [];
 	paths.push(
-		closedPath(openingCutPoints(inner, p), 'cut', { pocketId: p.id, role: 'central-cutout' })
+		closedPath(openingCutPoints(inner, p), 'cut', {
+			cam: INTERIOR_HOLE,
+			role: 'central-cutout',
+			owner: pocketOwner(p)
+		})
 	);
 	for (const side of SIDES) {
 		if (p.pulls[side] && p.sides[side]) paths.push(wallFingerPull(p, side));
@@ -237,13 +246,10 @@ export function pocketPaths(nominalPocket: Pocket, settings: FoldSettings): Pack
 			? splitSide(a, b, 1, p.pullDiameter).filter((span) => !span.tab)
 			: [{ points: [a, b] as const, tab: false }];
 		spans.forEach((span) =>
-			paths.push(
-				line(span.points[0]!, span.points[1]!, 'score', { pocketId: p.id, role: 'top-fold' })
-			)
+			paths.push(line(span.points[0]!, span.points[1]!, 'score', fold('top-fold')))
 		);
 	};
-	const flangeFold = (a: Point, b: Point) =>
-		paths.push(line(a, b, 'score', { pocketId: p.id, role: 'flange-fold' }));
+	const flangeFold = (a: Point, b: Point) => paths.push(line(a, b, 'score', fold('flange-fold')));
 
 	if (p.sides.top) {
 		addTopFold(point(p.x + r, p.y + p.h), point(p.x + p.w - r, p.y + p.h), 'top');

@@ -1,4 +1,9 @@
-import { regularPolygon, shapeOutline, splitClosedContour } from '$lib/core/geometry/outline.js';
+import {
+	holdingTabCentres,
+	regularPolygon,
+	shapeOutline,
+	splitClosedContour
+} from '$lib/core/geometry/outline.js';
 import type { Point } from '$lib/core/geometry/primitives.js';
 import type { DesignPath, DesignState, Geometry, HoldingTab } from '$lib/core/design/types.js';
 import type { SolidEntity } from './types.js';
@@ -39,32 +44,30 @@ function holePath(entity: SolidEntity): DesignPath {
  * A profile frees a part, so it is cut outside its line — the part keeps its
  * size — and after every hole in it.
  *
- * On a drag knife, holding tabs break the release cut into open runs chained
- * around the outline. A router cuts the whole compensated contour: core
- * compensation offsets closed outlines only, and an open run has no inside or
- * outside for it to offset toward, so tabs are not offered there.
+ * Holding tabs keep the freed part from moving under the tool. A drag knife
+ * leaves them as gaps: the release cut is broken into open runs chained around
+ * the outline. A router leaves them as bridges: the outline stays one closed
+ * contour, because compensation offsets closed outlines, and carries the tab
+ * centres so CAM can rise over each after it has offset and routed the cut.
+ * Either way the tabs drawn on the canvas are the same stretches of outline.
  */
 function profileGeometry(entity: SolidEntity, view: SolidView): Geometry {
 	const outline = entityOutline(entity);
 	const cam = { offsetSide: 'outside', stage: 'part-release' } as const;
-	const tabbed =
-		view.fabricationMode === 'knife'
-			? splitClosedContour(outline, entity.tabCount, view.tabWidth)
-			: null;
-	if (!tabbed?.tabs.length) {
-		return {
-			paths: [
-				{
-					points: outline,
-					type: 'cut',
-					closed: true,
-					cam: { ...cam, chainKey: null },
-					role: 'profile',
-					owner: owner(entity)
-				}
-			],
-			tabs: []
-		};
+	const tabbed = splitClosedContour(outline, entity.tabCount, view.tabWidth);
+	const tabs = tabbed.tabs.map((points): HoldingTab => ({ points }));
+	const closedProfile: DesignPath = {
+		points: outline,
+		type: 'cut',
+		closed: true,
+		cam: { ...cam, chainKey: null },
+		role: 'profile',
+		owner: owner(entity)
+	};
+	if (!tabs.length) return { paths: [closedProfile], tabs: [] };
+	if (view.fabricationMode === 'router') {
+		const holdingTabs = holdingTabCentres(outline, entity.tabCount, view.tabWidth);
+		return { paths: [{ ...closedProfile, holdingTabs }], tabs };
 	}
 	return {
 		paths: tabbed.runs.map((points) => ({
@@ -75,7 +78,7 @@ function profileGeometry(entity: SolidEntity, view: SolidView): Geometry {
 			role: 'profile',
 			owner: owner(entity)
 		})),
-		tabs: tabbed.tabs.map((points): HoldingTab => ({ points }))
+		tabs
 	};
 }
 

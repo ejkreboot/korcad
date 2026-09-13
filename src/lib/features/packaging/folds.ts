@@ -1,17 +1,12 @@
-import type { PackagingPath } from './paths.js';
-import type { FoldDirection } from '$lib/core/design/types.js';
+import { pathGroup } from './paths.js';
+import type { DesignPath, FoldDirection } from '$lib/core/design/types.js';
 import type { Support } from './types.js';
 import type { PackagingView } from './view.js';
 
 /** Stable identity for a fold group, used to persist per-fold direction overrides. */
-export function foldKeyForPath(path: PackagingPath, activeSheetId: string): string | null {
+export function foldKeyForPath(path: DesignPath, activeSheetId: string): string | null {
 	if (path.type !== 'score') return null;
-	const owner = path.pocketId
-		? `pocket:${path.pocketId}`
-		: path.riserId
-			? `riser:${path.riserId}`
-			: `sheet:${activeSheetId}`;
-	return `${owner}:${path.role || 'fold'}`;
+	return `${pathGroup(path.owner, activeSheetId)}:${path.role || 'fold'}`;
 }
 
 const FOLD_ROLE_LABELS: Readonly<Record<string, string>> = {
@@ -42,10 +37,11 @@ export function foldRoleLabel(role: string | undefined): string {
  * part of a single rolled edge.
  */
 export function isFixedFoldPath(
-	path: PackagingPath | null | undefined,
+	path: DesignPath | null | undefined,
 	supports: readonly Support[]
 ): boolean {
-	const support = path?.riserId ? supports.find((item) => item.id === path.riserId) : null;
+	const owner = path?.owner;
+	const support = owner?.kind === 'support' ? supports.find((item) => item.id === owner.id) : null;
 	return Boolean(
 		(support?.kind === 'platform' && path?.role === 'riser-bottom-flange-fold') ||
 		path?.role?.startsWith('joist-fold-')
@@ -64,9 +60,9 @@ export type FoldAnnotationSettings = Pick<
 
 /** Attaches fold identity, direction, and label to every score path. */
 export function annotateFoldPaths(
-	paths: readonly PackagingPath[],
+	paths: readonly DesignPath[],
 	settings: FoldAnnotationSettings
-): readonly PackagingPath[] {
+): readonly DesignPath[] {
 	return paths.map((path) => {
 		const foldKey = foldKeyForPath(path, settings.activeSheetId);
 		if (!foldKey) return path;

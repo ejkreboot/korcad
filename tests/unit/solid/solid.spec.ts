@@ -6,6 +6,7 @@ import { SHEET } from '$lib/core/constants.js';
 import { round } from '$lib/core/units.js';
 import { toolpathPoints } from '$lib/core/cam/compensation.js';
 import { generateGcode } from '$lib/core/cam/gcode.js';
+import { simulationMoves } from '$lib/core/cam/simulation.js';
 import { sheetView } from '$lib/core/design/machine.js';
 import type { DesignState } from '$lib/core/design/types.js';
 import { outlineBounds } from '$lib/core/geometry/contour.js';
@@ -82,11 +83,20 @@ describe('solid geometry', () => {
 		expect(bracketCut.right).toBeCloseTo(250 + radius, 2);
 	});
 
-	it('releases a routed part in one closed cut, with no tabs', () => {
+	it('releases a routed part in one closed cut that carries its bridge tabs', () => {
 		const { paths, tabs } = solidGeometry(solidDesign('router'));
-		expect(tabs).toEqual([]);
-		expect(paths.filter((path) => path.owner?.id === 'bracket')).toHaveLength(1);
+		const bracket = paths.filter((path) => path.owner?.id === 'bracket');
+		expect(bracket).toHaveLength(1);
 		expect(paths.every((path) => path.closed)).toBe(true);
+		expect(bracket[0]!.holdingTabs).toHaveLength(4);
+		// The canvas draws the same tabs a knife would leave as gaps.
+		expect(tabs).toEqual(solidGeometry(solidDesign('knife')).tabs);
+		const none = withEntity(solidDesign('router'), 'bracket', { tabCount: 0 });
+		const untabbed = solidGeometry(none).paths.find((path) => path.owner?.id === 'bracket')!;
+		expect(untabbed.holdingTabs).toBeUndefined();
+		expect(paths.filter((path) => path.owner?.kind === 'hole').every((p) => !p.holdingTabs)).toBe(
+			true
+		);
 	});
 
 	it('leaves holding tabs in a knife-cut part, chained around it', () => {
@@ -138,6 +148,43 @@ describe('solid golden output', () => {
 		});
 	}
 
+	it('rises over each routed bridge tab while still cutting, and never below the cut', () => {
+		const design = solidDesign('router');
+		const view = sheetView(design);
+		const program = (d: DesignState) =>
+			generateGcode(SOLID_WORKSPACE.geometry(d).paths, sheetView(d), 'cut');
+		const moves = simulationMoves(program(design), view);
+		// Bracket 4 + nut plate 3. A tab on a hexagon corner turns it in two moves.
+		const rises = moves.filter((move) => move.a.z === -view.cutDepth && move.b.z === -2);
+		expect(rises).toHaveLength(7);
+		const bridges = moves.filter((move) => move.b.z === -2 && move.a.z === -2);
+		expect(bridges.every((move) => move.type === 'cut')).toBe(true);
+		const raised = bridges.reduce(
+			(sum, move) => sum + Math.hypot(move.b.x - move.a.x, move.b.y - move.a.y),
+			0
+		);
+		// Each bridge spans the tab width plus the bit width along the bit centre.
+		expect(raised).toBeCloseTo(7 * (5 + 6.35), 1);
+		expect(Math.min(...moves.map((move) => move.b.z))).toBe(-view.cutDepth);
+		expect(moves.every((move) => move.a.z === move.b.z || move.a.x === move.b.x)).toBe(true);
+
+		const knife = program(solidDesign('knife'));
+		expect(knife).not.toContain('Holding tabs:');
+		expect(knife).not.toContain('holding tab');
+	});
+
+	it('warns in the program about a routed part left without tabs', () => {
+		const untabbed = withEntity(solidDesign('router'), 'nut', { tabCount: 0 });
+		expect(SOLID_WORKSPACE.gcodeOptions(untabbed, 'plate').headerNotes).toEqual([
+			'; No holding tabs on: Nut plate; secure these parts before the release cut'
+		]);
+		expect(SOLID_WORKSPACE.gcodeOptions(solidDesign('router'), 'plate').headerNotes ?? []).toEqual(
+			[]
+		);
+		const knife = withEntity(solidDesign('knife'), 'nut', { tabCount: 0 });
+		expect(SOLID_WORKSPACE.gcodeOptions(knife, 'plate').headerNotes ?? []).toEqual([]);
+	});
+
 	it('machines every hole before the part around it', () => {
 		const design = solidDesign('router');
 		const program = generateGcode(SOLID_WORKSPACE.geometry(design).paths, sheetView(design), 'cut');
@@ -186,6 +233,33 @@ describe('solid validation', () => {
 		expect(validateSolid(withMachine(near, { fabricationMode: 'knife' }))).toEqual([]);
 		expect(validateSolid(near)).toContain(
 			`Bracket and Nut plate: leave less than the ${design.stock.minimumWeb} mm minimum web between them`
+		);
+	});
+
+	it('rejects router bridge tabs that cannot be cut', () => {
+		const design = solidDesign('router');
+		const stock = (values: Partial<typeof design.stock>) => ({
+			...design,
+			stock: { ...design.stock, ...values }
+		});
+		expect(validateSolid(stock({ tabHeight: design.stock.material }))).toContain(
+			'Bracket: holding tabs must be thinner than the board'
+		);
+		expect(validateSolid(stock({ tabHeight: 0 }))).toContain(
+			'Bracket: holding tabs must be thinner than the board'
+		);
+		expect(validateSolid(withMachine(stock({ tabHeight: 1 }), { cutDepth: 1.5 }))).toContain(
+			'Bracket: the cut depth stops above the holding tabs'
+		);
+		expect(validateSolid(stock({ tabWidth: 0 }))).toContain(
+			'Bracket: holding tabs need a tab width'
+		);
+		// 80 tabs of 5 mm fit around the bracket's ~623 mm outline on a knife, but not
+		// once each bridge also spans a 6.35 mm bit.
+		const crowded = withEntity(design, 'bracket', { tabCount: 80 });
+		expect(validateSolid(withMachine(crowded, { fabricationMode: 'knife' }))).toEqual([]);
+		expect(validateSolid(crowded)).toContain(
+			'Bracket: holding tabs leave no room to cut between them'
 		);
 	});
 

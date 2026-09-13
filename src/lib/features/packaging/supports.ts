@@ -1,34 +1,18 @@
-import type { PackagingPath } from './paths.js';
+import type { DesignPath, PathType, Side } from '$lib/core/design/types.js';
+import {
+	closedPath,
+	foldIntent,
+	INTERIOR_HOLE,
+	line,
+	ownerGroup,
+	partReleaseIntent,
+	supportOwner,
+	type PathMeta
+} from './paths.js';
 import { point, type Point } from '$lib/core/geometry/primitives.js';
 import { flatPanel, bendDeduction, type FoldSettings } from './fold.js';
-import type { Side } from '$lib/core/design/types.js';
 import type { Support } from './types.js';
 import type { PackagingView } from './view.js';
-
-type PathMeta = Omit<PackagingPath, 'points' | 'type' | 'closed'>;
-
-const line = (
-	a: Point,
-	b: Point,
-	type: PackagingPath['type'],
-	meta: PathMeta = {}
-): PackagingPath => ({
-	points: [a, b],
-	type,
-	closed: false,
-	...meta
-});
-
-const closedPath = (
-	points: readonly Point[],
-	type: PackagingPath['type'],
-	meta: PathMeta = {}
-): PackagingPath => ({
-	points,
-	type,
-	closed: true,
-	...meta
-});
 
 export type SupportSettings = FoldSettings & Pick<PackagingView, 'material'>;
 
@@ -97,17 +81,28 @@ export function supportFlatPanel(support: Support): {
 }
 
 /**
+ * An open line in a support's net: a fold, or a cut that frees the net. The
+ * support's own lock slots are closed holes and are not drawn through here.
+ */
+function supportLineMeta(support: Support, type: PathType, role: string): PathMeta {
+	const owner = supportOwner(support);
+	const cam =
+		type === 'score' ? foldIntent(ownerGroup(owner), role) : partReleaseIntent(support, false);
+	return { cam, role, owner };
+}
+
+/**
  * Flat net for a recessed tray: a bottom panel with four tapered walls that
  * fold up and glue flanges that fold back out over the deck.
  */
-export function trayPaths(nominalTray: Support, settings: SupportSettings): PackagingPath[] {
+export function trayPaths(nominalTray: Support, settings: SupportSettings): DesignPath[] {
 	const tray = flatSupport(nominalTray, settings);
 	const metrics = trayMetrics(tray);
 	if (metrics.bottomW <= 0 || metrics.bottomD <= 0) return [];
 
-	const paths: PackagingPath[] = [];
-	const addLine = (a: Point, b: Point, type: PackagingPath['type'], role: string) =>
-		paths.push(line(a, b, type, { role, riserId: tray.id }));
+	const paths: DesignPath[] = [];
+	const addLine = (a: Point, b: Point, type: PathType, role: string) =>
+		paths.push(line(a, b, type, supportLineMeta(tray, type, role)));
 
 	const x = tray.flatX;
 	const y = tray.flatY;
@@ -192,8 +187,9 @@ export function trayPaths(nominalTray: Support, settings: SupportSettings): Pack
 					points: pullPoints,
 					type: 'cut',
 					closed: false,
+					cam: partReleaseIntent(tray, false),
 					role: `tray-finger-pull-${side}`,
-					riserId: tray.id
+					owner: supportOwner(tray)
 				});
 				addLine(rightOuter, outerB, 'cut', 'tray-flange-edge');
 			} else {
@@ -242,14 +238,14 @@ export function riserFlatBounds(
  * Flat net for a riser or platform: a top panel with four walls folding down
  * and corner closures that are either glue tabs or interlocking tabs.
  */
-export function riserPaths(nominalRiser: Support, settings: SupportSettings): PackagingPath[] {
+export function riserPaths(nominalRiser: Support, settings: SupportSettings): DesignPath[] {
 	if (nominalRiser.kind === 'tray') return trayPaths(nominalRiser, settings);
 	const r = flatSupport(nominalRiser, settings);
-	const paths: PackagingPath[] = [];
+	const paths: DesignPath[] = [];
 	const ox = r.flatX;
 	const oy = r.flatY;
-	const addLine = (a: Point, b: Point, type: PackagingPath['type'], role: string) =>
-		paths.push(line(a, b, type, { role, riserId: r.id }));
+	const addLine = (a: Point, b: Point, type: PathType, role: string) =>
+		paths.push(line(a, b, type, supportLineMeta(r, type, role)));
 
 	const flangeEdge = (a: Point, b: Point, nx: number, ny: number) => {
 		addLine(a, b, 'score', 'riser-bottom-flange-fold');
@@ -347,7 +343,7 @@ export function riserPaths(nominalRiser: Support, settings: SupportSettings): Pa
 						point(cx - slotLength / 2, cy + slotWidth / 2)
 					],
 					'cut',
-					{ role: 'riser-lock-slot', riserId: r.id }
+					{ cam: INTERIOR_HOLE, role: 'riser-lock-slot', owner: supportOwner(r) }
 				)
 			);
 		addSlot(ox - r.h / 2, oy + edgeInset);

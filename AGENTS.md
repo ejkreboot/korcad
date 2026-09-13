@@ -4,9 +4,9 @@
 
 KorCad is a local-first, browser-based 2D CAD/CAM application for small CNC jobs.
 
-Its first feature is a packaging-insert generator for cardstock, cardboard, and similar sheet goods. It supports cut paths, drag-knife and router compensation, scoring and creasing, fold allowances, tabs, packaging supports, SVG/design export, G-code export, toolpath simulation, and an optional 3D assembly preview.
+Work is organised into workspaces chosen per sheet, each cut on a named machine profile. The **Solid** workspace cuts flat parts with holes and slots from sheet stock. The **Packaging** workspace, where KorCad started, generates inserts for cardstock, cardboard, and similar sheet goods: scoring and creasing, fold allowances, folded walls, trays and risers, and an optional 3D assembly preview. Both share drag-knife and router compensation, holding tabs, SVG/design export, G-code export, and toolpath simulation.
 
-The product may grow into a general-purpose tool for straightforward 2D CNC work, but it must retain the packaging workflow that made it useful.
+KorCad is a general-purpose tool for straightforward 2D CNC work, and it must retain the packaging workflow that made it useful.
 
 KorCad is FOSS. Favor portable browser standards, transparent file formats, documented machine output, and workflows that users can run without a hosted account.
 
@@ -63,7 +63,7 @@ src/
       constants.ts
       units.ts                   mm internally; display/parse for the UI
       geometry/primitives.ts
-      geometry/outline.ts        shape outlines, regular polygons, holding tabs (splitSide, splitClosedContour)
+      geometry/outline.ts        shape outlines, regular polygons, holding tabs (splitSide, splitClosedContour, holdingTabCentres)
       geometry/contour.ts        outline distance, containment, self-intersection
       design/
         types.ts                 DesignState, sheets, stock, paths, machine settings
@@ -75,6 +75,7 @@ src/
       cam/
         compensation.ts
         routing.ts
+        tabs.ts                  router bridge tabs over a compensated, routed contour
         gcode.ts
         simulation.ts
       export/
@@ -94,6 +95,7 @@ src/
       normalize.ts               reads workspaces.packaging from a saved file
       fold.ts                    bend deduction, flat panel widths, MIN_FLAT_PANEL
       gcode.ts                   packagingGcode: the program plus the fold header
+      paths.ts                   path builders, owners, and the CAM intent each path states
       model.ts                   allGeometry: flat geometry for a sheet
       geometry.ts                pocket openings, walls, finger pulls
       perimeter.ts               folded walls and rolled joists
@@ -166,7 +168,7 @@ e2e/
   simulation.e2e.ts              toolpath playback and tool changes
   machine-profiles.e2e.ts        profile editing and per-sheet machines
   document-format.e2e.ts         the saved shape, unreadable drafts, selection outside it
-  solid-workspace.e2e.ts         Solid tools, cut-only export, parts carrying holes
+  solid-workspace.e2e.ts         Solid tools, cut-only export, parts carrying holes, router tabs
   workspace-switcher.e2e.ts      switching workspace; adding, duplicating, deleting profiles
 ```
 
@@ -289,8 +291,8 @@ SolidData`. `WorkspaceId` is the map's keys. A new workspace adds its own
   `part-release`) and holes (`kind: 'hole'`, cut `inside`, stage `interior`).
   Normalization gives every Solid sheet an entry and drops data for any other
   sheet. On a drag knife a part's release cut is broken by holding tabs into
-  open runs chained with `solid-profile:<id>`; on a router it is one closed
-  contour with no tabs, because core compensation offsets closed outlines only.
+  open runs chained with `solid-profile:<id>`; on a router it stays one closed
+  contour carrying `holdingTabs` (see Router Holding Tabs Are Bridges).
 - **A workspace keeps to its own sheets.** Packaging's tray placement, support
   sheet validation, and sheet picker only consider sheets tagged `packaging`.
 - **Packaging data is document-scoped.** One `PackagingData` spans every sheet
@@ -405,6 +407,31 @@ fold and in which direction (`folds.ts`, `foldDirections`) and the bend
 deduction. `foldKey`/`foldLabel` on `DesignPath` are packaging bookkeeping for
 fold editing and display only; CAM must not branch on them.
 
+### Router Holding Tabs Are Bridges
+
+A drag knife leaves a holding tab as a gap: the release cut is split into open
+runs. A router cannot do that, because compensation offsets closed outlines and
+routing reverses and rotates paths. So a routed outline stays closed and
+carries `DesignPath.holdingTabs` — tab centres on the drawn outline — and
+`generateGcode` hands the compensated, routed points to `bridgeTabbedContour`
+in `core/cam/tabs.ts`, which:
+
+- projects each centre onto the programmed contour, so rotation and reversal
+  cannot move a tab;
+- raises the bit for `tabWidth + bitWidth` along its centre, which leaves
+  exactly `tabWidth` of bridge on the part edge, to
+  `Z = -(material - tabHeight)`, with vertical rises and drops at plunge feed
+  and `; holding tab` / `; end of tab` comments;
+- starts the contour outside every tab, so the plunge never lands on one, and
+  ends on the tab if that start is a tab's end;
+- throws on a tab the cut would go through, one thicker than the board, or tabs
+  that leave nothing to cut. Solid validation rejects all three before export.
+
+`tabHeight` is a stock setting beside `tabWidth`. A program with bridges says so
+in its header; Solid also names any routed part left without tabs there.
+Packaging's routed deck outline does not carry tabs yet; it can adopt the same
+field.
+
 Do not mutate a nominal design or source path while generating compensated geometry or optimizing routes. Prefer read-only inputs and newly created output objects in core modules.
 
 ## Packaging Is A Feature Module
@@ -417,6 +444,7 @@ Keep packaging-specific concepts inside `features/packaging`:
 - folded walls and flanges
 - trays, risers, and platforms
 - which lines fold, their direction, and bend deduction (the `score` path type and `foldDirection` on a path are core process concepts; see Geometry And CAM Contracts)
+- the manufacturing intent of each of its paths, stated where the path is drawn
 - finger pulls and relief slots
 - joists and locking tabs
 - assembly relationships
@@ -436,34 +464,23 @@ features/
 
 Only promote a concept from a feature module into `core` after at least two independent features genuinely require it.
 
-### Legacy Hangover: Packaging Derives CAM Intent From Role Strings
+### Packaging States Its Own CAM Intent
 
-Core CAM reads only `DesignPath.cam` (`CamIntent`: offset side, machining
-stage, chain key). Packaging does **not** state that intent where it builds a
-path. Its constructors in `geometry.ts`, `perimeter.ts`, `supports.ts`, and
-`model.ts` still emit `PackagingPath` — a `DesignPath` without `cam` — carrying
-a `role` string and a `pocketId`/`riserId`. A single pass at the end of
-`allGeometry`, `annotateCamIntent` in `features/packaging/cam-intent.ts`, then
-derives the intent from role and owner using the role tables that used to live
-in core CAM, moved verbatim so output could not shift.
+Every packaging path constructor (`geometry.ts`, `perimeter.ts`, `supports.ts`,
+`model.ts`) states the path's `cam` and `owner` where it draws it, through the
+builders and intent helpers in `features/packaging/paths.ts` — the same
+contract Solid follows. There is no role table and no derivation pass; `role`
+is for display, fold labels, and G-code comments only.
 
-This was a migration expedient, not the intended design. Treat it as legacy:
-
-- **Risk:** a new role that is not in the tables silently falls through to the
-  `interior` stage and machines in the wrong order.
-  `tests/unit/packaging/cam-intent.spec.ts` guards against that by keeping the
-  role vocabulary closed. If it fails, decide what the new path is for and add
-  it; do not accept whatever the default produced.
-- **Do not copy it.** A new workspace (Solid included) sets `cam` explicitly
-  where each path is constructed, with no role table. `role` is for display and
-  G-code comments only.
-- **Cleanup, not yet scheduled:** move intent into the packaging constructors so
-  each path states its own `cam`; replace `pocketId`/`riserId` on `DesignPath`
-  with `owner`; then delete `packagingStage`, `packagingOffsetSide`,
-  `packagingChainKey`, the `annotateCamIntent` pass, and the `PackagingPath`
-  type. The goldens and `tests/unit/core/cam-partition.spec.ts` must stay
-  byte-identical, and the closed-vocabulary test can then become a direct check
-  on the constructors.
+- **Owners.** A pocket's paths carry `{ kind: 'pocket' }`, a support's
+  `{ kind: 'support' }`, and perimeter paths none. `pathGroup` turns that into
+  the `pocket:`/`riser:`/`sheet:` prefix shared by chain keys and persisted fold
+  keys; the `riser:` spelling is saved in `foldDirections`, so do not rename it.
+- **Adding a path.** Decide its stage and side and pick the matching helper
+  (`foldIntent`, `INTERIOR_HOLE`, `partReleaseIntent`, `frameIntent`,
+  `sheetReleaseIntent`, `DECK_OUTLINE`), then add its role to the reviewed
+  vocabulary in `tests/unit/packaging/cam-intent.spec.ts`, which fails on any
+  role it does not list and checks each emitted path against it.
 
 ## Machine Output Safety
 
@@ -472,6 +489,7 @@ Manufacturing output is safety-critical. Prefer conservative behavior over cleve
 - Validate before allowing export.
 - Return structured validation diagnostics with stable codes.
 - Never silently clamp or discard invalid manufacturing geometry.
+- A routed part freed by its last cut can be caught by the bit. Keep holding tabs on by default, and name any routed part without them in the program header.
 - Never start a spindle, laser, or other machine tool unless the selected postprocessor explicitly requires it and the user has configured it.
 - Include safe-Z moves, feed rates, coordinate mode, units, and a final safe/home move in generated programs where supported.
 - Keep machine profiles and postprocessors separate from geometry and routing.
@@ -508,6 +526,7 @@ Prioritize tests for:
 - travel optimization without source mutation
 - open-path reversal and closed-contour start-point selection
 - router and drag-knife compensation
+- holding tabs: knife gaps, and router bridges that survive route rotation and reversal
 - G-code headers, operations, retracts, safe return, and spindle/tool behavior
 - G-code simulation parsing, including that move types come from the `; N: cut` / `; N: score [up|down]` comments the generator emits before each path — a bare `G1` with no such comment ahead of it is read as travel
 
@@ -537,7 +556,7 @@ Notes from building the viewer, all of which cost real debugging time:
 - Size the drawing buffer from the canvas box, never from its wrapper. `canvas-wrap` carries padding at mobile widths, and a buffer sized to the padding box renders stretched.
 - The shell stacks and scrolls below 860px, where the canvas row has no height to give. The 2D sheet sets its own floor with `min-height`; the 3D viewer needs the same.
 - Fit the camera by solving the distance from the model's bounding sphere against the narrower of the two fields of view. A fixed camera distance crops the deck as soon as the pane is not square.
-- In the e2e tests the SVG sheet is drawn centred inside a much wider box, so only the middle of the pane lands on the deck. Drag through the shared `dragOnCanvas` helper rather than guessing pixels, and derive any fixed point from the measured box: the toolbar rewraps as controls are added and shifts everything below it.
+- In the e2e tests the SVG sheet is drawn centred inside a much wider box, so only the middle of the pane lands on the deck. Drag through the shared `dragOnCanvas` helper rather than guessing pixels, and derive any fixed point from the measured box: the toolbar rewraps as controls are added and shifts everything below it. Opening a sidebar panel also moves the canvas, so collapse it again before drawing. On a router, draw Solid parts well inside the sheet: a drag past the edge is clamped to it, and a part flush with the edge fails validation because the bit runs outside the line.
 - Navigate with `gotoEditor` from `e2e/helpers.ts`, never a bare `page.goto('/')`. The page is server-rendered, so a button is painted, enabled, and clickable before hydration wires up its handler; a click landing in that window satisfies every actionability check and is then silently swallowed, surfacing later as a dialog that never opened. The helper waits for the autosaved draft key, which only an effect can write.
 - A WebGL canvas does not preserve its drawing buffer, so a blank-render check reads the PNG size of a Playwright element screenshot rather than pixels.
 
@@ -581,6 +600,15 @@ Done:
     that builds through `workspace.assembly` and hands drags to a workspace assembly
     controller; `MIN_FLAT_PANEL` lives with packaging's fold allowance.
 
+18. Packaging intent cleanup: every packaging constructor states its own `cam` and `owner`;
+    `pocketId`/`riserId` are gone from `DesignPath`, and `cam-intent.ts`, its role tables,
+    and `PackagingPath` are deleted, with goldens and CAM snapshots byte-identical.
+
+19. Router holding tabs: a routed Solid part keeps its tabs as bridges the bit rises over
+    (`core/cam/tabs.ts`), with `tabHeight` in stock and tab width and thickness in the
+    Material panel. Deliberate golden change: `solid-plate-router.nc` gains the bridge
+    moves and a header line, and the design-file fixture gains `tabHeight`.
+
 Not yet ported from the reference implementation:
 
 - the calibration coupon workflow
@@ -595,8 +623,8 @@ sheet, and a **machine profile** (process and postprocessor) referenced per
 sheet. Stock size is fixed at 24 in for now.
 
 This round of the roadmap is complete: compatibility cleanup, registry wiring,
-the Solid workspace, the workspace switcher and profiles UI, and the slice 6
-cleanup. Whatever comes next keeps check, lint, unit, build, and e2e green,
+the Solid workspace, the workspace switcher and profiles UI, the slice 6
+cleanup, and packaging's intent cleanup. Router holding tabs for Solid followed. Whatever comes next keeps check, lint, unit, build, and e2e green,
 with goldens byte-identical unless a change is deliberate and documented here.
 
 Sheet nesting (`features/packaging/placement.ts`) stays in packaging: only
@@ -608,14 +636,8 @@ Deferred beyond this round: configurable stock size; laser and vinyl profiles
 and `engrave`/`mark`/`drill` operations; geometric canvas hit testing (dataset
 hit targets stay); a third workspace.
 
-Not yet scheduled: holding tabs on a routed part. Core CAM would have to
-compensate an interrupted contour — offset the closed outline, then lift over
-each tab — rather than offsetting open runs, which have no inside or outside,
-and whose direction routing may reverse. Until then Solid hides the tab field
-on a router and releases the part in one cut.
-
-Flagged for cleanup, not yet scheduled: packaging's role-string derivation of
-CAM intent (see Packaging Is A Feature Module → Legacy Hangover).
+Not yet scheduled: bridge tabs on packaging's routed deck outline, and multi-pass
+step-down cutting (tabs would then affect only the passes below their top).
 
 Decisions already taken in v8 that later work should not undo:
 

@@ -17,7 +17,6 @@ import { exteriorPaths, perimeterExtents } from '$lib/features/packaging/perimet
 import { riserPaths, trayPaths, trayPullWidthAtMouth } from '$lib/features/packaging/supports.js';
 import { validate } from '$lib/features/packaging/validation.js';
 import { view, withMachine, patchDesign } from '../../support/designs.js';
-import { annotateCamIntent } from '$lib/features/packaging/cam-intent.js';
 
 const tray = (overrides: Partial<Support> = {}): Support => ({
 	...supportDefaults(),
@@ -237,10 +236,7 @@ describe('dependency stages', () => {
 			mount: { anchor: 'box-floor', offset: 0 }
 		};
 		const design: DesignState = patchDesign(createDefaultDesign(), { supports: [riser] });
-		const paths = annotateCamIntent(
-			[...riserPaths(riser, view(design)), ...exteriorPaths(view(design)).paths],
-			view(design)
-		);
+		const paths = [...riserPaths(riser, view(design)), ...exteriorPaths(view(design)).paths];
 		const ordered = plannedToolpaths(paths, view(design)).paths;
 
 		expect(
@@ -286,7 +282,9 @@ describe('pockets', () => {
 				createPocket({ id: 'e', name: 'Lens', shape: 'ellipse', x: 200, y: 200, w: 80, h: 60 })
 			]
 		});
-		const cutouts = allGeometry(design).paths.filter((path) => path.pocketId === 'e');
+		const cutouts = allGeometry(design).paths.filter(
+			(path) => path.owner?.kind === 'pocket' && path.owner.id === 'e'
+		);
 		expect(cutouts).toHaveLength(1);
 		expect(cutouts[0]?.closed).toBe(true);
 		expect(cutouts[0]?.role).toBe('central-cutout');

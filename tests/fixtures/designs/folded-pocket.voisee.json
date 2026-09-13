@@ -10,7 +10,8 @@
       "grainDirection": "y",
       "minimumWeb": 6,
       "tabWidth": 5,
-      "tabCount": 2
+      "tabCount": 2,
+      "tabHeight": 1
     },
     "toolpathOrder": "optimized",
     "machineProfiles": [

@@ -120,6 +120,61 @@ export type TabbedContour = {
 	readonly tabs: readonly (readonly [Point, Point])[];
 };
 
+type ContourMeasure = {
+	/** The outline with its first vertex repeated at the end. */
+	readonly vertices: readonly Point[];
+	readonly lengths: readonly number[];
+	readonly perimeter: number;
+	/** The point `distance` along the outline, and the edge it falls on. */
+	readonly at: (distance: number) => { point: Point; edge: number };
+};
+
+function measureContour(outline: readonly Point[]): ContourMeasure {
+	const vertices = [...outline, outline[0]!];
+	const lengths = vertices.slice(1).map((vertex, index) => {
+		const previous = vertices[index]!;
+		return Math.hypot(vertex.x - previous.x, vertex.y - previous.y);
+	});
+	const perimeter = lengths.reduce((sum, length) => sum + length, 0);
+	const at = (distance: number): { point: Point; edge: number } => {
+		let remaining = distance;
+		for (let edge = 0; edge < lengths.length; edge++) {
+			const length = lengths[edge]!;
+			if (remaining <= length || edge === lengths.length - 1) {
+				const a = vertices[edge]!;
+				const b = vertices[edge + 1]!;
+				const t = length ? clamp(remaining / length, 0, 1) : 0;
+				return { point: point(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t), edge };
+			}
+			remaining -= length;
+		}
+		return { point: vertices[0]!, edge: 0 };
+	};
+	return { vertices, lengths, perimeter, at };
+}
+
+/** Whether `tabCount` tabs of `tabWidth` leave material to cut between them. */
+function tabsFit(perimeter: number, count: number, tabWidth: number): boolean {
+	return count > 0 && tabWidth > 0 && count * tabWidth < perimeter;
+}
+
+/**
+ * The centre of each of `tabCount` holding tabs spaced evenly around a closed
+ * outline, the first half a spacing from the first vertex — the same places
+ * `splitClosedContour` leaves its gaps. Empty when the tabs would not fit.
+ */
+export function holdingTabCentres(
+	outline: readonly Point[],
+	tabCount: number,
+	tabWidth: number
+): Point[] {
+	const count = Math.max(0, Math.floor(tabCount));
+	const { perimeter, at } = measureContour(outline);
+	if (!tabsFit(perimeter, count, tabWidth)) return [];
+	const spacing = perimeter / count;
+	return Array.from({ length: count }, (_, index) => at(spacing * (index + 0.5)).point);
+}
+
 /**
  * Breaks a closed outline into cut runs separated by `tabCount` holding tabs of
  * `tabWidth`, measured along the outline and spaced evenly around it, the first
@@ -135,31 +190,10 @@ export function splitClosedContour(
 	tabWidth: number
 ): TabbedContour {
 	const count = Math.max(0, Math.floor(tabCount));
-	const vertices = [...outline, outline[0]!];
-	const lengths = vertices.slice(1).map((vertex, index) => {
-		const previous = vertices[index]!;
-		return Math.hypot(vertex.x - previous.x, vertex.y - previous.y);
-	});
-	const perimeter = lengths.reduce((sum, length) => sum + length, 0);
-	if (!count || tabWidth <= 0 || count * tabWidth >= perimeter) {
+	const { vertices, lengths, perimeter, at } = measureContour(outline);
+	if (!tabsFit(perimeter, count, tabWidth)) {
 		return { runs: [vertices], tabs: [] };
 	}
-
-	/** The point `distance` along the outline, and the edge it falls on. */
-	const at = (distance: number): { point: Point; edge: number } => {
-		let remaining = distance;
-		for (let edge = 0; edge < lengths.length; edge++) {
-			const length = lengths[edge]!;
-			if (remaining <= length || edge === lengths.length - 1) {
-				const a = vertices[edge]!;
-				const b = vertices[edge + 1]!;
-				const t = length ? clamp(remaining / length, 0, 1) : 0;
-				return { point: point(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t), edge };
-			}
-			remaining -= length;
-		}
-		return { point: vertices[0]!, edge: 0 };
-	};
 
 	const spacing = perimeter / count;
 	const gaps = Array.from({ length: count }, (_, index) => {

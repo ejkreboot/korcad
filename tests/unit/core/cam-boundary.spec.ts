@@ -26,6 +26,7 @@ const FORBIDDEN: readonly (readonly [RegExp, string])[] = [
 	[/\brole\s*[!=]==/, 'branches on a path role'],
 	[/\brole\??\.(startsWith|endsWith|includes)\(/, 'pattern-matches a path role'],
 	[/\b(pocketId|riserId)\b/, 'reads a packaging owner id'],
+	[/\bowner\??\.(kind|id)\b/, 'branches on who drew a path'],
 	[/\brouteStage\b/, 'reads the removed stage override'],
 	[/\b(pockets|supports)\b/, 'reads a packaging collection'],
 	[/from '\$lib\/features\//, 'imports a feature module']
@@ -62,10 +63,12 @@ describe('the boundary guard itself', () => {
 		expect(hits("if (path.role === 'exterior') return 4;")).toBeGreaterThan(0);
 		expect(hits("path.role?.startsWith('perimeter-')")).toBeGreaterThan(0);
 		expect(hits('const id = path.riserId;')).toBeGreaterThan(0);
+		expect(hits("if (path.owner?.kind === 'support') return 2;")).toBeGreaterThan(0);
 		expect(hits("import { x } from '$lib/features/packaging/model.js';")).toBeGreaterThan(0);
 		// Reading the stated intent, and printing a role, are both fine.
 		expect(hits('return stageIndex(path.cam.stage);')).toBe(0);
 		expect(hits("`${path.role || ''}${owner}`")).toBe(0);
+		expect(hits('const owner = path.owner ? ` (${path.owner.name})` : "";')).toBe(0);
 	});
 });
 

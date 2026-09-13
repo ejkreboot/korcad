@@ -99,7 +99,8 @@ function stock(value: unknown): StockSettings {
 		),
 		minimumWeb: number('minimumWeb', defaults.minimumWeb),
 		tabWidth: number('tabWidth', defaults.tabWidth),
-		tabCount: number('tabCount', defaults.tabCount)
+		tabCount: number('tabCount', defaults.tabCount),
+		tabHeight: number('tabHeight', defaults.tabHeight)
 	};
 }
 

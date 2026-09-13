@@ -26,7 +26,8 @@ const STOCK_KEYS: readonly (keyof StockSettings)[] = [
 	'grainDirection',
 	'minimumWeb',
 	'tabWidth',
-	'tabCount'
+	'tabCount',
+	'tabHeight'
 ];
 const DOCUMENT_KEYS: readonly string[] = [
 	'toolpathOrder',

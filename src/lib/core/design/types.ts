@@ -60,12 +60,12 @@ export type DesignPath = {
 	readonly owner?: { readonly kind: string; readonly id: string; readonly name: string };
 	readonly foldDirection?: FoldDirection;
 	/**
-	 * Packaging's own bookkeeping, used to key folds and derive chains inside the
-	 * feature. CAM must not read these; `tests/unit/core/cam-boundary.spec.ts`
-	 * enforces that. Slated to be replaced by `owner`.
+	 * Centres of holding tabs on a closed outline. On a router the bit rises over
+	 * each, leaving a bridge `tabWidth` wide and `tabHeight` thick (see
+	 * `core/cam/tabs.ts`). A drag knife cannot bridge, so a knife path leaves its
+	 * tabs as gaps between open runs instead and does not carry these.
 	 */
-	readonly pocketId?: string;
-	readonly riserId?: string;
+	readonly holdingTabs?: readonly Point[];
 	readonly sheetId?: string;
 	readonly bladeOffset?: number;
 	readonly overcut?: number;
@@ -78,9 +78,10 @@ export type DesignPath = {
 };
 
 /**
- * A gap deliberately left in an exterior cut so the blank stays attached to
- * the stock. Tabs are never machined, so they carry no operation or feed;
- * they exist to be drawn and to be broken by hand.
+ * Where material is deliberately left in a release cut so the part stays
+ * attached to the stock, drawn on the nominal outline: a gap in a knife cut,
+ * or a bridge a router rises over. A tab is drawn and broken by hand; it is
+ * not a path to machine, so it carries no operation or feed.
  */
 export type HoldingTab = {
 	readonly points: readonly [Point, Point];
@@ -138,6 +139,8 @@ export type StockSettings = {
 	/** Holding tabs left in a release cut. */
 	readonly tabWidth: number;
 	readonly tabCount: number;
+	/** Thickness of board a router's bridge tab leaves, above the underside. */
+	readonly tabHeight: number;
 };
 
 /**

@@ -37,7 +37,10 @@ export function createDefaultMachineProfile(
 	};
 }
 
-/** Ported verbatim from the monolith's `defaults()`; see above. */
+/**
+ * Ported verbatim from the monolith's `defaults()`; see above. `tabHeight` is
+ * newer: the monolith had no router bridge tabs.
+ */
 export function createDefaultStock(): StockSettings {
 	return {
 		units: 'in',
@@ -46,6 +49,7 @@ export function createDefaultStock(): StockSettings {
 		grainDirection: 'y',
 		minimumWeb: 6,
 		tabWidth: 5,
-		tabCount: 2
+		tabCount: 2,
+		tabHeight: 1
 	};
 }

@@ -107,3 +107,35 @@ test('moving a part carries its hole, as one undo step', async ({ page }) => {
 		.poll(async () => (await entities()).map((entity) => entity.x))
 		.toEqual(before.map((entity) => entity.x));
 });
+
+test('a routed part keeps bridge holding tabs unless they are turned off', async ({ page }) => {
+	await gotoEditor(page);
+	await addSolidSheet(page);
+	await page.getByRole('button', { name: 'Machine' }).click();
+	await page.getByLabel('Fabrication').selectOption('router');
+	// Collapse it again, so the canvas is where the drag expects it.
+	await page.getByRole('button', { name: 'Machine' }).click();
+
+	// Well inside the sheet: a router's bit runs outside the line, so a part
+	// clamped to the sheet edge would not fit.
+	await draw(page, 'Part', /Rounded rectangle/, [0.42, 0.35], [0.58, 0.6]);
+	await expect(page.getByRole('heading', { name: 'Part 1' })).toBeVisible();
+	await expect(page.getByLabel('Holding tabs')).toHaveValue('4');
+	await expect(page.locator('.tab-mark')).toHaveCount(4);
+	await expect(page.locator('.status.ok')).toContainText('geometry valid');
+
+	const exported = async () => {
+		const download = page.waitForEvent('download');
+		await page.getByRole('button', { name: 'G-code' }).click();
+		return readFileSync((await (await download).path())!, 'utf8');
+	};
+	const tabbed = await exported();
+	expect(tabbed).toContain('; Holding tabs: 5 mm wide bridges, 1 mm thick');
+	expect(tabbed.match(/; holding tab$/gm)).toHaveLength(4);
+
+	await page.getByLabel('Holding tabs').fill('0');
+	await expect(page.locator('.tab-mark')).toHaveCount(0);
+	const untabbed = await exported();
+	expect(untabbed).not.toContain('; holding tab');
+	expect(untabbed).toContain('; No holding tabs on: Part 1');
+});

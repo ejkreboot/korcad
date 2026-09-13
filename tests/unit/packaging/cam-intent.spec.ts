@@ -2,23 +2,27 @@ import { describe, expect, it } from 'vitest';
 import type { MachiningStage } from '$lib/core/cam/stages.js';
 import type { DesignPath, OffsetSide } from '$lib/core/design/types.js';
 import { allGeometry } from '$lib/features/packaging/model.js';
+import { createPocket } from '$lib/features/packaging/defaults.js';
+import { pocketPaths } from '$lib/features/packaging/geometry.js';
+import { packagingData } from '$lib/features/packaging/view.js';
+import { exteriorPaths } from '$lib/features/packaging/perimeter.js';
+import { riserPaths } from '$lib/features/packaging/supports.js';
 import {
-	packagingChainKey,
-	packagingOffsetSide,
-	packagingStage
-} from '$lib/features/packaging/cam-intent.js';
-import type { PackagingPath } from '$lib/features/packaging/paths.js';
-import { everyPackagingVariant, FIXTURE_DESIGNS } from '../../support/designs.js';
+	everyPackagingVariant,
+	FIXTURE_DESIGNS,
+	supportDesign,
+	joistDesign,
+	view
+} from '../../support/designs.js';
 
 /**
  * Packaging's manufacturing intent.
  *
- * Packaging derives each path's intent from its role and ownership in one pass
- * as geometry leaves `allGeometry`. That keeps role strings out of core CAM, but
- * it means a new role would silently take the `interior` default and machine in
- * the wrong order. The vocabulary below holds the set of roles closed: every
- * role packaging can emit must be listed with the intent it is meant to have,
- * and every listed role must still be emitted.
+ * Every packaging constructor states its path's `CamIntent` where it draws it
+ * (`features/packaging/paths.ts`). The vocabulary below is the reviewed record
+ * of what each role is for: every role packaging can emit must be listed with
+ * the intent it is meant to have, and every listed role must still be emitted.
+ * A new path therefore cannot ship until someone decides what it is for.
  */
 
 /**
@@ -125,39 +129,51 @@ describe('the packaging path vocabulary is closed', () => {
 	});
 });
 
-describe('packaging stage rules', () => {
-	const cut = (role: string, extra: Partial<PackagingPath> = {}): PackagingPath => ({
-		points: [],
-		type: 'cut',
-		closed: false,
-		role,
-		...extra
-	});
+/** A pocket with a folded wall on every side, so it draws folds, reliefs, and a cutout. */
+const ALL_WALLS = {
+	x: 100,
+	y: 100,
+	w: 90,
+	h: 60,
+	wallDepth: 12,
+	sides: { top: true, right: true, bottom: true, left: true }
+};
 
-	it('scores before anything, whatever the role', () => {
-		expect(packagingStage({ points: [], type: 'score', closed: false, role: 'exterior' })).toBe(
-			'score'
-		);
-	});
-
+describe('packaging constructors state their own intent and owner', () => {
 	it('releases a support after its own lock slots', () => {
-		expect(packagingStage(cut('riser-wall-edge', { riserId: 'r' }))).toBe('part-release');
-		expect(packagingStage(cut('riser-lock-slot', { riserId: 'r' }))).toBe('interior');
+		const design = supportDesign();
+		const riser = packagingData(design).supports.find(
+			(support) => support.kind !== 'tray' && support.cornerClosure === 'lock'
+		);
+		expect(riser).toBeDefined();
+		const paths = riserPaths(riser!, view(design));
+		const slots = paths.filter((path) => path.role === 'riser-lock-slot');
+		expect(slots.length).toBeGreaterThan(0);
+		expect(slots.every((path) => path.cam.stage === 'interior')).toBe(true);
+		const walls = paths.filter((path) => path.role === 'riser-wall-edge');
+		expect(walls.length).toBeGreaterThan(0);
+		expect(walls.every((path) => path.cam.stage === 'part-release')).toBe(true);
+		expect(
+			paths.every((path) => path.owner?.kind === 'support' && path.owner.id === riser!.id)
+		).toBe(true);
 	});
 
 	it('distinguishes a joist lock slot from the joist cuts that release the blank', () => {
-		expect(packagingStage(cut('joist-lock-slot'))).toBe('interior');
-		expect(packagingStage(cut('joist-terminal'))).toBe('sheet-release');
+		const paths = exteriorPaths(view(joistDesign())).paths;
+		const stageOf = (role: string) =>
+			new Set(paths.filter((p) => p.role === role).map((p) => p.cam.stage));
+		expect(stageOf('joist-lock-slot')).toEqual(new Set(['interior']));
+		expect(stageOf('joist-terminal')).toEqual(new Set(['sheet-release']));
+		expect(paths.every((path) => path.owner === undefined)).toBe(true);
 	});
 
-	it('cuts only the router deck perimeter outside the line', () => {
-		expect(packagingOffsetSide(cut('router-deck-perimeter'))).toBe('outside');
-		expect(packagingOffsetSide(cut('exterior'))).toBe('inside');
-		expect(packagingOffsetSide({ points: [], type: 'score', closed: false })).toBe('on');
-	});
-
-	it('defaults an unknown role to an interior hole, which is why the vocabulary is closed', () => {
-		expect(packagingStage(cut('some-new-role'))).toBe('interior');
+	it('names the pocket that drew each of its paths', () => {
+		const pocket = createPocket({ ...ALL_WALLS, id: 'p1', name: 'Phone' });
+		const paths = pocketPaths(pocket, view(FIXTURE_DESIGNS[0]![1]()));
+		expect(paths.length).toBeGreaterThan(1);
+		expect(
+			paths.every((path) => path.owner?.kind === 'pocket' && path.owner.name === 'Phone')
+		).toBe(true);
 	});
 });
 
@@ -193,16 +209,12 @@ describe('packaging chain keys', () => {
 	});
 
 	it('keys folds by their owner, so each pocket creases as one pass', () => {
-		const fold: PackagingPath = {
-			points: [],
-			type: 'score',
-			closed: false,
-			role: 'top-fold',
-			pocketId: 'p1'
-		};
-		expect(packagingChainKey(fold, { activeSheetId: 'deck' })).toBe('pocket:p1:score:top-fold');
-		expect(packagingChainKey({ ...fold, pocketId: 'p2' }, { activeSheetId: 'deck' })).not.toBe(
-			'pocket:p1:score:top-fold'
-		);
+		const settings = view(FIXTURE_DESIGNS[0]![1]());
+		const folds = (id: string) =>
+			pocketPaths(createPocket({ ...ALL_WALLS, id, name: id }), settings)
+				.filter((path) => path.role === 'top-fold')
+				.map((path) => path.cam.chainKey);
+		expect(new Set(folds('p1'))).toEqual(new Set(['pocket:p1:score:top-fold']));
+		expect(new Set(folds('p2'))).toEqual(new Set(['pocket:p2:score:top-fold']));
 	});
 });

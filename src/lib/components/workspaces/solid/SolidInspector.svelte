@@ -122,7 +122,7 @@
 					/>
 				</label>
 			{/if}
-			{#if entity.kind === 'profile' && !router}
+			{#if entity.kind === 'profile'}
 				<label class="field">
 					Holding tabs
 					<input
@@ -140,7 +140,13 @@
 				A part is cut outside its line, so it keeps its drawn size. Moving it carries the holes
 				inside it.
 				{#if router}
-					Holding tabs are not available on a router yet; the part is released in one cut.
+					Each holding tab is a bridge the bit rises over, leaving the tab thickness set under
+					Material.
+					{#if entity.tabCount === 0}
+						With no tabs the last cut frees the part, so hold it down some other way.
+					{/if}
+				{:else}
+					Each holding tab is a gap left in the cut.
 				{/if}
 			{:else}
 				A hole is cut inside its line, before the part around it is released. It must lie inside a

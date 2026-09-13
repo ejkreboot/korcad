@@ -14,11 +14,12 @@ import { FIXTURE_DESIGNS, view } from '../../support/designs.js';
  * which machining stage every path lands in, and how paths are partitioned and
  * ordered into route chains.
  *
- * Today both are derived inside core CAM from packaging role strings
- * (`routing.ts` `machiningStage` / `routeChainKey`). They are moving onto the
- * path itself as explicit intent. These snapshots exist so that move is
- * provable rather than hopeful: they are recorded here BEFORE anything changes,
- * and must still hold after the role tables are deleted.
+ * Both were once derived inside core CAM from packaging role strings, then in
+ * a packaging pass over those strings; now every constructor states its own
+ * `CamIntent`. These snapshots were recorded before either move and still
+ * hold, which is what made the moves provable rather than hopeful. The
+ * `owner=riser` label predates `owner.kind === 'support'` and is kept so the
+ * snapshot does not churn.
  *
  * A diff here means the route changed, which means the emitted program changed.
  * Investigate it; do not regenerate it to make the suite pass.
@@ -35,13 +36,17 @@ function snapshot(name: string, actual: string): void {
 	expect(actual).toBe(readFileSync(path, 'utf8'));
 }
 
-/** A path identified by what CAM actually branches on today. */
+/** A path identified by its shape, role, owner, and the stage CAM gives it. */
 const describePath = (path: DesignPath) =>
 	[
 		path.type,
 		path.closed ? 'closed' : 'open',
 		`role=${path.role ?? '-'}`,
-		path.pocketId ? 'owner=pocket' : path.riserId ? 'owner=riser' : 'owner=-',
+		path.owner?.kind === 'pocket'
+			? 'owner=pocket'
+			: path.owner?.kind === 'support'
+				? 'owner=riser'
+				: 'owner=-',
 		`stage=${machiningStage(path)}`
 	].join(' ');
 

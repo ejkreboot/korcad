@@ -6,10 +6,12 @@ import {
 	selfIntersects
 } from '$lib/core/geometry/contour.js';
 import type { DesignState } from '$lib/core/design/types.js';
+import type { Point } from '$lib/core/geometry/primitives.js';
+import { bridgeTabZ } from '$lib/core/cam/tabs.js';
 import { round } from '$lib/core/units.js';
 import { entityOutline } from './geometry.js';
 import type { SolidEntity } from './types.js';
-import { solidSheetView } from './view.js';
+import { solidSheetView, type SolidView } from './view.js';
 
 /** Smallest box an entity may be drawn in, in millimeters. */
 export const MIN_SOLID_ENTITY = 1;
@@ -58,9 +60,7 @@ function validateSheet(design: DesignState, sheetId: string): string[] {
 		) {
 			errors.push(`${profile.name}: does not fit the sheet`);
 		}
-		if (!router && profile.tabCount > 0 && view.tabWidth <= 0) {
-			errors.push(`${profile.name}: holding tabs need a tab width`);
-		}
+		if (profile.tabCount > 0) errors.push(...tabErrors(profile, outline(profile), view));
 	}
 
 	profiles.forEach((profile, index) => {
@@ -105,4 +105,32 @@ function validateSheet(design: DesignState, sheetId: string): string[] {
 	});
 
 	return [...new Set(errors)];
+}
+
+/**
+ * Whether a part's holding tabs can be cut. On a router a tab is a bridge the
+ * bit rises over for the tab width plus a bit width, and it must sit above the
+ * floor of the cut and below the top of the board, or the program would cut
+ * straight through it or lift out of the work.
+ */
+function tabErrors(profile: SolidEntity, outline: readonly Point[], view: SolidView): string[] {
+	if (view.tabWidth <= 0) return [`${profile.name}: holding tabs need a tab width`];
+	const router = view.fabricationMode === 'router';
+	const errors: string[] = [];
+	const perimeter = outline.reduce((sum, vertex, index) => {
+		const next = outline[(index + 1) % outline.length]!;
+		return sum + Math.hypot(next.x - vertex.x, next.y - vertex.y);
+	}, 0);
+	const span = view.tabWidth + (router ? view.bitWidth : 0);
+	if (profile.tabCount * span >= perimeter) {
+		errors.push(`${profile.name}: holding tabs leave no room to cut between them`);
+	}
+	if (router) {
+		if (view.tabHeight <= 0 || view.tabHeight >= view.material) {
+			errors.push(`${profile.name}: holding tabs must be thinner than the board`);
+		} else if (bridgeTabZ(view) <= -view.cutDepth) {
+			errors.push(`${profile.name}: the cut depth stops above the holding tabs`);
+		}
+	}
+	return errors;
 }

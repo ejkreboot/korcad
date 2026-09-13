@@ -106,8 +106,10 @@ and supports with the Cutout and Support menus; the preset you pick sets the
 semantic type, not just the outline.
 
 On a Solid sheet, draw parts with the Part menu and holes or slots inside them
-with the Hole menu. Moving a part carries its holes. Holding tabs are left in a
-knife-cut part; a routed part is released in one cut.
+with the Hole menu. Moving a part carries its holes. Each part keeps holding tabs
+(four by default): gaps in a knife cut, or on a router bridges the bit rises
+over, leaving the tab thickness set in the Material panel. A routed part with no
+tabs is named in the program header, because its last cut frees it.
 
 Scroll to zoom, middle-drag or hold space to pan, and Snap constrains to a
 quarter-inch grid. One drag is one undo step.

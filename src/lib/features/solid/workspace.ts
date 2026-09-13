@@ -15,6 +15,24 @@ function labels(design: DesignState, sheetId: string) {
 		.map((entity) => ({ name: entity.name, x: entity.x + 5, y: entity.y + entity.h - 9 }));
 }
 
+/**
+ * A routed part without holding tabs is freed by its last cut and can be
+ * caught by the bit, so the program says which parts must be held some other
+ * way. A knife leaves nothing spinning to catch them.
+ */
+function untabbedPartNotes(design: DesignState, sheetId: string) {
+	const view = solidSheetView(design, sheetId);
+	if (view.fabricationMode !== 'router') return {};
+	const untabbed = view.entities.filter(
+		(entity) => entity.kind === 'profile' && entity.tabCount === 0
+	);
+	if (!untabbed.length) return {};
+	const names = untabbed.map((entity) => entity.name).join(', ');
+	return {
+		headerNotes: [`; No holding tabs on: ${names}; secure these parts before the release cut`]
+	};
+}
+
 export const SOLID_WORKSPACE: Workspace<'solid'> = {
 	id: 'solid',
 	label: 'Solid',
@@ -46,7 +64,7 @@ export const SOLID_WORKSPACE: Workspace<'solid'> = {
 	reconcile: (design) => design,
 	geometry: solidGeometry,
 	validate: validateSolid,
-	gcodeOptions: () => ({}),
+	gcodeOptions: untabbedPartNotes,
 	labels,
 	selectionExists: (design, selection) => findEntity(design, selection.id)?.kind === selection.kind,
 	selectionBounds: (design, selection, sheetId) => {

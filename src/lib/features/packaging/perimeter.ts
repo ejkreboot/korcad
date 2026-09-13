@@ -1,34 +1,19 @@
-import type { PackagingGeometry, PackagingPath } from './paths.js';
+import type { DesignPath } from '$lib/core/design/types.js';
+import {
+	closedPath,
+	foldIntent,
+	frameIntent,
+	INTERIOR_HOLE,
+	line,
+	pathGroup,
+	sheetReleaseIntent,
+	type PackagingGeometry
+} from './paths.js';
 import { point, type Point } from '$lib/core/geometry/primitives.js';
 import { flatPanel, type FoldSettings } from './fold.js';
 import type { HoldingTab, SideFlags } from '$lib/core/design/types.js';
 import type { PackagingView } from './view.js';
 import { splitSide } from './geometry.js';
-
-type PathMeta = Omit<PackagingPath, 'points' | 'type' | 'closed'>;
-
-const line = (
-	a: Point,
-	b: Point,
-	type: PackagingPath['type'],
-	meta: PathMeta = {}
-): PackagingPath => ({
-	points: [a, b],
-	type,
-	closed: false,
-	...meta
-});
-
-const closedPath = (
-	points: readonly Point[],
-	type: PackagingPath['type'],
-	meta: PathMeta = {}
-): PackagingPath => ({
-	points,
-	type,
-	closed: true,
-	...meta
-});
 
 export type PerimeterSettings = FoldSettings &
 	Pick<
@@ -53,6 +38,9 @@ export type PerimeterSettings = FoldSettings &
 		| 'joistLockWidth'
 		| 'joistSlotClearance'
 	>;
+
+/** What drawing the perimeter needs beyond its extent: the sheet it chains on. */
+export type ExteriorSettings = PerimeterSettings & Pick<PackagingView, 'activeSheetId'>;
 
 /** Joists run across the axis they stiffen, so only two opposite sides carry them. */
 export function joistSides(settings: PerimeterSettings): SideFlags {
@@ -135,19 +123,32 @@ export function perimeterExtents(settings: PerimeterSettings): {
  * that keep the blank attached to the stock. Tabs are returned separately
  * because they are gaps in the cut, not paths to machine.
  */
-export function exteriorPaths(settings: PerimeterSettings): PackagingGeometry {
+export function exteriorPaths(settings: ExteriorSettings): PackagingGeometry {
 	const bounds = perimeterBounds(settings);
-	const paths: PackagingPath[] = [];
+	const paths: DesignPath[] = [];
 	const tabs: HoldingTab[] = [];
-	const outerCuts: PackagingPath[] = [];
+	const outerCuts: DesignPath[] = [];
+	const sheet = settings.activeSheetId;
 
 	const cut = (a: Point, b: Point, role = 'perimeter-side') =>
-		paths.push(line(a, b, 'cut', { role }));
-	const score = (a: Point, b: Point, role: string) => paths.push(line(a, b, 'score', { role }));
+		paths.push(line(a, b, 'cut', { cam: frameIntent(sheet), role }));
+	const release = (a: Point, b: Point, role: string) =>
+		paths.push(line(a, b, 'cut', { cam: sheetReleaseIntent(sheet), role }));
+	const score = (a: Point, b: Point, role: string) =>
+		paths.push(line(a, b, 'score', { cam: foldIntent(pathGroup(undefined, sheet), role), role }));
+	const hole = (points: readonly Point[], role: string) =>
+		paths.push(closedPath(points, 'cut', { cam: INTERIOR_HOLE, role }));
 	const tabbedEdge = (a: Point, b: Point) =>
 		splitSide(a, b, settings.tabCount, settings.tabWidth).forEach((span) => {
 			if (span.tab) tabs.push({ points: span.points });
-			else outerCuts.push(line(span.points[0], span.points[1], 'cut', { role: 'exterior' }));
+			else {
+				outerCuts.push(
+					line(span.points[0], span.points[1], 'cut', {
+						cam: sheetReleaseIntent(sheet),
+						role: 'exterior'
+					})
+				);
+			}
 		});
 
 	if (settings.perimeterType === 'plain') {
@@ -159,9 +160,9 @@ export function exteriorPaths(settings: PerimeterSettings): PackagingGeometry {
 		];
 		for (let i = 0; i < 4; i++) tabbedEdge(pts[i]!, pts[(i + 1) % 4]!);
 	} else if (settings.perimeterType === 'joist') {
-		buildJoistPerimeter(settings, { cut, score, tabbedEdge, paths });
+		buildJoistPerimeter(settings, { cut, release, score, hole, tabbedEdge });
 	} else {
-		buildFoldedPerimeter(settings, { cut, score, tabbedEdge });
+		buildFoldedPerimeter(settings, { cut, release, score, hole, tabbedEdge });
 	}
 
 	// Exterior release cuts come last so interior features are already done.
@@ -170,8 +171,12 @@ export function exteriorPaths(settings: PerimeterSettings): PackagingGeometry {
 }
 
 type EdgeBuilders = {
+	/** Perimeter framing, cut before the blank is released. */
 	cut: (a: Point, b: Point, role?: string) => void;
+	/** Part of the outline that frees the blank. */
+	release: (a: Point, b: Point, role: string) => void;
 	score: (a: Point, b: Point, role: string) => void;
+	hole: (points: readonly Point[], role: string) => void;
 	tabbedEdge: (a: Point, b: Point) => void;
 };
 
@@ -309,7 +314,7 @@ function buildFoldedPerimeter(
  */
 function buildJoistPerimeter(
 	settings: PerimeterSettings,
-	{ cut, score, tabbedEdge, paths }: EdgeBuilders & { paths: PackagingPath[] }
+	{ release, score, hole, tabbedEdge }: EdgeBuilders
 ): void {
 	const x = settings.deckX;
 	const y = settings.deckY;
@@ -364,8 +369,8 @@ function buildJoistPerimeter(
 				score(shifted(edge, 0, offset), shifted(edge, length, offset), `joist-fold-${index + 1}`);
 				offset += width;
 			});
-			cut(edge.start, shifted(edge, 0, fullStripExtent), 'joist-end');
-			cut(edge.end, shifted(edge, length, fullStripExtent), 'joist-end');
+			release(edge.start, shifted(edge, 0, fullStripExtent), 'joist-end');
+			release(edge.end, shifted(edge, length, fullStripExtent), 'joist-end');
 
 			if (settings.joistFolds !== 5) {
 				tabbedEdge(shifted(edge, 0, fullStripExtent), shifted(edge, length, fullStripExtent));
@@ -379,30 +384,27 @@ function buildJoistPerimeter(
 			const tabStart = shifted(edge, lockStart, fullStripExtent);
 			const tabEnd = shifted(edge, lockEnd, fullStripExtent);
 			const terminalEnd = shifted(edge, length, fullStripExtent);
-			cut(terminalStart, tabStart, 'joist-terminal');
-			cut(tabEnd, terminalEnd, 'joist-terminal');
+			release(terminalStart, tabStart, 'joist-terminal');
+			release(tabEnd, terminalEnd, 'joist-terminal');
 			score(tabStart, tabEnd, 'joist-fold-5');
 			const tabTipStart = shifted(edge, lockStart, fullStripExtent + settings.joistHeight);
 			const tabTipEnd = shifted(edge, lockEnd, fullStripExtent + settings.joistHeight);
-			cut(tabStart, tabTipStart, 'joist-lock-tab');
+			release(tabStart, tabTipStart, 'joist-lock-tab');
 			tabbedEdge(tabTipStart, tabTipEnd);
-			cut(tabTipEnd, tabEnd, 'joist-lock-tab');
+			release(tabTipEnd, tabEnd, 'joist-lock-tab');
 
 			const slotWidth = settings.material + settings.joistSlotClearance;
 			const slotCenter = settings.joistHeight + slotWidth;
 			const slotAlongStart = (length - settings.joistLockWidth - settings.joistSlotClearance) / 2;
 			const slotAlongEnd = (length + settings.joistLockWidth + settings.joistSlotClearance) / 2;
-			paths.push(
-				closedPath(
-					[
-						shifted(edge, slotAlongStart, slotCenter - slotWidth / 2),
-						shifted(edge, slotAlongEnd, slotCenter - slotWidth / 2),
-						shifted(edge, slotAlongEnd, slotCenter + slotWidth / 2),
-						shifted(edge, slotAlongStart, slotCenter + slotWidth / 2)
-					],
-					'cut',
-					{ role: 'joist-lock-slot' }
-				)
+			hole(
+				[
+					shifted(edge, slotAlongStart, slotCenter - slotWidth / 2),
+					shifted(edge, slotAlongEnd, slotCenter - slotWidth / 2),
+					shifted(edge, slotAlongEnd, slotCenter + slotWidth / 2),
+					shifted(edge, slotAlongStart, slotCenter + slotWidth / 2)
+				],
+				'joist-lock-slot'
 			);
 		}
 	);

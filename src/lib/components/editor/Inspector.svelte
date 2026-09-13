@@ -77,6 +77,26 @@
 					oninput={(e) => setStock('minimumWeb', e.currentTarget.value)}
 				/>
 			</label>
+			<label class="field">
+				Tab width ({unitLabel})
+				<input
+					type="number"
+					min="0"
+					step="0.001"
+					value={mm(design.stock.tabWidth)}
+					oninput={(e) => setStock('tabWidth', e.currentTarget.value)}
+				/>
+			</label>
+			<label class="field" title="Board a router's bridge tab leaves above the underside">
+				Tab thickness ({unitLabel})
+				<input
+					type="number"
+					min="0"
+					step="0.001"
+					value={mm(design.stock.tabHeight)}
+					oninput={(e) => setStock('tabHeight', e.currentTarget.value)}
+				/>
+			</label>
 			<label class="field wide">
 				Board appearance
 				<select
