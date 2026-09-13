@@ -27,7 +27,7 @@ export function unwrapDesignFile(text: string): unknown {
 	}
 	const record = parsed as Record<string, unknown>;
 	if (record.format !== DESIGN_FORMAT) {
-		throw new Error('This is not a Voisee insert design file.');
+		throw new Error('This is not a KorCad design file.');
 	}
 	if (record.version !== DESIGN_VERSION) {
 		throw new Error(

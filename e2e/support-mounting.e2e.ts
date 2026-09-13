@@ -201,7 +201,7 @@ test('dragging a support in 3D re-anchors it instead of setting a bare height', 
 	}
 	// Nothing anywhere records a loose Z height.
 	const hasAssemblyZ = await page.evaluate(() => {
-		const raw = localStorage.getItem('voisee-insert-generator-v02');
+		const raw = localStorage.getItem('korcad-draft');
 		return raw ? raw.includes('assemblyZ') : true;
 	});
 	expect(hasAssemblyZ).toBe(false);

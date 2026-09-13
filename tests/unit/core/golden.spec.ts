@@ -71,7 +71,7 @@ describe('golden output', () => {
 	it('round-trips the default fixture through the design file unchanged', () => {
 		const design = foldedDesign();
 		const text = serializeDesign(design, '2026-01-01T00:00:00.000Z');
-		golden('designs/folded-pocket.voisee.json', text);
+		golden('designs/folded-pocket.korcad.json', text);
 		expect(parseDesign(text)).toEqual(design);
 	});
 });

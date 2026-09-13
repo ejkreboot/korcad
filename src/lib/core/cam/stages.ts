@@ -5,7 +5,7 @@
  * under the tool while it still has work left on it. Stages are *process*
  * concepts, not feature concepts: a workspace chooses one per path, it does not
  * get to invent new ones. That is what lets routing order a sheet without
- * knowing whether it holds a packaging insert or a plate of brackets.
+ * knowing what the parts on it are for.
  */
 export type MachiningStage =
 	/** Creases and scores, cut while the board is still fully supported. */
@@ -21,7 +21,7 @@ export type MachiningStage =
 
 /**
  * Execution order. The index of a stage is its priority, and these indices
- * deliberately match the integers the packaging role table produced before
+ * deliberately match the integers the original per-role priorities used before
  * stages were named, so route bucketing is unchanged.
  */
 export const STAGE_ORDER: readonly MachiningStage[] = [

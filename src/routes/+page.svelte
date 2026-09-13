@@ -75,7 +75,7 @@
 
 	function saveDesign(): void {
 		download(
-			`${slugify(editor.design.sheets[0]?.name ?? 'insert')}.voisee.json`,
+			`${slugify(editor.design.sheets[0]?.name ?? 'design')}.korcad.json`,
 			designFileText(editor.design),
 			'application/json'
 		);
@@ -140,10 +140,10 @@
 </script>
 
 <svelte:head>
-	<title>Insert generator</title>
+	<title>KorCad</title>
 	<meta
 		name="description"
-		content="Local-first packaging insert CAD/CAM for drag-knife and router work."
+		content="Local-first 2D CAD/CAM for makers: design sheet parts and export G-code for your CNC."
 	/>
 </svelte:head>
 
@@ -239,8 +239,8 @@
 		</footer>
 
 		<p class="disclaimer">
-			The preview shows design geometry; exported G-code additionally offsets the spindle axis for
-			the trailing blade tip. Dimensions are not substitutes for a material calibration cut.
+			The preview shows design geometry; exported G-code additionally compensates for the tool.
+			Dimensions are not substitutes for a material calibration cut.
 		</p>
 	</section>
 
@@ -250,7 +250,7 @@
 		bind:this={importInput}
 		hidden
 		type="file"
-		accept=".json,.voisee.json"
+		accept=".json,.korcad.json"
 		onchange={importDesign}
 	/>
 	<p aria-live="polite" class="sr-only">{notice}</p>

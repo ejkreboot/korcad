@@ -24,7 +24,7 @@ export type GcodeOptions = {
 	readonly sheetLabel?: string;
 	/**
 	 * Workspace-specific header comments, each a complete `; ...` line, emitted
-	 * after the stock description. Packaging records its fold allowance here.
+	 * after the stock description, such as packaging's fold allowance.
 	 */
 	readonly headerNotes?: readonly string[];
 };
@@ -80,11 +80,11 @@ export function generateGcode(
 		'Unknown';
 
 	const lines: string[] = [
-		options.title ?? '; Voisee insert generator v0.1',
+		options.title ?? '; KorCad v0.1',
 		`; Sheet: ${sheetName}`,
 		`; Operation: ${operation}; tool: ${toolDescription}`,
 		'; 24 x 24 inch sheet; origin at lower left; Z zero at material surface',
-		`; Grain / flute direction: ${settings.grainDirection}; board thickness: ${round(settings.material)} mm`,
+		`; Grain direction: ${settings.grainDirection}; material thickness: ${round(settings.material)} mm`,
 		...(options.headerNotes ?? []),
 		router && !creasing
 			? `; ROUTER operation; ${round(settings.bitWidth)} mm bit with radius compensation`

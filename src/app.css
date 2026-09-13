@@ -14,6 +14,8 @@
 	--line-strong: #aebfc0;
 	--accent: #176a68;
 	--accent-ink: #ffffff;
+	--brand-ink: #1a2c3f;
+	--brand-blue: #0075fe;
 	--danger: #a24232;
 	--ok-bg: #e4efe8;
 	--ok-ink: #2f5c4a;
@@ -89,16 +91,24 @@ button {
 }
 
 .brand {
-	padding: 16px 18px;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 14px 18px;
 	background: var(--surface);
 	border-bottom: 1px solid var(--line);
 }
 
+.brand-mark {
+	flex-shrink: 0;
+	display: block;
+}
+
 .brand-eyebrow {
 	margin: 0;
-	font: 600 10px/1 var(--mono);
-	letter-spacing: 0.14em;
-	color: var(--ink-faint);
+	font: 700 13px/1 var(--font);
+	letter-spacing: 0.02em;
+	color: var(--brand-ink);
 }
 
 .brand h1 {
@@ -538,16 +548,6 @@ input[type='number'] {
 	stroke: #90a6a5;
 }
 
-.drawing .deck-area {
-	/* Transparent, like the flaps, so the grid reads through the deck. */
-	fill: none;
-	stroke: var(--ink-faint);
-	stroke-width: 0.8;
-	stroke-dasharray: 4 3;
-	vector-effect: non-scaling-stroke;
-	pointer-events: none;
-}
-
 .drawing .origin {
 	fill: var(--ink);
 }
@@ -600,55 +600,11 @@ input[type='number'] {
 	pointer-events: none;
 }
 
-.drawing .deck-move,
-.drawing .pocket-hit,
-.drawing .support-hit,
-.drawing .placement-hit {
+/* An invisible shape a workspace layer draws over a part to pick it up. */
+.drawing .hit-target {
 	fill: transparent;
 	stroke: none;
-}
-
-.drawing .deck-move {
 	cursor: move;
-}
-
-.drawing .pocket-hit,
-.drawing .support-hit,
-.drawing .placement-hit {
-	cursor: move;
-}
-
-.drawing .deck-edge-hit {
-	stroke: transparent;
-	stroke-width: calc(9px / var(--vs));
-	vector-effect: none;
-}
-
-.drawing .deck-edge-hit[data-deck-action$='left'],
-.drawing .deck-edge-hit[data-deck-action$='right'] {
-	cursor: ew-resize;
-}
-
-.drawing .deck-edge-hit[data-deck-action$='top'],
-.drawing .deck-edge-hit[data-deck-action$='bottom'] {
-	cursor: ns-resize;
-}
-
-.drawing .deck-edge-handle {
-	fill: var(--surface);
-	stroke: var(--accent);
-	stroke-width: 1.1;
-	vector-effect: non-scaling-stroke;
-}
-
-.drawing .deck-edge-handle[data-deck-action$='left'],
-.drawing .deck-edge-handle[data-deck-action$='right'] {
-	cursor: ew-resize;
-}
-
-.drawing .deck-edge-handle[data-deck-action$='top'],
-.drawing .deck-edge-handle[data-deck-action$='bottom'] {
-	cursor: ns-resize;
 }
 
 .drawing .selection-box {
@@ -660,8 +616,7 @@ input[type='number'] {
 	pointer-events: none;
 }
 
-.drawing .resize-handle,
-.drawing .support-height-handle {
+.drawing .resize-handle {
 	fill: var(--surface);
 	stroke: var(--accent);
 	stroke-width: 1.2;
@@ -678,23 +633,12 @@ input[type='number'] {
 	cursor: nesw-resize;
 }
 
-.drawing .support-height-handle {
-	cursor: ns-resize;
-}
-
 .drawing .draft {
 	fill: rgb(23 106 104 / 0.08);
 	stroke: var(--accent);
 	stroke-width: 1.2;
 	stroke-dasharray: 4 3;
 	vector-effect: non-scaling-stroke;
-	pointer-events: none;
-}
-
-.drawing.panning [data-deck-action],
-.drawing.panning [data-pocket],
-.drawing.panning [data-support],
-.drawing.draw-mode [data-deck-action] {
 	pointer-events: none;
 }
 

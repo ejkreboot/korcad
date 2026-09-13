@@ -41,7 +41,7 @@ export function designSvg(geometry: Geometry, labels: readonly SvgLabel[] = []):
 	return (
 		`<?xml version="1.0" encoding="UTF-8"?>\n` +
 		`<svg xmlns="http://www.w3.org/2000/svg" width="609.6mm" height="609.6mm" viewBox="0 0 ${SHEET} ${SHEET}">\n` +
-		`<!-- Voisee insert: red=through cut, blue dashed=down fold, purple dotted=up fold. Origin is lower left in CAM coordinates. -->\n` +
+		`<!-- KorCad sheet: red=through cut, blue dashed=down fold, purple dotted=up fold. Origin is lower left in CAM coordinates. -->\n` +
 		`<rect width="${SHEET}" height="${SHEET}" fill="white"/>\n` +
 		`${geometry.paths.map(pathMarkup).join('\n')}\n` +
 		`${labelMarkup}\n` +

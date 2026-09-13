@@ -13,7 +13,7 @@ import type {
 
 /**
  * The rendering layer: the only place in the app that knows about Three.js.
- * It consumes the plain assembly description produced by the packaging feature
+ * It consumes the plain assembly description produced by a workspace's builder
  * and returns meshes. It reads nothing from the design document and mutates no
  * application state, so the same description always yields the same scene.
  */

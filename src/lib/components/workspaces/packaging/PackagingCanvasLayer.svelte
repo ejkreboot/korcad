@@ -153,7 +153,7 @@
 	{#if isDeckSheet && !drawing}
 		<!-- Deck move surface sits under the openings so they win the hit test. -->
 		<rect
-			class="deck-move"
+			class="hit-target"
 			data-deck-action="move"
 			x={packaging.deckX}
 			y={packaging.deckY}
@@ -165,7 +165,7 @@
 	{#if isDeckSheet && !drawing}
 		{#each packaging.pockets as pocket (pocket.id)}
 			<rect
-				class="pocket-hit"
+				class="hit-target"
 				class:selected={pocket.id === actions.selectedPocketId}
 				data-pocket={pocket.id}
 				x={pocket.x}
@@ -177,7 +177,7 @@
 		{#each trays as tray (tray.id)}
 			{@const origin = supportAssemblyOrigin(tray, packaging.supports)}
 			<rect
-				class="placement-hit"
+				class="hit-target"
 				data-support-placement={tray.id}
 				x={packaging.deckX + origin.x}
 				y={packaging.deckY + origin.y}
@@ -191,7 +191,7 @@
 		{#each sheetSupports as support (support.id)}
 			{@const bounds = riserFlatBounds(support, packaging)}
 			<rect
-				class="support-hit"
+				class="hit-target"
 				class:selected={support.id === actions.selectedSupportId}
 				data-support={support.id}
 				x={bounds.left}
@@ -290,3 +290,53 @@
 		<text class="component-label" x={label.x} y={flip(label.y)}>{label.name}</text>
 	{/each}
 {/if}
+
+<style>
+	/* Transparent, like the flaps, so the grid reads through the deck. */
+	.deck-area {
+		fill: none;
+		stroke: var(--ink-faint);
+		stroke-width: 0.8;
+		stroke-dasharray: 4 3;
+		vector-effect: non-scaling-stroke;
+		pointer-events: none;
+	}
+
+	.deck-edge-hit {
+		stroke: transparent;
+		stroke-width: calc(9px / var(--vs));
+		vector-effect: none;
+	}
+
+	.deck-edge-handle {
+		fill: var(--surface);
+		stroke: var(--accent);
+		stroke-width: 1.1;
+		vector-effect: non-scaling-stroke;
+	}
+
+	[data-deck-action$='left'],
+	[data-deck-action$='right'] {
+		cursor: ew-resize;
+	}
+
+	[data-deck-action$='top'],
+	[data-deck-action$='bottom'],
+	.support-height-handle {
+		cursor: ns-resize;
+	}
+
+	.support-height-handle {
+		fill: var(--surface);
+		stroke: var(--accent);
+		stroke-width: 1.2;
+		vector-effect: non-scaling-stroke;
+	}
+
+	:global(.drawing.panning) [data-deck-action],
+	:global(.drawing.panning) [data-pocket],
+	:global(.drawing.panning) [data-support],
+	:global(.drawing.draw-mode) [data-deck-action] {
+		pointer-events: none;
+	}
+</style>

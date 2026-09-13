@@ -2,9 +2,10 @@
 	import { display, parseDisplay } from '$lib/core/units.js';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
 	import { packagingActions } from '$lib/features/packaging/actions.js';
+	import type { StockSettings } from '$lib/core/design/types.js';
 	import type { PackagingData } from '$lib/features/packaging/types.js';
 
-	/** Packaging's part of the Material panel: how folds are allowed for. */
+	/** Packaging's part of the Material panel: how the board looks and how folds are allowed for. */
 	let { editor }: { editor: EditorState } = $props();
 
 	const actions = $derived(packagingActions(editor));
@@ -21,6 +22,18 @@
 	}
 </script>
 
+<label class="field wide">
+	Board appearance
+	<select
+		value={editor.design.stock.boardFinish}
+		onchange={(e) =>
+			editor.setStock('boardFinish', e.currentTarget.value as StockSettings['boardFinish'])}
+	>
+		<option value="kraft">Natural kraft</option>
+		<option value="white">White board</option>
+		<option value="printed">Printed</option>
+	</select>
+</label>
 <label class="field wide">
 	Fold allowance
 	<select

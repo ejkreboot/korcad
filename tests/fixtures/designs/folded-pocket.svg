@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="609.6mm" height="609.6mm" viewBox="0 0 609.5999999999999 609.5999999999999">
-<!-- Voisee insert: red=through cut, blue dashed=down fold, purple dotted=up fold. Origin is lower left in CAM coordinates. -->
+<!-- KorCad sheet: red=through cut, blue dashed=down fold, purple dotted=up fold. Origin is lower left in CAM coordinates. -->
 <rect width="609.5999999999999" height="609.5999999999999" fill="white"/>
 <polyline points="138.4,341.2 387.5,341.2" fill="none" stroke="#2474a6" stroke-width="0.5" stroke-dasharray="3 2"/>
 <polyline points="163.8,366.6 362.1,366.6" fill="none" stroke="#2474a6" stroke-width="0.5" stroke-dasharray="3 2"/>

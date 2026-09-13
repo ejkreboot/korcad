@@ -32,7 +32,7 @@ const supportRead = (support: Record<string, unknown>) =>
 describe('normalization', () => {
 	it('rejects anything that is not a design', () => {
 		for (const bad of [null, {}, { sheets: [] }, 'nope', { pockets: [] }]) {
-			expect(() => normalizeState(bad)).toThrow(/valid Voisee design/);
+			expect(() => normalizeState(bad)).toThrow(/valid KorCad design/);
 		}
 	});
 
@@ -202,10 +202,8 @@ describe('the design file envelope', () => {
 	});
 
 	it('rejects a bare document or a foreign format', () => {
-		expect(() => parseDesign(JSON.stringify(saved()))).toThrow(/not a Voisee insert design/);
-		expect(() => parseDesign(file({ format: 'something-else' }))).toThrow(
-			/not a Voisee insert design/
-		);
+		expect(() => parseDesign(JSON.stringify(saved()))).toThrow(/not a KorCad design/);
+		expect(() => parseDesign(file({ format: 'something-else' }))).toThrow(/not a KorCad design/);
 		expect(() => parseDesign('[]')).toThrow(/must contain an object/);
 	});
 });

@@ -196,7 +196,7 @@
 		viewBox={viewBoxAttr(tools.view)}
 		style="--vs: {tools.scale}"
 		role="application"
-		aria-label="Insert design for the {design.activeSheetId} sheet"
+		aria-label="Design for the {design.activeSheetId} sheet"
 		onpointerdown={handlePointerDown}
 		onpointermove={handlePointerMove}
 		onpointerup={handlePointerUp}

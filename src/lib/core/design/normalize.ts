@@ -153,7 +153,7 @@ function isDocument(raw: unknown): raw is Record_ {
  */
 export function normalizeDocument(raw: unknown, readers: DocumentReaders): DesignState {
 	if (!isDocument(raw)) {
-		throw new Error('This file does not contain a valid Voisee design');
+		throw new Error('This file does not contain a valid KorCad design');
 	}
 	const profiles = machineProfiles(raw.machineProfiles);
 	const savedWorkspaces = isRecord(raw.workspaces) ? raw.workspaces : {};

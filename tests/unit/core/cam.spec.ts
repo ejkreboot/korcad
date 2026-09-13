@@ -316,7 +316,7 @@ describe('stated CAM intent', () => {
 		}).split('\n');
 		// Straight after the stock description, which is where packaging's fold
 		// allowance has always been printed.
-		const stock = noted.findIndex((entry) => entry.startsWith('; Grain / flute direction'));
+		const stock = noted.findIndex((entry) => entry.startsWith('; Grain direction'));
 		expect(noted[stock + 1]).toBe('; Workspace note');
 		expect(noted.length).toBe(generic.length + 1);
 	});

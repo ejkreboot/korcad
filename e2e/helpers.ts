@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 
 /** Matches `STORAGE_KEY` in `src/lib/core/constants.ts`. */
-export const DRAFT_KEY = 'voisee-insert-generator-v02';
+export const DRAFT_KEY = 'korcad-draft';
 
 /**
  * Opens the editor and waits until it is interactive.

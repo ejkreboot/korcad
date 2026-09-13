@@ -1,8 +1,8 @@
-; Voisee insert generator v0.1
+; KorCad v0.1
 ; Sheet: Plate 1
 ; Operation: cut; tool: drag knife
 ; 24 x 24 inch sheet; origin at lower left; Z zero at material surface
-; Grain / flute direction: y; board thickness: 3 mm
+; Grain direction: y; material thickness: 3 mm
 ; SPINDLE MUST REMAIN OFF
 G21 ; millimeters
 G90 ; absolute positioning

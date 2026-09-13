@@ -18,8 +18,8 @@
 	/**
 	 * The 3D assembly preview: renderer lifecycle, camera, orbit, and the drag
 	 * gesture. What is drawn comes from the active workspace's `assembly`, and
-	 * what a drag means from its assembly controller, so nothing here knows a
-	 * deck from a support. Mounted only for a workspace with that capability.
+	 * what a drag means from its assembly controller, so nothing here knows what
+	 * the parts are. Mounted only for a workspace with that capability.
 	 */
 	let { editor, tools }: { editor: EditorState; tools: ToolState } = $props();
 
@@ -96,11 +96,11 @@
 	}
 
 	/**
-	 * Frames the whole deck from over the lower-left corner, which is the 2D
+	 * Frames the whole model from over the lower-left corner, which is the 2D
 	 * editor's origin, so the two views agree on which corner is which.
 	 *
 	 * The distance is solved from the model's bounding sphere against the
-	 * narrower of the two fields of view, so the deck stays fully framed on a
+	 * narrower of the two fields of view, so the model stays fully framed on a
 	 * wide desktop pane and a tall phone alike.
 	 */
 	function fitCamera(): void {
@@ -136,7 +136,7 @@
 		disposeGroup(built?.root ?? null);
 		built = buildScene(assembly, runtime.paperTexture);
 		runtime.scene.add(built.root);
-		applyFadeOpacity(built.fadingObjects, tools.deckOpacity);
+		applyFadeOpacity(built.fadingObjects, tools.fadeOpacity);
 		resize();
 		if (needsFit) fitCamera();
 		render();
@@ -339,7 +339,7 @@
 	});
 
 	$effect(() => {
-		const opacity = tools.deckOpacity;
+		const opacity = tools.fadeOpacity;
 		if (!ready || !built) return;
 		applyFadeOpacity(built.fadingObjects, opacity);
 		render();
@@ -355,8 +355,8 @@
 		<label>
 			{ui?.fadeLabel ?? 'Shell'}
 			<select
-				value={tools.deckOpacity}
-				onchange={(event) => tools.setDeckOpacity(Number(event.currentTarget.value))}
+				value={tools.fadeOpacity}
+				onchange={(event) => tools.setFadeOpacity(Number(event.currentTarget.value))}
 			>
 				{#each FADE_OPACITIES as option (option.value)}
 					<option value={option.value}>{option.label}</option>

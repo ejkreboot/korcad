@@ -53,8 +53,11 @@
 
 <aside class="sidebar">
 	<header class="brand">
-		<p class="brand-eyebrow">VOISEE</p>
-		<h1>Insert generator <span>drag-knife CAM</span></h1>
+		<img class="brand-mark" src="/logo_graphic_only.png" alt="" width="28" height="30" />
+		<div class="brand-text">
+			<p class="brand-eyebrow">KorCad</p>
+			<h1>CAD/CAM <span>for makers</span></h1>
+		</div>
 	</header>
 
 	<CollapsiblePanel title="Material">
@@ -87,7 +90,7 @@
 					oninput={(e) => setStock('tabWidth', e.currentTarget.value)}
 				/>
 			</label>
-			<label class="field" title="Board a router's bridge tab leaves above the underside">
+			<label class="field" title="Material a router's bridge tab leaves above the underside">
 				Tab thickness ({unitLabel})
 				<input
 					type="number"
@@ -98,19 +101,7 @@
 				/>
 			</label>
 			<label class="field wide">
-				Board appearance
-				<select
-					value={design.stock.boardFinish}
-					onchange={(e) =>
-						editor.setStock('boardFinish', e.currentTarget.value as StockSettings['boardFinish'])}
-				>
-					<option value="kraft">Natural kraft</option>
-					<option value="white">White board</option>
-					<option value="printed">Printed</option>
-				</select>
-			</label>
-			<label class="field wide">
-				Grain / flute direction
+				Grain direction
 				<select
 					value={design.stock.grainDirection}
 					onchange={(e) =>

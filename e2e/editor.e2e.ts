@@ -278,11 +278,11 @@ test('exposes material properties that reach the G-code header', async ({ page }
 	await gotoEditor(page);
 	// Material is a once-per-job panel, so it starts folded away.
 	await page.getByRole('button', { name: 'Material' }).click();
-	await page.getByLabel('Grain / flute direction').selectOption('x');
+	await page.getByLabel('Grain direction').selectOption('x');
 	await page.getByLabel('Board appearance').selectOption('white');
 	await page.getByLabel('Fold allowance').selectOption('manual');
 	await expect(page.getByLabel(/Deduction per fold/)).toBeVisible();
-	await expect(page.getByLabel('Grain / flute direction')).toHaveValue('x');
+	await expect(page.getByLabel('Grain direction')).toHaveValue('x');
 });
 
 test('folds the once-per-job settings away, above the selection panel', async ({ page }) => {

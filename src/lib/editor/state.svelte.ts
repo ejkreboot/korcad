@@ -221,7 +221,7 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 		},
 
 		addSheet,
-		/** A sheet a workspace cannot do without, such as the packaging deck, is locked. */
+		/** A sheet its workspace cannot do without is locked. */
 		canEditSheet(id: string) {
 			return !protectsSheet(id);
 		},

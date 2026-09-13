@@ -28,8 +28,8 @@ export function createToolState() {
 	let view = $state<View>(fitView());
 	let panArmed = $state(false);
 	let viewMode = $state<ViewMode>('flat');
-	/** How solid the assembly preview draws the lid; below 1 shows what is inside. */
-	let deckOpacity = $state(1);
+	/** How solid the assembly preview draws its fading parts; below 1 shows what is inside. */
+	let fadeOpacity = $state(1);
 	// A drawing aid rather than a property of the design, so it is not saved.
 	let snapEnabled = $state(false);
 	// Kept current by the canvas; zooming needs it to anchor on a pixel.
@@ -57,8 +57,8 @@ export function createToolState() {
 		get viewMode() {
 			return viewMode;
 		},
-		get deckOpacity() {
-			return deckOpacity;
+		get fadeOpacity() {
+			return fadeOpacity;
 		},
 		get snapEnabled() {
 			return snapEnabled;
@@ -110,8 +110,8 @@ export function createToolState() {
 		setSnap(enabled: boolean) {
 			snapEnabled = enabled;
 		},
-		setDeckOpacity(next: number) {
-			deckOpacity = next;
+		setFadeOpacity(next: number) {
+			fadeOpacity = next;
 		}
 	};
 }

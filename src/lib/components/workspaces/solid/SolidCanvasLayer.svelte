@@ -36,7 +36,7 @@
 {#if plane === 'over' && !drawing}
 	{#each entities as entity (entity.id)}
 		<polygon
-			class={entity.kind === 'profile' ? 'support-hit' : 'pocket-hit'}
+			class="hit-target"
 			class:selected={entity.id === selected?.id}
 			data-solid-entity={entity.id}
 			points={pointsAttr(entityOutline(entity))}
