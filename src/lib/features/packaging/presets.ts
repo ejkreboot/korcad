@@ -161,7 +161,6 @@ export function createSupportFromPreset(
 		flatY: tray ? 25.4 : round(rect.y),
 		assemblyX: tray ? round(rect.x - context.deckX) : 0,
 		assemblyY: tray ? round(rect.y - context.deckY) : 0,
-		mount: tray ? { anchor: 'deck-underside', offset: 0 } : { anchor: 'box-floor', offset: 0 },
-		netVersion: tray ? 3 : 2
+		mount: tray ? { anchor: 'deck-underside', offset: 0 } : { anchor: 'box-floor', offset: 0 }
 	};
 }

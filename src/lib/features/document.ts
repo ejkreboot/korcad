@@ -39,20 +39,18 @@ export function createDefaultDesign(): DesignState {
 }
 
 /**
- * Narrows untrusted saved JSON of any supported version into a `DesignState`.
- * Throws rather than silently repairing a file that is not a design at all.
- * `recordedVersion` is the version a file envelope claims, when there is one.
+ * Narrows an untrusted saved document into a `DesignState`. Throws rather than
+ * silently repairing a file that is not a design at all.
  */
-export function normalizeState(raw: unknown, recordedVersion?: number): DesignState {
-	return normalizeDocument(raw, recordedVersion, {
+export function normalizeState(raw: unknown): DesignState {
+	return normalizeDocument(raw, {
 		workspaces: WORKSPACES,
 		defaultWorkspace: DEFAULT_WORKSPACE,
 		defaultSheet: deckSheet
 	});
 }
 
-/** Reads a saved design file, or a bare document with no envelope. */
+/** Reads a saved design file of the current version. */
 export function parseDesign(text: string): DesignState {
-	const { document, version } = unwrapDesignFile(text);
-	return normalizeState(document, version);
+	return normalizeState(unwrapDesignFile(text));
 }

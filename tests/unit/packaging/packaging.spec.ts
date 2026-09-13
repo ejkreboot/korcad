@@ -37,7 +37,6 @@ const tray = (overrides: Partial<Support> = {}): Support => ({
 	assemblyX: 40,
 	assemblyY: 50,
 	mount: { anchor: 'deck-underside', offset: 0 },
-	netVersion: 3,
 	...overrides
 });
 
@@ -133,8 +132,7 @@ describe('platform', () => {
 		flatY: 400,
 		assemblyX: 20,
 		assemblyY: 20,
-		mount: { anchor: 'deck-top', offset: 0 },
-		netVersion: 2
+		mount: { anchor: 'deck-top', offset: 0 }
 	};
 
 	it('keeps its glue flanges as down folds even when overridden', () => {
@@ -236,8 +234,7 @@ describe('dependency stages', () => {
 			flange: 10,
 			bottomFlange: true,
 			cornerClosure: 'lock',
-			mount: { anchor: 'box-floor', offset: 0 },
-			netVersion: 2
+			mount: { anchor: 'box-floor', offset: 0 }
 		};
 		const design: DesignState = patchDesign(createDefaultDesign(), { supports: [riser] });
 		const paths = annotateCamIntent(

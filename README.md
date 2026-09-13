@@ -56,7 +56,7 @@ regression fixtures.
 
 Ported and tested:
 
-- design model, defaults, normalization, and version-stepped file migrations
+- design model, defaults, and validated design-file normalization
 - fold allowance and bend deduction
 - pocket, perimeter (plain / folded / joist), tray, riser, and platform geometry
 - manufacturability validation

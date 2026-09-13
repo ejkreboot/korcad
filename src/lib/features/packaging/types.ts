@@ -114,7 +114,6 @@ export type Support = {
 	readonly assemblyX: number;
 	readonly assemblyY: number;
 	readonly mount: SupportMount;
-	readonly netVersion: number;
 	/** Offset of the drawn name label from its default corner. */
 	readonly labelOffset?: Point;
 };

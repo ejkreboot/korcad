@@ -80,7 +80,7 @@ export function createPocket(values: Partial<Pocket> & Pick<Pocket, 'id' | 'name
 /** Field defaults applied to every support read from a saved file. */
 export function supportDefaults(
 	sheetId: string = DEFAULT_DECK_SHEET_ID
-): Omit<Support, 'id' | 'name' | 'w' | 'd' | 'h' | 'kind' | 'mount' | 'netVersion'> {
+): Omit<Support, 'id' | 'name' | 'w' | 'd' | 'h' | 'kind' | 'mount'> {
 	return {
 		bottomFlange: true,
 		cornerClosure: 'glue',

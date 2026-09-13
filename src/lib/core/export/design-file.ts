@@ -11,35 +11,28 @@ export function serializeDesign(design: DesignState, savedAt = new Date().toISOS
 	return JSON.stringify(file, null, 2);
 }
 
-/** A saved design taken out of its envelope, still untrusted. */
-export type UnwrappedDesign = {
-	readonly document: unknown;
-	/** The version the envelope records; absent for a bare document. */
-	readonly version: number | undefined;
-};
-
 /**
- * Opens a saved design's envelope. A file from a newer version is rejected
- * rather than partially understood, because a silently dropped field changes
- * what gets cut.
+ * Opens a saved design's envelope and returns the document inside, still
+ * untrusted. A file of any other version is rejected rather than partially
+ * understood, because a silently dropped or misread field changes what gets
+ * cut; KorCad has no older formats to upgrade.
  *
- * A bare document with no envelope is accepted too, which is how the editor's
- * local drafts were written before they gained one. Reading the document
- * itself needs every registered workspace, so it is `parseDesign` in
- * `features/document.ts` that callers want.
+ * Reading the document itself needs every registered workspace, so it is
+ * `parseDesign` in `features/document.ts` that callers want.
  */
-export function unwrapDesignFile(text: string): UnwrappedDesign {
+export function unwrapDesignFile(text: string): unknown {
 	const parsed: unknown = JSON.parse(text);
-	if (!parsed || typeof parsed !== 'object') throw new Error('Design file must contain an object.');
+	if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+		throw new Error('Design file must contain an object.');
+	}
 	const record = parsed as Record<string, unknown>;
-	if (record.format !== undefined && record.format !== DESIGN_FORMAT) {
+	if (record.format !== DESIGN_FORMAT) {
 		throw new Error('This is not a Voisee insert design file.');
 	}
-	if (typeof record.version === 'number' && record.version > DESIGN_VERSION) {
-		throw new Error('This design was created by a newer version of the insert generator.');
+	if (record.version !== DESIGN_VERSION) {
+		throw new Error(
+			`This design file is version ${String(record.version)}; this build reads version ${DESIGN_VERSION}.`
+		);
 	}
-	return {
-		document: record.design ?? record,
-		version: typeof record.version === 'number' ? record.version : undefined
-	};
+	return record.design;
 }

@@ -1,5 +1,4 @@
 import { createDefaultMachineProfile, createDefaultStock } from './defaults.js';
-import { migrateDocument } from './migrate.js';
 import type { WorkspaceId } from './workspace.js';
 import type { DesignState, MachineProfile, Sheet, StockSettings } from './types.js';
 
@@ -12,7 +11,7 @@ export const finite = (value: unknown): value is number =>
 	typeof value === 'number' && Number.isFinite(value);
 
 /**
- * Reads one workspace's data out of a migrated document.
+ * Reads one workspace's data out of a saved document.
  *
  * Handed the raw value stored under `workspaces[id]` — `undefined` when the
  * document has none — and the document read so far, it returns the document
@@ -34,9 +33,8 @@ export type DocumentReaders = {
 };
 
 /**
- * Reads the machine profiles, each field defaulted exactly as it was when the
- * setting lived on the document, so a migrated design cuts as it did. A
- * document always has at least one profile, and ids are unique.
+ * Reads the machine profiles, defaulting any unreadable field. A document
+ * always has at least one profile, and ids are unique.
  */
 function machineProfiles(value: unknown): MachineProfile[] {
 	const base = createDefaultMachineProfile();
@@ -134,16 +132,13 @@ function sheets(value: unknown, profiles: readonly MachineProfile[], readers: Do
 }
 
 /**
- * Whether untrusted JSON is shaped like a design document of any version: a
- * current one has workspaces or at least one sheet, a version 6 or 7 one lists
- * its pockets. An empty sheet list alone describes nothing.
+ * Whether untrusted JSON is shaped like a design document: it has workspaces
+ * or at least one sheet. An empty sheet list alone describes nothing.
  */
 function isDocument(raw: unknown): raw is Record_ {
 	return (
 		isRecord(raw) &&
-		((Array.isArray(raw.sheets) && raw.sheets.length > 0) ||
-			isRecord(raw.workspaces) ||
-			Array.isArray(raw.pockets))
+		((Array.isArray(raw.sheets) && raw.sheets.length > 0) || isRecord(raw.workspaces))
 	);
 }
 
@@ -151,30 +146,23 @@ function isDocument(raw: unknown): raw is Record_ {
  * Narrows untrusted saved JSON into a `DesignState`. Throws rather than
  * silently repairing a file that is not a design at all.
  *
- * The document is first stepped up to the current version by `migrateDocument`,
- * then the generic fields are read here and each workspace's data by its own
- * reader. `recordedVersion` is the version a file envelope claims, when there
- * is one. Call `normalizeState` in `features/document.ts`, which supplies the
+ * The generic fields are read here and each workspace's data by its own
+ * reader. Call `normalizeState` in `features/document.ts`, which supplies the
  * registered readers.
  */
-export function normalizeDocument(
-	raw: unknown,
-	recordedVersion: number | undefined,
-	readers: DocumentReaders
-): DesignState {
+export function normalizeDocument(raw: unknown, readers: DocumentReaders): DesignState {
 	if (!isDocument(raw)) {
 		throw new Error('This file does not contain a valid Voisee design');
 	}
-	const saved = migrateDocument(raw, recordedVersion);
-	const profiles = machineProfiles(saved.machineProfiles);
-	const savedWorkspaces = isRecord(saved.workspaces) ? saved.workspaces : {};
+	const profiles = machineProfiles(raw.machineProfiles);
+	const savedWorkspaces = isRecord(raw.workspaces) ? raw.workspaces : {};
 
 	let document: DesignState = {
-		stock: stock(saved.stock),
-		toolpathOrder: enumerated(saved.toolpathOrder, ['optimized', 'design'] as const, 'optimized'),
+		stock: stock(raw.stock),
+		toolpathOrder: enumerated(raw.toolpathOrder, ['optimized', 'design'] as const, 'optimized'),
 		machineProfiles: profiles,
-		sheets: sheets(saved.sheets, profiles, readers),
-		activeSheetId: typeof saved.activeSheetId === 'string' ? saved.activeSheetId : '',
+		sheets: sheets(raw.sheets, profiles, readers),
+		activeSheetId: typeof raw.activeSheetId === 'string' ? raw.activeSheetId : '',
 		workspaces: {}
 	};
 

@@ -12,15 +12,32 @@ import {
 import { view, patchDesign, withMachine } from '../../support/designs.js';
 import { serializeDesign } from '$lib/core/export/design-file.js';
 import { parseDesign } from '$lib/features/document.js';
+import { DESIGN_FORMAT, DESIGN_VERSION } from '$lib/core/constants.js';
+import { machineProfileFor } from '$lib/core/design/machine.js';
+
+/** A minimal current document: one packaging deck and whatever packaging data is given. */
+const saved = (packaging: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) => ({
+	sheets: [{ id: 'deck', name: 'Deck', workspace: 'packaging', machineProfileId: 'default' }],
+	workspaces: { packaging: { deckSheetId: 'deck', ...packaging } },
+	...extra
+});
+
+const supportRead = (support: Record<string, unknown>) =>
+	packagingData(
+		normalizeState(
+			saved({ supports: [{ id: 'r', name: 'R', w: 100, d: 80, h: 30, kind: 'riser', ...support }] })
+		)
+	).supports[0];
 
 describe('normalization', () => {
 	it('rejects anything that is not a design', () => {
-		expect(() => normalizeState(null)).toThrow(/valid Voisee design/);
-		expect(() => normalizeState({})).toThrow(/valid Voisee design/);
+		for (const bad of [null, {}, { sheets: [] }, 'nope', { pockets: [] }]) {
+			expect(() => normalizeState(bad)).toThrow(/valid Voisee design/);
+		}
 	});
 
-	it('defaults new settings for legacy designs', () => {
-		const design = normalizeState({ pockets: [] });
+	it('defaults settings a document leaves out', () => {
+		const design = normalizeState(saved());
 		expect(design.stock.boardFinish).toBe('kraft');
 		expect(design.stock.minimumWeb).toBe(6);
 		expect(packagingData(design).foldCompensation).toBe('none');
@@ -28,159 +45,168 @@ describe('normalization', () => {
 
 	it('rejects an unknown foldCompensation rather than trusting it', () => {
 		expect(
-			packagingData(normalizeState({ pockets: [], foldCompensation: 'wishful' })).foldCompensation
+			packagingData(normalizeState(saved({ foldCompensation: 'wishful' }))).foldCompensation
 		).toBe('none');
 	});
 
 	it('keeps label offsets across a JSON roundtrip', () => {
 		const design = patchDesign(createDefaultDesign(), {
 			pockets: packagingData(
-				normalizeState({
-					pockets: [{ id: 'p', name: 'Tablet', labelOffset: { x: 12, y: -7 } }]
-				})
+				normalizeState(
+					saved({ pockets: [{ id: 'p', name: 'Tablet', labelOffset: { x: 12, y: -7 } }] })
+				)
 			).pockets
 		});
 		const roundTripped = parseDesign(serializeDesign(design));
 		expect(packagingData(roundTripped).pockets[0]?.labelOffset).toEqual({ x: 12, y: -7 });
 	});
 
-	it('migrates legacy supports to floor mounts without changing their height offset', () => {
-		const design = normalizeState({
-			pockets: [],
-			risers: [
-				{
-					id: 'old',
-					name: 'Old riser',
-					w: 100,
-					d: 80,
-					h: 30,
-					assemblyZ: 12,
-					flatX: 100,
-					flatY: 100,
-					netVersion: 2
-				}
-			]
-		});
-		expect(packagingData(design).supports[0]?.kind).toBe('riser');
-		expect(packagingData(design).supports[0]?.mount.anchor).toBe('box-floor');
-		expect(packagingData(design).supports[0]?.mount.offset).toBe(12);
-	});
-
-	it('maps the older target/face mount pair onto the named anchors', () => {
-		const support = (mount: unknown) => ({
-			id: 'r',
-			name: 'R',
-			w: 100,
-			d: 80,
-			h: 30,
-			flatX: 100,
-			flatY: 100,
-			netVersion: 2,
-			kind: 'riser',
-			mount
-		});
-		const anchorOf = (mount: unknown) =>
-			packagingData(normalizeState({ pockets: [], risers: [support(mount)] })).supports[0]?.mount;
-
-		expect(anchorOf({ target: 'deck', face: 'top', offset: 4 })).toEqual({
-			anchor: 'deck-top',
-			offset: 4
-		});
-		expect(anchorOf({ target: 'deck', face: 'underside', offset: 0 })).toEqual({
-			anchor: 'deck-underside',
-			offset: 0
-		});
-		expect(anchorOf({ target: 'box-floor', face: 'top', offset: 7 })).toEqual({
-			anchor: 'box-floor',
-			offset: 7
-		});
-		// Any other target named another support by id.
-		expect(anchorOf({ target: 'parent-id', face: 'top', offset: 2 })).toEqual({
-			anchor: 'support-top',
-			supportId: 'parent-id',
-			offset: 2
-		});
-	});
-
-	it('reads a mount already written with a named anchor', () => {
-		const design = normalizeState({
-			pockets: [],
-			risers: [
-				{
-					id: 'r',
-					name: 'R',
-					w: 100,
-					d: 80,
-					h: 30,
-					kind: 'riser',
-					netVersion: 2,
-					mount: { anchor: 'support-top', supportId: 'p', offset: 3 }
-				}
-			]
-		});
-		expect(packagingData(design).supports[0]?.mount).toEqual({
+	it('reads a mount written with a named anchor', () => {
+		expect(
+			supportRead({ mount: { anchor: 'support-top', supportId: 'p', offset: 3 } })?.mount
+		).toEqual({
 			anchor: 'support-top',
 			supportId: 'p',
 			offset: 3
 		});
+		expect(supportRead({ mount: { anchor: 'deck-underside', offset: 0 } })?.mount).toEqual({
+			anchor: 'deck-underside',
+			offset: 0
+		});
 	});
 
-	it('falls back to the floor when a support-top mount names nothing', () => {
-		const design = normalizeState({
-			pockets: [],
-			risers: [
-				{
-					id: 'r',
-					name: 'R',
-					w: 100,
-					d: 80,
-					h: 30,
-					kind: 'riser',
-					mount: { anchor: 'support-top' }
-				}
-			]
+	it('falls back to the floor when a mount is missing or names nothing', () => {
+		expect(supportRead({ mount: { anchor: 'support-top' } })?.mount.anchor).toBe('box-floor');
+		expect(supportRead({ mount: { target: 'deck', face: 'top' } })?.mount).toEqual({
+			anchor: 'box-floor',
+			offset: 0
 		});
-		expect(packagingData(design).supports[0]?.mount.anchor).toBe('box-floor');
+		expect(supportRead({ kind: 'tray' })?.mount.anchor).toBe('deck-underside');
 	});
 
 	it('takes a saved height as fixed unless the file says it spans', () => {
-		const read = (extra: Record<string, unknown>) =>
-			packagingData(
-				normalizeState({
-					pockets: [],
-					risers: [{ id: 'r', name: 'R', w: 100, d: 80, h: 30, kind: 'riser', ...extra }]
-				})
-			).supports[0];
-		// A file predating spanning heights keeps the height it recorded.
-		expect(read({})).toMatchObject({ heightMode: 'fixed', h: 30 });
-		expect(read({ heightMode: 'span' })?.heightMode).toBe('span');
+		expect(supportRead({})).toMatchObject({ heightMode: 'fixed', h: 30 });
+		expect(supportRead({ heightMode: 'span' })?.heightMode).toBe('span');
 	});
 
-	it('shifts a pre-v2 riser net up by its height', () => {
-		const legacy = normalizeState({
-			pockets: [],
-			risers: [{ id: 'old', name: 'Old', w: 100, d: 80, h: 30, flatX: 100, flatY: 100 }]
-		});
-		expect(packagingData(legacy).supports[0]?.flatY).toBe(130);
+	it('keeps a support net where the file placed it', () => {
+		expect(supportRead({ kind: undefined, flatX: 100, flatY: 100 })?.flatY).toBe(100);
 	});
 
 	it('restores a deck sheet and a valid active sheet', () => {
-		// A version 7 document, whose sheets carry no workspace tag yet.
-		const design = normalizeState({
-			pockets: [],
-			sheets: [{ id: 'parts', name: 'Parts', machineProfileId: DEFAULT_MACHINE_PROFILE_ID }],
-			activeSheetId: 'gone'
-		});
+		const design = normalizeState(
+			saved(
+				{},
+				{
+					sheets: [
+						{
+							id: 'parts',
+							name: 'Parts',
+							workspace: 'packaging',
+							machineProfileId: DEFAULT_MACHINE_PROFILE_ID
+						}
+					],
+					activeSheetId: 'gone'
+				}
+			)
+		);
 		expect(design.sheets[0]?.id).toBe('deck');
 		expect(design.activeSheetId).toBe('deck');
 	});
 
-	it('refuses a design file from a newer version', () => {
-		expect(() =>
-			parseDesign(
-				JSON.stringify({ format: 'voisee-insert-design', version: 99, design: { pockets: [] } })
+	it('gives a packaging sheet its data even when the namespace is missing', () => {
+		const design = normalizeState({ ...saved(), workspaces: {} });
+		expect(design.workspaces.packaging?.deckSheetId).toBe('deck');
+	});
+
+	it('re-tags a sheet whose workspace this build does not know', () => {
+		const design = normalizeState({
+			sheets: [{ id: 'deck', name: 'Deck', workspace: 'embroidery' }],
+			workspaces: {}
+		});
+		expect(design.sheets[0]?.workspace).toBe('packaging');
+	});
+
+	it('follows a deck sheet with any id', () => {
+		const design = normalizeState({
+			sheets: [{ id: 'blank-a', name: 'Blank', workspace: 'packaging' }],
+			activeSheetId: 'blank-a',
+			workspaces: { packaging: { deckSheetId: 'blank-a' } }
+		});
+		expect(design.sheets.map((sheet) => sheet.id)).toEqual(['blank-a']);
+		expect(design.activeSheetId).toBe('blank-a');
+	});
+});
+
+describe('machine profiles in a saved document', () => {
+	it('repairs a sheet that names a profile the document does not have', () => {
+		// Losing the sheet would lose the parts cut from it, so it is re-pointed.
+		const design = normalizeState(
+			saved(
+				{},
+				{
+					machineProfiles: [{ id: 'real', name: 'Real' }],
+					sheets: [
+						{ id: 'deck', name: 'Deck', workspace: 'packaging', machineProfileId: 'missing' }
+					]
+				}
 			)
-		).toThrow(/newer version/);
+		);
+		expect(design.sheets[0]?.machineProfileId).toBe('real');
+	});
+
+	it('always leaves at least one profile, however broken the input', () => {
+		for (const machineProfiles of [[], undefined, 'nonsense', [null], [{}]]) {
+			const design = normalizeState(saved({}, { machineProfiles }));
+			expect(design.machineProfiles.length).toBeGreaterThanOrEqual(1);
+			expect(() => machineProfileFor(design, 'deck')).not.toThrow();
+		}
+	});
+
+	it('drops a duplicate profile id rather than leaving the reference ambiguous', () => {
+		const design = normalizeState(
+			saved(
+				{},
+				{
+					machineProfiles: [
+						{ id: 'a', name: 'First', cutFeed: 111 },
+						{ id: 'a', name: 'Second', cutFeed: 222 }
+					]
+				}
+			)
+		);
+		expect(design.machineProfiles).toHaveLength(1);
+		expect(design.machineProfiles[0]?.cutFeed).toBe(111);
+	});
+
+	it('defaults an unreadable field rather than making the program nonsense', () => {
+		const design = normalizeState(
+			saved({}, { machineProfiles: [{ id: 'partial', name: 'Partial', cutFeed: 'fast' }] })
+		);
+		expect(design.machineProfiles[0]?.cutFeed).toBe(800);
+	});
+});
+
+describe('the design file envelope', () => {
+	const file = (fields: Record<string, unknown>) =>
+		JSON.stringify({ format: DESIGN_FORMAT, version: DESIGN_VERSION, design: saved(), ...fields });
+
+	it('reads a file of the current version', () => {
+		expect(parseDesign(file({})).sheets[0]?.id).toBe('deck');
+	});
+
+	it('rejects a file of any other version with a clear error', () => {
+		for (const version of [DESIGN_VERSION - 1, DESIGN_VERSION + 1, undefined, '8']) {
+			expect(() => parseDesign(file({ version }))).toThrow(/this build reads version/);
+		}
+	});
+
+	it('rejects a bare document or a foreign format', () => {
+		expect(() => parseDesign(JSON.stringify(saved()))).toThrow(/not a Voisee insert design/);
+		expect(() => parseDesign(file({ format: 'something-else' }))).toThrow(
+			/not a Voisee insert design/
+		);
+		expect(() => parseDesign('[]')).toThrow(/must contain an object/);
 	});
 });
 

@@ -67,7 +67,6 @@ src/
         types.ts                 DesignState, sheets, stock, paths, machine settings
         workspace.ts             WorkspaceDataMap, augmented by each feature
         machine.ts               machine profiles and per-sheet views
-        migrate.ts               version-stepped document migrations
         defaults.ts              generic defaults: stock, machine profile
         normalize.ts             generic document reading; workspaces read their own
       cam/
@@ -258,8 +257,8 @@ under `workspaces[id]`, present only when the document uses that workspace.
   only while the entity exists); snap is in `editor/tools.svelte.ts` and reaches
   drags as `DragView = PackagingView & { snapEnabled }`.
 - **Drafts are design files.** `saveDraft` writes through `serializeDesign`, and
-  `loadDraft` reads through `parseDesign`, which still accepts the bare documents
-  earlier builds left in `localStorage`.
+  `loadDraft` reads through `parseDesign`; a draft it cannot read is dropped and
+  the editor starts fresh.
 
 **There are no legacy designs.** KorCad has never shipped saved files to users,
 so loading or upgrading old document versions is not a requirement. When the
@@ -267,20 +266,10 @@ document shape changes, change the types and regenerate the serialization
 fixture (`tests/fixtures/designs/folded-pocket.voisee.json`, with
 `UPDATE_GOLDEN=1`); do not add a migration step or a compatibility reader.
 
-The code still carries compatibility machinery from before this was decided,
-and removing it is the next cleanup (see Roadmap):
-
-- the version-stepped pipeline in `core/design/migrate.ts` (steps 6→7 and 7→8,
-  `detectVersion`, `migrateDocument`) and `tests/unit/core/migration.spec.ts`
-- old-shape readers in `features/packaging/normalize.ts`: the `{ target, face }`
-  mount, `assemblyZ`, and pre-v2 riser nets (which is all `netVersion` is for)
-- the frozen `tests/fixtures/designs/legacy/v6-folded-pocket.voisee.json` and its
-  test, which duplicate the `folded-pocket` golden
-- the bare-draft fallback in `unwrapDesignFile` and `persistence.spec.ts`
-
-Keep after the cleanup: the file's `version` field as a plain check that rejects
-a mismatched file with a clear error, and field-by-field validation of imported
-JSON, which is still untrusted input.
+`unwrapDesignFile` requires the `format` and a `version` equal to
+`DESIGN_VERSION`, and rejects anything else — a bare document, an older or newer
+file — with a clear error. Past the envelope, `normalizeState` still reads the
+document field by field, because imported JSON is untrusted input.
 
 Validate untrusted design-file JSON at the import boundary. TypeScript types do not validate runtime data.
 
@@ -325,7 +314,7 @@ type SupportMount =
 	| { anchor: 'support-top'; supportId: string; offset: number };
 ```
 
-`offset` always measures away from the anchoring surface along the support's own build direction, so it reads positive downward for `deck-underside` and positive upward everywhere else. The union is discriminated deliberately: only `support-top` carries an id, and a face for the box floor cannot be written down. Earlier files used a `{ target, face }` pair, migrated in `normalizeSupport`.
+`offset` always measures away from the anchoring surface along the support's own build direction, so it reads positive downward for `deck-underside` and positive upward everywhere else. The union is discriminated deliberately: only `support-top` carries an id, and a face for the box floor cannot be written down.
 
 Height is either `fixed` or a `span` derived from the gap between the anchor and the deck underside. A riser box exists to hold the deck up, so it spans by default and its flat net follows the wall height. `resolveSupportHeights` writes the derived value back into `h`, and runs on every editor mutation and at the design-file import boundary — so every geometry consumer reads one concrete number and never has to know how it was decided.
 
@@ -509,6 +498,8 @@ Done:
 12. Workspace namespace: packaging data under `workspaces.packaging`, a workspace tag per
     sheet, `stock` grouped, selection and snap moved out of the document, drafts written
     as design files, and a registry seam in `features/workspaces.ts` (document version 8).
+13. Compatibility cleanup: the migration pipeline, old-shape readers, `netVersion`, and the
+    bare-draft fallback removed; a file of any other version is rejected.
 
 Not yet ported from the reference implementation:
 
@@ -526,10 +517,7 @@ sheet. Stock size is fixed at 24 in for now.
 Next, in order. Each step leaves check, lint, unit, build, and e2e green, with
 goldens byte-identical.
 
-1. **Compatibility cleanup.** Remove the machinery listed under Domain Model →
-   "There are no legacy designs". Commit the repository first: nothing is under
-   git yet.
-2. **Slice 4 — registry wiring.** `features/workspaces.ts` is the registry: one
+1. **Slice 4 — registry wiring.** `features/workspaces.ts` is the registry: one
    typed entry per workspace. Today an entry has `id`, `label`, `dataScope`, and
    `normalize`. Grow it with `defaults`, `reconcile`, `tools`, `geometry`,
    `validate`, optional `assembly`, `capabilities` (`folding`, `assembly`), and
@@ -552,7 +540,7 @@ goldens byte-identical.
      assuming packaging exists here.
    - If it grows unwieldy, land the state/registry half before the component
      split.
-3. **Slice 5 — the Solid workspace.** Sheet-scoped data (each plate is
+2. **Slice 5 — the Solid workspace.** Sheet-scoped data (each plate is
    independent). Entities: outer profile (rectangle, rounded, ellipse,
    polygon), hole, slot. Profiles cut `outside`, holes `inside` — the first real
    use of `CamIntent.offsetSide`. Holding tabs on outer profiles, reusing
@@ -561,11 +549,11 @@ goldens byte-identical.
    fold UI, crease pass, or 3D toggle on a Solid sheet — absent, not disabled.
    Choosing the workspace when adding a sheet. Decide what an unknown workspace
    tag does; normalization currently re-tags it as `packaging`.
-4. **Workspace switcher and profiles UI.** A Fusion-style switcher, and adding,
+3. **Workspace switcher and profiles UI.** A Fusion-style switcher, and adding,
    duplicating, and deleting machine profiles (only rename and edit exist).
    E2E: switching workspace changes the tools; a Solid part with a hole exports
    G-code; packaging sheets behave exactly as before.
-5. **Slice 6 — cleanup.** Move deck-shaped fields out of
+4. **Slice 6 — cleanup.** Move deck-shaped fields out of
    `core/assembly/model.ts` and `MIN_FLAT_PANEL` out of `core/constants.ts`;
    promote sheet nesting (`placement.ts`) once both workspaces use it; leave
    `mounting.ts`/`anchoring.ts` in packaging. Update this file and `README.md`.

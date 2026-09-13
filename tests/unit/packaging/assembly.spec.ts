@@ -29,7 +29,6 @@ const riser = (overrides: Partial<Support> = {}): Support => ({
 	h: 30,
 	heightMode: 'fixed',
 	mount: { anchor: 'deck-top', offset: 0 },
-	netVersion: 3,
 	...overrides
 });
 

@@ -9,10 +9,8 @@ import { resolveSupportHeights } from '$lib/features/packaging/levels.js';
  * cleared browser profile never loses a design the user meant to keep.
  *
  * A draft is written exactly like a design file, envelope and version
- * included, so the two can never drift apart and a draft is migrated from the
- * version it records. Drafts saved by earlier builds are bare documents with no
- * envelope; `parseDesign` accepts those too and reads their version from their
- * shape.
+ * included, so the two can never drift apart. A draft this build cannot read
+ * is ignored and the editor starts fresh.
  */
 export function loadDraft(): DesignState | null {
 	try {

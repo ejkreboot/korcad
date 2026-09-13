@@ -90,8 +90,7 @@ const trayDesign = (): DesignState =>
 				flatY: 100,
 				assemblyX: 40,
 				assemblyY: 50,
-				mount: { anchor: 'deck-underside', offset: 0 },
-				netVersion: 3
+				mount: { anchor: 'deck-underside', offset: 0 }
 			} satisfies Support
 		]
 	});

@@ -15,8 +15,9 @@ export const SNAP = MM_PER_IN / 4;
 export const STORAGE_KEY = 'voisee-insert-generator-v02';
 export const DESIGN_FORMAT = 'voisee-insert-design';
 /**
- * The document version this build writes. Every bump needs a step in
- * `core/design/migrate.ts`; a test asserts the two agree.
+ * The document version this build writes, and the only one it reads. There are
+ * no legacy designs to upgrade: a shape change bumps this and regenerates the
+ * serialization fixture.
  */
 export const DESIGN_VERSION = 8;
 

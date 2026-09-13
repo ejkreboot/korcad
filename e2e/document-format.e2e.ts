@@ -2,10 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { DRAFT_KEY, gotoEditor, readDraft, readPackagingDraft } from './helpers.js';
 
 /**
- * The saved document, version 8: generic settings at the top, each workspace's
+ * The saved document: generic settings at the top, each workspace's
  * data under `workspaces`, and editor state — selection, snap — not saved at
  * all. The shape is unit-tested; what needs a browser is that the editor writes
- * it, and still opens a draft an earlier build left behind.
+ * it, and recovers from a draft it cannot read.
  */
 
 async function drawOpening(page: Page): Promise<void> {
@@ -46,19 +46,13 @@ test('undoing the opening it just drew clears the selection with it', async ({ p
 	await expect(page.getByLabel(/Deck width/)).toBeVisible();
 });
 
-test('opens a bare draft saved by an earlier build and rewrites it', async ({ page }) => {
-	const legacy = {
+test('starts fresh over a draft this build cannot read, and replaces it', async ({ page }) => {
+	// A bare document with no envelope, as no current build writes.
+	const unreadable = {
 		units: 'mm',
-		fabricationMode: 'knife',
-		cutDepth: 2.5,
 		deckW: 300,
-		snapEnabled: true,
 		sheets: [{ id: 'deck', name: 'Deck' }],
-		activeSheetId: 'deck',
-		selectedId: null,
-		pockets: [],
-		selectedRiserId: null,
-		risers: []
+		pockets: []
 	};
 	await page.addInitScript(
 		([key, value]) => {
@@ -68,7 +62,7 @@ test('opens a bare draft saved by an earlier build and rewrites it', async ({ pa
 				sessionStorage.setItem('seeded', '1');
 			}
 		},
-		[DRAFT_KEY, JSON.stringify(legacy)] as const
+		[DRAFT_KEY, JSON.stringify(unreadable)] as const
 	);
 	await gotoEditor(page);
 
@@ -78,8 +72,6 @@ test('opens a bare draft saved by an earlier build and rewrites it', async ({ pa
 		)
 		.toBe(true);
 	const design = (await readDraft(page))!;
-	expect((await readPackagingDraft(page))?.deckW).toBe(300);
-	expect(design.stock).toMatchObject({ units: 'mm' });
-	expect((design.machineProfiles as { cutDepth: number }[])[0]?.cutDepth).toBe(2.5);
-	await expect(page.getByLabel(/Deck width/)).toHaveValue('300');
+	expect(design.workspaces).toHaveProperty('packaging');
+	await expect(page.getByLabel(/Deck width/)).not.toHaveValue('300');
 });

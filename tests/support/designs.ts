@@ -136,8 +136,7 @@ export function supportDesign(): DesignState {
 	const common = {
 		...supportDefaults(),
 		heightMode: 'fixed' as const,
-		sheetId: 'parts',
-		netVersion: 3
+		sheetId: 'parts'
 	};
 	const tray: Support = {
 		...common,
@@ -171,8 +170,7 @@ export function supportDesign(): DesignState {
 		flatY: 60,
 		assemblyX: 220,
 		assemblyY: 60,
-		mount: { anchor: 'box-floor', offset: 0 },
-		netVersion: 2
+		mount: { anchor: 'box-floor', offset: 0 }
 	};
 	return patchDesign(foldedDesign(), {
 		sheets: [packagingSheet('deck', 'Deck'), packagingSheet('parts', 'Parts 1')],
@@ -234,8 +232,7 @@ export function* everyPackagingVariant(): Generator<DesignState> {
 									mount:
 										kind === 'tray'
 											? { anchor: 'deck-underside', offset: 0 }
-											: { anchor: 'box-floor', offset: 0 },
-									netVersion: kind === 'tray' ? 3 : 2
+											: { anchor: 'box-floor', offset: 0 }
 								};
 								yield withMachine(
 									patchDesign(createDefaultDesign(), {

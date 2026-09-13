@@ -2,7 +2,6 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { packagingData } from '$lib/features/packaging/view.js';
 import { serializeDesign } from '$lib/core/export/design-file.js';
 import { parseDesign } from '$lib/features/document.js';
 import type { DesignState } from '$lib/core/design/types.js';
@@ -74,36 +73,5 @@ describe('golden output', () => {
 		const text = serializeDesign(design, '2026-01-01T00:00:00.000Z');
 		golden('designs/folded-pocket.voisee.json', text);
 		expect(parseDesign(text)).toEqual(design);
-	});
-});
-
-/**
- * The compatibility contract, pinned to a real saved file rather than to a
- * design built in code.
- *
- * `designs/folded-pocket.voisee.json` is a serialization golden and will change
- * shape as the document format moves on. This frozen copy must not: it is a
- * version 6 file exactly as the shipped editor wrote one, and the programs it
- * produces must stay byte-identical forever. If this test fails, a real user's
- * saved design would now cut differently.
- */
-describe('a saved version 6 design', () => {
-	const saved = readFileSync(fixture('designs/legacy/v6-folded-pocket.voisee.json'), 'utf8');
-
-	it('still loads', () => {
-		const design = parseDesign(saved);
-		expect(packagingData(design).pockets).toHaveLength(1);
-		expect(validate(design)).toEqual([]);
-	});
-
-	it('still produces the same crease and cut programs', () => {
-		const design = parseDesign(saved);
-		const paths = allGeometry(design).paths;
-		expect(packagingGcode(paths, view(design), 'crease')).toBe(
-			readFileSync(fixture('expected-gcode/folded-pocket-01-crease.nc'), 'utf8')
-		);
-		expect(packagingGcode(paths, view(design), 'cut')).toBe(
-			readFileSync(fixture('expected-gcode/folded-pocket-02-cut.nc'), 'utf8')
-		);
 	});
 });

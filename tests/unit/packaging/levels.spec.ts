@@ -43,7 +43,6 @@ const riser = (overrides: Partial<Support> = {}): Support => ({
 	h: 30,
 	heightMode: 'fixed',
 	mount: { anchor: 'box-floor', offset: 0 },
-	netVersion: 2,
 	...overrides
 });
 

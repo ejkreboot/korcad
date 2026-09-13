@@ -4,14 +4,7 @@ import type { DesignState, FoldDirection, SideFlags } from '$lib/core/design/typ
 import { createDefaultPackaging, pocketDefaults, supportDefaults } from './defaults.js';
 import type { PackagingData, Pocket, PocketPurpose, Support, SupportMount } from './types.js';
 
-/**
- * Reads the packaging workspace out of a migrated document.
- *
- * The pre-v6 shapes recognised here — a support's `{ target, face }` mount, a
- * bare `assemblyZ`, pre-v2 riser nets — are tolerant reads of fields inside an
- * old document rather than steps of the migration pipeline. They are tested,
- * and turning them into synthetic versions would be churn.
- */
+/** Reads the packaging workspace out of an untrusted saved document. */
 
 const POCKET_PURPOSES: readonly PocketPurpose[] = [
 	'product',
@@ -97,12 +90,8 @@ function normalizePocket(value: unknown, index: number): Pocket {
 }
 
 /**
- * Reads a support mount from untrusted JSON.
- *
- * Supersedes the earlier `{ target, face }` pair, where `target` was `deck`,
- * `box-floor`, or another support's id and `face` only meant anything for the
- * deck. Those combinations map onto the named anchors one-for-one, so a saved
- * design lands at exactly the same height it did before.
+ * Reads a support mount from untrusted JSON. A `support-top` mount that names
+ * no support falls back to the floor rather than pointing at nothing.
  */
 function normalizeMount(source: Record<string, unknown>, fallback: SupportMount): SupportMount {
 	const offset = finite(source.offset) ? source.offset : fallback.offset;
@@ -115,16 +104,6 @@ function normalizeMount(source: Record<string, unknown>, fallback: SupportMount)
 			? { anchor, supportId: source.supportId, offset }
 			: { anchor: 'box-floor', offset };
 	}
-
-	const target = source.target;
-	if (target === 'box-floor') return { anchor: 'box-floor', offset };
-	if (target === 'deck') {
-		return { anchor: source.face === 'underside' ? 'deck-underside' : 'deck-top', offset };
-	}
-	// Any other target named another support by id.
-	if (typeof target === 'string' && target.length > 0) {
-		return { anchor: 'support-top', supportId: target, offset };
-	}
 	return fallback;
 }
 
@@ -133,17 +112,9 @@ function normalizeSupport(value: unknown, index: number, deckSheetId: string): S
 	const base = supportDefaults(deckSheetId);
 	const kind: Support['kind'] =
 		source.kind === 'tray' ? 'tray' : source.kind === 'platform' ? 'platform' : 'riser';
-	// Pre-v2 riser nets placed `flatY` at the wall fold rather than the panel
-	// bottom, so legacy files must be shifted up by the riser height.
-	const legacyNet = source.kind === undefined && source.netVersion !== 2;
-	// Oldest files carry a bare `assemblyZ` height above the box floor.
 	const defaultMount: SupportMount =
-		kind === 'tray'
-			? { anchor: 'deck-underside', offset: 0 }
-			: { anchor: 'box-floor', offset: finite(source.assemblyZ) ? source.assemblyZ : 0 };
+		kind === 'tray' ? { anchor: 'deck-underside', offset: 0 } : { anchor: 'box-floor', offset: 0 };
 	const mountSource = isRecord(source.mount) ? source.mount : {};
-	const flatY = finite(source.flatY) ? source.flatY : base.flatY;
-	const height = finite(source.h) ? source.h : 40;
 
 	return {
 		kind,
@@ -152,9 +123,7 @@ function normalizeSupport(value: unknown, index: number, deckSheetId: string): S
 		sheetId: typeof source.sheetId === 'string' ? source.sheetId : base.sheetId,
 		w: finite(source.w) ? source.w : 0,
 		d: finite(source.d) ? source.d : 0,
-		h: height,
-		// Only a design saved with an explicit spanning height keeps one; every
-		// older file is taken at the height it recorded, unchanged.
+		h: finite(source.h) ? source.h : 40,
 		heightMode: source.heightMode === 'span' ? 'span' : 'fixed',
 		flange: finite(source.flange) ? source.flange : base.flange,
 		seam: finite(source.seam) ? source.seam : base.seam,
@@ -175,11 +144,10 @@ function normalizeSupport(value: unknown, index: number, deckSheetId: string): S
 		pullDepth: finite(source.pullDepth) ? source.pullDepth : base.pullDepth,
 		pulls: sideFlags(source.pulls, base.pulls),
 		flatX: finite(source.flatX) ? source.flatX : base.flatX,
-		flatY: legacyNet ? flatY + height : flatY,
+		flatY: finite(source.flatY) ? source.flatY : base.flatY,
 		assemblyX: finite(source.assemblyX) ? source.assemblyX : base.assemblyX,
 		assemblyY: finite(source.assemblyY) ? source.assemblyY : base.assemblyY,
 		mount: normalizeMount(mountSource, defaultMount),
-		netVersion: kind === 'tray' ? 3 : 2,
 		...labelOffset(source.labelOffset)
 	};
 }

@@ -6,7 +6,7 @@ import type { MachineProfile, StockSettings } from './types.js';
  * because choosing which workspace a new design opens in is not core's call.
  */
 
-/** Id of the profile every design starts with, and every migrated design gets. */
+/** Id of the profile every design starts with. */
 export const DEFAULT_MACHINE_PROFILE_ID = 'default';
 
 /**

@@ -118,7 +118,6 @@ describe('support placement', () => {
 		d: 80,
 		h: 40,
 		mount: { anchor: 'box-floor', offset: 0 },
-		netVersion: 2,
 		...overrides
 	});
 

@@ -415,8 +415,7 @@ describe('support manipulation', () => {
 		h: 40,
 		flatX: 200,
 		flatY: 200,
-		mount: { anchor: 'box-floor', offset: 0 },
-		netVersion: 2
+		mount: { anchor: 'box-floor', offset: 0 }
 	};
 	const original = { flatX: 200, flatY: 200, w: 100, d: 80, h: 40 };
 
