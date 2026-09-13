@@ -261,26 +261,26 @@ under `workspaces[id]`, present only when the document uses that workspace.
   `loadDraft` reads through `parseDesign`, which still accepts the bare documents
   earlier builds left in `localStorage`.
 
-Document migrations are version-stepped in `core/design/migrate.ts`: each
-`MigrationStep` turns a raw document of one version into the raw shape of the
-next, and `normalizeState` runs the chain before reading fields. Steps only
-move data; defaulting and validating values stays normalization's job. Bump
-`DESIGN_VERSION` in `core/constants.ts` and add a step — a test asserts the two
-agree and that the chain has no gaps.
+**There are no legacy designs.** KorCad has never shipped saved files to users,
+so loading or upgrading old document versions is not a requirement. When the
+document shape changes, change the types and regenerate the serialization
+fixture (`tests/fixtures/designs/folded-pocket.voisee.json`, with
+`UPDATE_GOLDEN=1`); do not add a migration step or a compatibility reader.
 
-Version 7 moved machine settings into profiles; version 8 moved packaging data
-under `workspaces.packaging`, renamed `risers` to `supports`, grouped `stock`,
-tagged sheets with a workspace, and dropped selection and snap. A migration
-names the historical field strings of the shape it reads — that is data about
-old files, not a dependency on the feature.
+The code still carries compatibility machinery from before this was decided,
+and removing it is the next cleanup (see Roadmap):
 
-Documents older than version 6 are not stepped. Fields that changed shape
-before the pipeline existed — a support's `{ target, face }` mount, `assemblyZ`,
-pre-v2 riser nets — are still recognised by shape inside
-`features/packaging/normalize.ts`. That is the pipeline's backlog, not a gap in
-it.
+- the version-stepped pipeline in `core/design/migrate.ts` (steps 6→7 and 7→8,
+  `detectVersion`, `migrateDocument`) and `tests/unit/core/migration.spec.ts`
+- old-shape readers in `features/packaging/normalize.ts`: the `{ target, face }`
+  mount, `assemblyZ`, and pre-v2 riser nets (which is all `netVersion` is for)
+- the frozen `tests/fixtures/designs/legacy/v6-folded-pocket.voisee.json` and its
+  test, which duplicate the `folded-pocket` golden
+- the bare-draft fallback in `unwrapDesignFile` and `persistence.spec.ts`
 
-Every design-file migration must be explicit and tested. Older files should normalize into the newest supported document shape without silently changing the intended manufactured result.
+Keep after the cleanup: the file's `version` field as a plain check that rejects
+a mismatched file with a clear error, and field-by-field validation of imported
+JSON, which is still untrusted input.
 
 Validate untrusted design-file JSON at the import boundary. TypeScript types do not validate runtime data.
 
@@ -382,6 +382,35 @@ features/
 
 Only promote a concept from a feature module into `core` after at least two independent features genuinely require it.
 
+### Legacy Hangover: Packaging Derives CAM Intent From Role Strings
+
+Core CAM reads only `DesignPath.cam` (`CamIntent`: offset side, machining
+stage, chain key). Packaging does **not** state that intent where it builds a
+path. Its constructors in `geometry.ts`, `perimeter.ts`, `supports.ts`, and
+`model.ts` still emit `PackagingPath` — a `DesignPath` without `cam` — carrying
+a `role` string and a `pocketId`/`riserId`. A single pass at the end of
+`allGeometry`, `annotateCamIntent` in `features/packaging/cam-intent.ts`, then
+derives the intent from role and owner using the role tables that used to live
+in core CAM, moved verbatim so output could not shift.
+
+This was a migration expedient, not the intended design. Treat it as legacy:
+
+- **Risk:** a new role that is not in the tables silently falls through to the
+  `interior` stage and machines in the wrong order.
+  `tests/unit/packaging/cam-intent.spec.ts` guards against that by keeping the
+  role vocabulary closed. If it fails, decide what the new path is for and add
+  it; do not accept whatever the default produced.
+- **Do not copy it.** A new workspace (Solid included) sets `cam` explicitly
+  where each path is constructed, with no role table. `role` is for display and
+  G-code comments only.
+- **Cleanup, not yet scheduled:** move intent into the packaging constructors so
+  each path states its own `cam`; replace `pocketId`/`riserId` on `DesignPath`
+  with `owner`; then delete `packagingStage`, `packagingOffsetSide`,
+  `packagingChainKey`, the `annotateCamIntent` pass, and the `PackagingPath`
+  type. The goldens and `tests/unit/core/cam-partition.spec.ts` must stay
+  byte-identical, and the closed-vocabulary test can then become a direct check
+  on the constructors.
+
 ## Machine Output Safety
 
 Manufacturing output is safety-critical. Prefer conservative behavior over clever behavior.
@@ -415,7 +444,7 @@ Every extracted or added core function should be directly importable and unit-te
 
 Prioritize tests for:
 
-- design normalization and version migrations
+- design normalization of untrusted imported JSON
 - unit conversion and numeric rounding
 - bounds and validation
 - nominal versus compensated geometry
@@ -485,6 +514,76 @@ Not yet ported from the reference implementation:
 
 - the calibration coupon workflow
 - fold-direction editing by selecting a fold in the canvas
+
+## Roadmap
+
+The goal is a general 2D CAD/CAM app for hobbyist CNC in which packaging stays a
+first-class workspace. Two orthogonal concepts: a **workspace** (vocabulary,
+entities, material behaviour — `packaging` today, `solid` next) chosen per
+sheet, and a **machine profile** (process and postprocessor) referenced per
+sheet. Stock size is fixed at 24 in for now.
+
+Next, in order. Each step leaves check, lint, unit, build, and e2e green, with
+goldens byte-identical.
+
+1. **Compatibility cleanup.** Remove the machinery listed under Domain Model →
+   "There are no legacy designs". Commit the repository first: nothing is under
+   git yet.
+2. **Slice 4 — registry wiring.** `features/workspaces.ts` is the registry: one
+   typed entry per workspace. Today an entry has `id`, `label`, `dataScope`, and
+   `normalize`. Grow it with `defaults`, `reconcile`, `tools`, `geometry`,
+   `validate`, optional `assembly`, `capabilities` (`folding`, `assembly`), and
+   `gcodeOptions`, so the editor, toolbar, and export look up the active sheet's
+   workspace instead of importing packaging.
+   - `reconcile` (packaging's `resolveSupportHeights`) runs for every workspace
+     present in the document, not only the active sheet's.
+   - No generic entity CRUD. The editor exposes one primitive — update a
+     workspace's data as one undo step, plus a preview variant for drags — and
+     each feature keeps its verbs (`addPocket`, …) in its own actions module.
+   - A UI half, `components/workspaces/index.ts`, maps a workspace to its
+     inspector panels and canvas layer. Move the packaging panels out of
+     `Inspector.svelte` and the packaging overlays out of `Canvas.svelte`;
+     the canvas keeps grid, zoom/pan, paths, and the draft rectangle. The
+     toolbar shows the active workspace's tools, each carrying its own icon
+     (removing the duplicate icon maps in `Toolbar.svelte`). `DECK_OPACITIES`
+     moves to the packaging UI.
+   - Known hazard: `editor.packaging` and `packagingData` throw when a document
+     has no packaging data. That is unreachable today, but the UI must stop
+     assuming packaging exists here.
+   - If it grows unwieldy, land the state/registry half before the component
+     split.
+3. **Slice 5 — the Solid workspace.** Sheet-scoped data (each plate is
+   independent). Entities: outer profile (rectangle, rounded, ellipse,
+   polygon), hole, slot. Profiles cut `outside`, holes `inside` — the first real
+   use of `CamIntent.offsetSide`. Holding tabs on outer profiles, reusing
+   packaging's `splitSide` and `cutoutPoints` once promoted to shared code.
+   Validators: fits the sheet, respects `minimumWeb`, no self-intersection. No
+   fold UI, crease pass, or 3D toggle on a Solid sheet — absent, not disabled.
+   Choosing the workspace when adding a sheet. Decide what an unknown workspace
+   tag does; normalization currently re-tags it as `packaging`.
+4. **Workspace switcher and profiles UI.** A Fusion-style switcher, and adding,
+   duplicating, and deleting machine profiles (only rename and edit exist).
+   E2E: switching workspace changes the tools; a Solid part with a hole exports
+   G-code; packaging sheets behave exactly as before.
+5. **Slice 6 — cleanup.** Move deck-shaped fields out of
+   `core/assembly/model.ts` and `MIN_FLAT_PANEL` out of `core/constants.ts`;
+   promote sheet nesting (`placement.ts`) once both workspaces use it; leave
+   `mounting.ts`/`anchoring.ts` in packaging. Update this file and `README.md`.
+
+Deferred beyond this round: configurable stock size; laser and vinyl profiles
+and `engrave`/`mark`/`drill` operations; geometric canvas hit testing (dataset
+hit targets stay); a third workspace.
+
+Flagged for cleanup, not yet scheduled: packaging's role-string derivation of
+CAM intent (see Packaging Is A Feature Module → Legacy Hangover).
+
+Decisions already taken in v8 that later work should not undo:
+
+- Selection is one slot in `editor/state.svelte.ts`, not in `tools.svelte.ts`,
+  because the add actions select what they create. Snap lives in tools.
+- `fold.ts` already moved to `features/packaging`; core `generateGcode` prints
+  workspace header lines passed in `GcodeOptions.headerNotes`.
+- When the saved active sheet is missing, the first sheet becomes active.
 
 Still true for anything remaining: behaviour preservation first. Retain the original values and numerical behaviour unless a change is intentional and covered by updated tests, and avoid numeric cleanup that shifts toolpaths through rounding or unit-conversion differences. Migrate one behaviorally testable slice at a time rather than changing the data model, geometry, and UI together.
 
@@ -580,12 +679,45 @@ Run the narrowest relevant test after each core change. Before declaring a phase
 
 `npm run lint` fails on formatting alone, so run `npm run format` before it rather than hand-fixing Prettier complaints.
 
+### Working Efficiently
+
+Every command's output and every file read stays in the session's context and
+is paid for again on each later turn. Be deliberate about both.
+
+**Run targeted tests while iterating; run the full gates once.**
+
+- During a change, run only the specs that cover it:
+  `npx vitest run tests/unit/core/golden.spec.ts`, or filter by name with `-t`.
+  Run `npx playwright test e2e/<file>.e2e.ts` only when the change touches that
+  flow.
+- Any CAM, geometry, or packaging change always includes `golden.spec.ts`: it
+  is cheap, and it is the regression contract.
+- Run the full unit suite, `npm run check`, `npm run lint`, the build, and the
+  whole e2e suite once, when a slice is finished — not after every edit. The
+  e2e suite is the most expensive step, because it builds the app first.
+- Pipe noisy output through a filter (`| tail`, `| grep -E "×|Tests |Error"`)
+  so a passing run costs a few lines, not hundreds.
+
+**Read only the parts of large files you need.**
+
+- Several modules are hundreds of lines (`Inspector.svelte`, `Canvas.svelte`,
+  `AssemblyViewer.svelte`, `SimulationDialog.svelte`,
+  `features/packaging/assembly.ts`, `perimeter.ts`, `validation.ts`). Locate
+  the relevant symbol with `grep -n` first, then read that range with an offset
+  and limit rather than the whole file.
+- The Current Layout above says which module owns what; use it to go straight
+  to the right file instead of opening several to find out.
+- Do not re-read a file you just edited to confirm the edit landed; the type
+  check and the targeted test are the confirmation.
+- Never read `insert-generator.html` whole. It is a large read-only reference;
+  search it for the behaviour in question and read around the match.
+
 ## Definition Of Done
 
 A change is complete only when:
 
 - moved or added behavior has direct automated tests
-- representative saved designs still load, and any document-shape change has an explicit, tested migration
+- a document-shape change updates the types and the serialization fixture; no migration or compatibility reader is added (there are no legacy designs)
 - reviewed SVG and G-code fixtures remain equivalent unless a deliberate behavior change is documented here
 - the editor preserves local-first use and explicit file export
 - machine output is validated before export
