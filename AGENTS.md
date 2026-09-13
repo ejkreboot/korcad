@@ -172,7 +172,8 @@ e2e/
 
 Two layering rules matter more than the tree itself:
 
-- `core` may not import from `features`, `editor`, `viewer`, or `components`; `tests/unit/core/cam-boundary.spec.ts` enforces it. When a packaging rule has to run at an import boundary, apply it in `editor/persistence.ts` or the packaging reader, not in `core/design/normalize.ts`.
+- `core` may not import from `features`, `editor`, `viewer`, or `components`. Only `core/cam` is guarded by a test (`tests/unit/core/cam-boundary.spec.ts`); the rest of `core` is kept clean by review, so check imports when adding to it. When a workspace rule has to run at an import boundary, put it in that workspace's `reconcile` or reader — `editor/persistence.ts` runs every workspace's `reconcile` on import — not in `core/design/normalize.ts`.
+- The editor shell (`editor/`, `components/editor/`, `routes/`) reaches a workspace only through `features/workspaces.ts` and `components/workspaces/index.ts`; `tests/unit/editor/workspace-boundary.spec.ts` enforces it. Feature modules (`features/workspaces.ts`, each workspace's `presets.ts`) type-import `IconName` from `components/icons/paths.ts` so a tool carries its own icon; that is a type-only edge to plain path data, and nothing else in `features` may import from `components`.
 - `viewer/` owns Three.js. A workspace's `assembly` (packaging's `buildAssembly`) produces the plain-data description in `core/assembly/model.ts`, which names no workspace's parts; `viewer/assembly-scene.ts` turns it into meshes, and `components/editor/AssemblyViewer.svelte` owns the renderer and hands drags to the workspace's assembly controller. Geometry decisions belong in the workspace's builder so they can be unit-tested without a browser.
 
 Do not create a package workspace or publish a package prematurely. Keep the core as an internal module until its public API has stabilized through real use.
@@ -261,7 +262,7 @@ type DesignState = {
 	machineProfiles: MachineProfile[];
 	sheets: Sheet[]; // { id, name, workspace, machineProfileId }
 	activeSheetId: string;
-	workspaces: WorkspaceData; // { packaging?: PackagingData, ... }
+	workspaces: WorkspaceData; // { packaging?: PackagingData, solid?: SolidData }
 };
 ```
 
@@ -270,8 +271,15 @@ under `workspaces[id]`, present only when the document uses that workspace.
 
 - **Core names workspace data without importing it.** `core/design/workspace.ts`
   declares an empty `WorkspaceDataMap`; `features/packaging/types.ts` augments it
-  with `packaging: PackagingData`. `WorkspaceId` is the map's keys. A new
-  workspace adds its own augmentation and registers in `features/workspaces.ts`.
+  with `packaging: PackagingData`, `features/solid/types.ts` with `solid:
+SolidData`. `WorkspaceId` is the map's keys. A new workspace adds its own
+  augmentation and registers in both registries: a `Workspace` entry in
+  `features/workspaces.ts` and a `WorkspaceUi` entry in
+  `components/workspaces/index.ts` (the compiler requires the second once the
+  id exists).
+- **An unknown workspace tag is re-tagged `packaging`** by normalization. There
+  are no files from other builds, so this is a fallback for hand-edited input,
+  not a compatibility promise; leave it unless it gets in the way.
 - **Each workspace reads its own saved data.** `normalizeDocument` in core reads
   stock, profiles, and sheets, then hands `workspaces[id]` to each registered
   reader. `normalizeState` and `parseDesign` live in `features/document.ts`,
@@ -291,10 +299,12 @@ under `workspaces[id]`, present only when the document uses that workspace.
   sheet its `sheetId` names. Read it flat through `PackagingView`
   (`packagingSheetView(design, sheetId)`, or `packagingView(design)` for the deck
   sheet), and write it with `withPackaging(design, update)`.
-- **Selection and snap are not in the document.** Selection is one slot in
-  `editor/state.svelte.ts` (`selectedPocketId` / `selectedSupportId` report it
-  only while the entity exists); snap is in `editor/tools.svelte.ts` and reaches
-  drags as `DragView = PackagingView & { snapEnabled }`.
+- **Selection and snap are not in the document.** Selection is one generic slot,
+  `{ kind, id }`, in `editor/state.svelte.ts`, reported only while the active
+  workspace's `selectionExists` says the entity is still there; each workspace's
+  bound actions read it in their own terms (`selectedPocketId`,
+  `selectedEntity`). Snap is in `editor/tools.svelte.ts` and reaches drags as
+  `tools.snapEnabled` (packaging's `DragView = PackagingView & { snapEnabled }`).
 - **Drafts are design files.** `saveDraft` writes through `serializeDesign`, and
   `loadDraft` reads through `parseDesign`; a draft it cannot read is dropped and
   the editor starts fresh.
@@ -340,9 +350,12 @@ Consequences for anything that reads a machine setting:
   components get `PackagingView` from `packagingActions(editor).view`, which
   throws without packaging data — so only packaging UI, mounted for a packaging
   sheet through `components/workspaces/index.ts`, may call it.
-- **G-code for a packaging sheet goes through `packagingGcode`.** Core
-  `generateGcode` knows nothing about folds; packaging passes its fold-allowance
-  line in `GcodeOptions.headerNotes`, printed where it always was.
+- **Export asks the workspace for its G-code options.** The shell calls core
+  `generateGcode` with `workspace.gcodeOptions(design, sheetId)`; packaging's
+  returns its fold-allowance line in `headerNotes`, printed where it always was.
+  `packagingGcode` is the same call wrapped for tests and goldens. A workspace
+  with the `folding` capability exports a crease and a cut program; one without
+  exports a single cut program.
 
 ### Vertical Placement Is Relational
 
@@ -382,6 +395,16 @@ Keep these layers distinct:
 3. Toolpath planning: legal ordering, reversible open paths, closed-contour start points, travel optimization, retracts, and machining stages.
 4. Postprocessing: machine-specific G-code or other output formats.
 
+**Scoring and fold direction are process concepts, and belong in core.**
+`DesignPath.foldDirection`, the `score` path type, and the `score` stage are
+read by core CAM, G-code, simulation, and SVG export because they decide how a
+path is machined: up-folds are creased from the back in their own program with
+their own tool, and the simulator stops for that tool change. That is not
+packaging leaking into core. What stays in packaging is deciding _which_ lines
+fold and in which direction (`folds.ts`, `foldDirections`) and the bend
+deduction. `foldKey`/`foldLabel` on `DesignPath` are packaging bookkeeping for
+fold editing and display only; CAM must not branch on them.
+
 Do not mutate a nominal design or source path while generating compensated geometry or optimizing routes. Prefer read-only inputs and newly created output objects in core modules.
 
 ## Packaging Is A Feature Module
@@ -393,13 +416,13 @@ Keep packaging-specific concepts inside `features/packaging`:
 - decks and exterior perimeters
 - folded walls and flanges
 - trays, risers, and platforms
-- fold direction and bend deduction
+- which lines fold, their direction, and bend deduction (the `score` path type and `foldDirection` on a path are core process concepts; see Geometry And CAM Contracts)
 - finger pulls and relief slots
 - joists and locking tabs
 - assembly relationships
 - calibration coupons
 
-General 2D tools should share the core path and CAM APIs, but should not need to understand packaging roles, fold direction, or assembly hierarchy.
+General 2D tools should share the core path and CAM APIs, but should not need to understand packaging roles, fold layout, or assembly hierarchy.
 
 Add new capabilities as feature modules, for example:
 
