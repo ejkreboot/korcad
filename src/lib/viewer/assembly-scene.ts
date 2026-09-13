@@ -5,7 +5,7 @@ import type {
 	AssemblyMaterial,
 	AssemblyPart,
 	BoxPart,
-	DeckPart,
+	PlatePart,
 	FootprintPart,
 	PanelPart,
 	WallPart
@@ -25,12 +25,12 @@ const EDGE_THRESHOLD = 28;
 const PLACEMENT_GREEN = 0x267151;
 
 const BOARD: Record<AssemblyMaterial, { color: number; roughness: number }> = {
-	deck: { color: 0xd8dad8, roughness: 0.94 },
+	plate: { color: 0xd8dad8, roughness: 0.94 },
 	wall: { color: 0xc7cac7, roughness: 0.96 },
-	pocket: { color: 0xb9bcba, roughness: 0.97 },
-	support: { color: 0xd0d3d0, roughness: 0.9 }
+	recess: { color: 0xb9bcba, roughness: 0.97 },
+	part: { color: 0xd0d3d0, roughness: 0.9 }
 };
-const SELECTED_SUPPORT = { color: 0xbfc4c0, roughness: 0.86 };
+const SELECTED_PART = { color: 0xbfc4c0, roughness: 0.86 };
 /** Kraft board reads as one brown regardless of which part it was cut from. */
 const KRAFT = 0xb99b70;
 
@@ -72,7 +72,7 @@ function createMaterials(
 		const key = `${material}:${selected}`;
 		const existing = cache.get(key);
 		if (existing) return existing;
-		const spec = material === 'support' && selected ? SELECTED_SUPPORT : BOARD[material];
+		const spec = material === 'part' && selected ? SELECTED_PART : BOARD[material];
 		const created = new THREE.MeshStandardMaterial({
 			color: finish === 'kraft' ? KRAFT : spec.color,
 			bumpMap: paperTexture,
@@ -219,7 +219,7 @@ function wallGeometry(part: WallPart): THREE.BufferGeometry | null {
 	return geometry;
 }
 
-function deckGeometry(part: DeckPart): THREE.BufferGeometry | null {
+function plateGeometry(part: PlatePart): THREE.BufferGeometry | null {
 	const [start, ...rest] = part.outline;
 	if (!start) return null;
 	const shape = new THREE.Shape();
@@ -262,10 +262,10 @@ function footprintMesh(part: FootprintPart, selected: boolean): THREE.Mesh {
 export type BuiltScene = {
 	/** Root of everything built for this assembly; add it to the scene. */
 	readonly root: THREE.Group;
-	/** Meshes and edges of the deck piece, which the opacity control fades. */
-	readonly deckObjects: readonly THREE.Object3D[];
-	/** Groups that can be picked and dragged, tagged with their support id. */
-	readonly supportTargets: readonly THREE.Object3D[];
+	/** Meshes and edges of the enclosing piece, which the opacity control fades. */
+	readonly fadingObjects: readonly THREE.Object3D[];
+	/** Groups that can be picked and dragged, tagged with `userData.draggableId`. */
+	readonly dragTargets: readonly THREE.Object3D[];
 };
 
 /** Builds the meshes for one part into `parent`, returning what it created. */
@@ -288,20 +288,20 @@ function addPart(
 				? panelGeometry(part)
 				: part.form === 'wall'
 					? wallGeometry(part)
-					: deckGeometry(part);
+					: plateGeometry(part);
 	if (!geometry) return [];
 
 	const mesh = new THREE.Mesh(geometry, board(part.material, selected));
 	// A box is described by its corner, but BoxGeometry is centred.
 	if (part.form === 'box') {
 		mesh.position.set(part.x + part.w / 2, part.y + part.d / 2, part.z + part.h / 2);
-	} else if (part.form === 'deck') {
+	} else if (part.form === 'plate') {
 		mesh.position.z = part.z;
 	}
 	mesh.castShadow = true;
 	mesh.receiveShadow = true;
 	parent.add(mesh);
-	const edges = part.form === 'deck' ? addEdges(mesh, 0x666d72, 0.38) : addEdges(mesh);
+	const edges = part.form === 'plate' ? addEdges(mesh, 0x666d72, 0.38) : addEdges(mesh);
 	return [mesh, edges];
 }
 
@@ -309,14 +309,14 @@ function addGroup(
 	root: THREE.Group,
 	group: AssemblyGroup,
 	board: ReturnType<typeof createMaterials>,
-	deckObjects: THREE.Object3D[]
+	fadingObjects: THREE.Object3D[]
 ): THREE.Group {
 	const container = new THREE.Group();
 	container.position.set(group.origin.x, group.origin.y, 0);
-	if (group.supportId) container.userData.supportId = group.supportId;
+	if (group.draggableId) container.userData.draggableId = group.draggableId;
 	for (const part of group.parts) {
 		const created = addPart(container, part, group.selected, board);
-		if (part.deckPart) deckObjects.push(...created);
+		if (part.fades) fadingObjects.push(...created);
 	}
 	root.add(container);
 	return container;
@@ -329,26 +329,26 @@ function addGroup(
 export function buildScene(assembly: Assembly, paperTexture: THREE.Texture): BuiltScene {
 	const root = new THREE.Group();
 	const board = createMaterials(assembly.finish, paperTexture);
-	const deckObjects: THREE.Object3D[] = [];
-	const supportTargets: THREE.Object3D[] = [];
+	const fadingObjects: THREE.Object3D[] = [];
+	const dragTargets: THREE.Object3D[] = [];
 
 	for (const group of assembly.groups) {
-		const container = addGroup(root, group, board, deckObjects);
-		if (group.supportId) supportTargets.push(container);
+		const container = addGroup(root, group, board, fadingObjects);
+		if (group.draggableId) dragTargets.push(container);
 	}
 
 	const ground = new THREE.Mesh(
 		new THREE.PlaneGeometry(
-			Math.max(assembly.deckW * 1.7, MIN_EXTENT),
-			Math.max(assembly.deckH * 1.7, MIN_EXTENT)
+			Math.max(assembly.extent.w * 1.7, MIN_EXTENT),
+			Math.max(assembly.extent.d * 1.7, MIN_EXTENT)
 		),
 		new THREE.ShadowMaterial({ color: 0x3d3a34, opacity: 0.14 })
 	);
-	ground.position.set(assembly.deckW / 2, assembly.deckH / 2, -1.5);
+	ground.position.set(assembly.extent.w / 2, assembly.extent.d / 2, -1.5);
 	ground.receiveShadow = true;
 	root.add(ground);
 
-	return { root, deckObjects, supportTargets };
+	return { root, fadingObjects, dragTargets };
 }
 
 /** Releases every geometry and material under `group` and detaches it. */
@@ -365,12 +365,12 @@ export function disposeGroup(group: THREE.Object3D | null): void {
 }
 
 /**
- * Applies the deck-transparency setting to the deck piece only, so the
- * supports inside stay solid. Depth writing is dropped once the deck is
- * noticeably transparent, otherwise it hides what it is meant to reveal.
+ * Applies the transparency setting to the enclosing piece only, so the parts
+ * inside stay solid. Depth writing is dropped once the piece is noticeably
+ * transparent, otherwise it hides what it is meant to reveal.
  */
-export function applyDeckOpacity(deckObjects: readonly THREE.Object3D[], opacity: number): void {
-	for (const object of deckObjects) {
+export function applyFadeOpacity(fadingObjects: readonly THREE.Object3D[], opacity: number): void {
+	for (const object of fadingObjects) {
 		object.visible = opacity > 0;
 		const material = (object as Partial<THREE.Mesh>).material;
 		if (!material || Array.isArray(material)) continue;

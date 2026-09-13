@@ -7,21 +7,25 @@ import type { Point } from '$lib/core/geometry/primitives.js';
  *
  * Coordinate convention matches the 2D editor and the machine: X right,
  * Y away from the operator, Z up out of the sheet. The origin is the
- * lower-left corner of the deck, so a part's Z is its height above the
- * surface the box sits on.
+ * lower-left corner of the assembled piece, so a part's Z is its height above
+ * the surface it stands on.
+ *
+ * The model names no workspace's parts. A workspace maps its own vocabulary
+ * onto these forms and materials: packaging's deck is a `plate`, its supports
+ * are draggable groups of `part` material.
  */
 export type Point3 = { readonly x: number; readonly y: number; readonly z: number };
 
 export const point3 = (x: number, y: number, z: number): Point3 => ({ x, y, z });
 
 /**
- * Which surface a part represents. The viewer maps these to materials, and the
- * deck opacity control keys off `deck`, `wall`, and `pocket`, which together
- * make up the piece the supports sit inside.
+ * Which surface a part represents, for the viewer's choice of board shade: the
+ * main `plate`, a standing or folded `wall`, a `recess` let into the plate,
+ * and a movable `part`.
  */
-export type AssemblyMaterial = 'deck' | 'wall' | 'pocket' | 'support';
+export type AssemblyMaterial = 'plate' | 'wall' | 'recess' | 'part';
 
-/** A rectangular block: a wall segment, a joist panel, or a riser side. */
+/** A rectangular block, such as a wall segment or a standing panel. */
 export type BoxPart = {
 	readonly form: 'box';
 	readonly x: number;
@@ -65,11 +69,11 @@ export type WallPart = {
 };
 
 /**
- * The deck panel: an outline extruded to the material thickness with the
- * openings punched out of it. Holes are in deck-local coordinates.
+ * A flat plate: an outline extruded to the material thickness with openings
+ * punched out of it. Outline and holes share the assembly's coordinates.
  */
-export type DeckPart = {
-	readonly form: 'deck';
+export type PlatePart = {
+	readonly form: 'plate';
 	readonly outline: readonly Point[];
 	readonly holes: readonly (readonly Point[])[];
 	readonly z: number;
@@ -89,27 +93,27 @@ export type FootprintPart = {
 	readonly d: number;
 };
 
-export type PartShape = BoxPart | PanelPart | WallPart | DeckPart | FootprintPart;
+export type PartShape = BoxPart | PanelPart | WallPart | PlatePart | FootprintPart;
 
 export type AssemblyPart = PartShape & {
 	readonly material: AssemblyMaterial;
 	/**
-	 * Whether this part belongs to the deck piece itself. The viewer fades
-	 * exactly these when the deck is made translucent, so the supports inside
-	 * stay visible.
+	 * Whether this part belongs to the enclosing piece. The viewer fades
+	 * exactly these when that piece is made translucent, so what sits inside
+	 * it stays visible.
 	 */
-	readonly deckPart: boolean;
+	readonly fades: boolean;
 };
 
 /**
- * Parts that move together. A support's parts are modelled around its own
- * origin and positioned by `origin`, so dragging it in the viewer is a group
- * translation rather than a rebuild.
+ * Parts that move together. A draggable group's parts are modelled around its
+ * own origin and positioned by `origin`, so dragging it in the viewer is a
+ * group translation rather than a rebuild.
  */
 export type AssemblyGroup = {
 	readonly id: string;
-	/** Set when the group is a draggable support, else null for fixed geometry. */
-	readonly supportId: string | null;
+	/** The id the workspace drags this group by, or null for fixed geometry. */
+	readonly draggableId: string | null;
 	readonly origin: Point;
 	readonly selected: boolean;
 	readonly parts: readonly AssemblyPart[];
@@ -117,12 +121,13 @@ export type AssemblyGroup = {
 
 export type Assembly = {
 	readonly groups: readonly AssemblyGroup[];
-	/** Z of the deck's underside. */
-	readonly deckZ: number;
-	/** Z of the deck's top face, which is what supports mount to. */
-	readonly deckSurfaceZ: number;
-	readonly deckW: number;
-	readonly deckH: number;
+	/**
+	 * The fixed piece's footprint from the origin, and its height: what the
+	 * camera frames and the ground plane is sized to.
+	 */
+	readonly extent: { readonly w: number; readonly d: number; readonly h: number };
+	/** Z of the plane a dragged group slides across. */
+	readonly dragPlaneZ: number;
 	/** Board colour hint so the viewer does not need to read design settings. */
 	readonly finish: 'kraft' | 'white' | 'printed';
 };

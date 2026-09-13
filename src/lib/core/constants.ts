@@ -20,9 +20,3 @@ export const DESIGN_FORMAT = 'voisee-insert-design';
  * serialization fixture.
  */
 export const DESIGN_VERSION = 8;
-
-/**
- * A folded panel may never be reduced below this flat width by bend
- * deduction; a shorter panel cannot be folded reliably.
- */
-export const MIN_FLAT_PANEL = 0.4;

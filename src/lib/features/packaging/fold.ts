@@ -1,6 +1,11 @@
-import { MIN_FLAT_PANEL } from '$lib/core/constants.js';
 import { clamp, round } from '$lib/core/units.js';
 import type { PackagingView } from './view.js';
+
+/**
+ * A folded panel may never be reduced below this flat width by bend
+ * deduction; a shorter panel cannot be folded reliably.
+ */
+export const MIN_FLAT_PANEL = 0.4;
 
 export type FoldSettings = Pick<
 	PackagingView,

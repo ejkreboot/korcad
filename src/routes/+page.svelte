@@ -13,6 +13,7 @@
 		saveDraft,
 		slugify
 	} from '$lib/editor/persistence.js';
+	import AssemblyViewer from '$lib/components/editor/AssemblyViewer.svelte';
 	import Canvas from '$lib/components/editor/Canvas.svelte';
 	import { workspaceUi } from '$lib/components/workspaces/index.js';
 	import Icon from '$lib/components/icons/Icon.svelte';
@@ -164,8 +165,8 @@
 
 		<SheetTabs {editor} />
 
-		{#if tools.viewMode === 'assembly' && ui.AssemblyViewer}
-			<ui.AssemblyViewer {editor} {tools} />
+		{#if tools.viewMode === 'assembly' && ui.assembly}
+			<AssemblyViewer {editor} {tools} />
 		{:else}
 			<Canvas {editor} {tools} />
 		{/if}

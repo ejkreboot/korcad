@@ -217,17 +217,17 @@ describe('joist parts', () => {
 describe('buildAssembly', () => {
 	it('always emits one deck panel, extruded to the material thickness', () => {
 		const assembly = buildAssembly(design({ material: 2.5 }));
-		const deck = parts(assembly, 'deck').filter((part) => part.form === 'deck');
+		const deck = parts(assembly, 'deck').filter((part) => part.form === 'plate');
 		expect(deck).toHaveLength(1);
-		expect(deck[0]).toMatchObject({ thickness: 2.5, deckPart: true, material: 'deck' });
+		expect(deck[0]).toMatchObject({ thickness: 2.5, fades: true, material: 'plate' });
 	});
 
 	it('punches every pocket through the deck, in deck-local coordinates', () => {
 		const pocket = createPocket({ id: 'p1', name: 'Pocket', x: 60, y: 70, w: 40, h: 30 });
 		const assembly = buildAssembly(design({ deckX: 50, deckY: 50, pockets: [pocket] }));
-		const deck = parts(assembly, 'deck').find((part) => part.form === 'deck');
-		expect(deck?.form === 'deck' && deck.holes).toHaveLength(1);
-		const hole = deck?.form === 'deck' ? (deck.holes[0] ?? []) : [];
+		const deck = parts(assembly, 'deck').find((part) => part.form === 'plate');
+		expect(deck?.form === 'plate' && deck.holes).toHaveLength(1);
+		const hole = deck?.form === 'plate' ? (deck.holes[0] ?? []) : [];
 		// The pocket sits 10mm inside the deck origin on both axes.
 		expect(Math.min(...hole.map((p) => p.x))).toBeCloseTo(10, 6);
 		expect(Math.min(...hole.map((p) => p.y))).toBeCloseTo(20, 6);
@@ -236,8 +236,8 @@ describe('buildAssembly', () => {
 	it('punches a tray opening through the deck', () => {
 		const tray = riser({ kind: 'tray', assemblyX: 30, assemblyY: 20 });
 		const assembly = buildAssembly(design({ supports: [tray] }));
-		const deck = parts(assembly, 'deck').find((part) => part.form === 'deck');
-		expect(deck?.form === 'deck' && deck.holes).toHaveLength(1);
+		const deck = parts(assembly, 'deck').find((part) => part.form === 'plate');
+		expect(deck?.form === 'plate' && deck.holes).toHaveLength(1);
 	});
 
 	it('folds a wall and a flange out of each enabled pocket side', () => {
@@ -254,10 +254,10 @@ describe('buildAssembly', () => {
 		});
 		const deckParts = parts(buildAssembly(design({ pockets: [pocket] })), 'deck');
 		expect(
-			deckParts.filter((part) => part.form === 'wall' && part.material === 'pocket')
+			deckParts.filter((part) => part.form === 'wall' && part.material === 'recess')
 		).toHaveLength(2);
 		expect(
-			deckParts.filter((part) => part.form === 'panel' && part.material === 'pocket')
+			deckParts.filter((part) => part.form === 'panel' && part.material === 'recess')
 		).toHaveLength(2);
 	});
 
@@ -280,14 +280,14 @@ describe('buildAssembly', () => {
 	it('marks every part of the deck piece as deck geometry, and no support part', () => {
 		const support = riser();
 		const assembly = buildAssembly(design({ perimeterType: 'folded', supports: [support] }));
-		expect(parts(assembly, 'deck').every((part) => part.deckPart)).toBe(true);
-		expect(parts(assembly, 'riser:riser-1').some((part) => part.deckPart)).toBe(false);
+		expect(parts(assembly, 'deck').every((part) => part.fades)).toBe(true);
+		expect(parts(assembly, 'riser:riser-1').some((part) => part.fades)).toBe(false);
 	});
 
 	it('gives a support its own draggable group at its assembly origin', () => {
 		const support = riser({ assemblyX: 40, assemblyY: 25 });
 		const group = buildAssembly(design({ supports: [support] })).groups.find(
-			(candidate) => candidate.supportId === 'riser-1'
+			(candidate) => candidate.draggableId === 'riser-1'
 		);
 		expect(group?.origin).toEqual({ x: 40, y: 25 });
 		expect(group?.id).toBe('riser:riser-1');
@@ -302,13 +302,13 @@ describe('buildAssembly', () => {
 			mount: { anchor: 'support-top', supportId: 'parent', offset: 0 }
 		});
 		const groups = buildAssembly(design({ supports: [parent, child] })).groups;
-		expect(groups.find((group) => group.supportId === 'child')?.origin).toEqual({ x: 45, y: 30 });
+		expect(groups.find((group) => group.draggableId === 'child')?.origin).toEqual({ x: 45, y: 30 });
 	});
 
 	it('marks the selected support so the viewer can highlight it', () => {
 		const support = riser();
 		const assembly = buildAssembly(design({ supports: [support] }), 'riser-1');
-		expect(assembly.groups.find((group) => group.supportId === 'riser-1')?.selected).toBe(true);
+		expect(assembly.groups.find((group) => group.draggableId === 'riser-1')?.selected).toBe(true);
 	});
 
 	it('closes a riser with four walls, a top panel, and four corner tabs', () => {
@@ -360,12 +360,17 @@ describe('buildAssembly', () => {
 		expect(walls.filter((part) => part.form === 'wall' && part.notch)).toHaveLength(1);
 	});
 
-	it('reports the deck planes and finish the viewer needs', () => {
-		const assembly = buildAssembly(
-			design({ perimeterType: 'folded', perimeterWall: 40, material: 2, boardFinish: 'kraft' })
-		);
-		expect(assembly.deckZ).toBe(40);
-		expect(assembly.deckSurfaceZ).toBe(42);
+	it('reports the extent, drag plane, and finish the viewer needs', () => {
+		const source = design({
+			perimeterType: 'folded',
+			perimeterWall: 40,
+			material: 2,
+			boardFinish: 'kraft'
+		});
+		const assembly = buildAssembly(source);
+		// The deck underside stands on the 40 mm wall, and supports slide across its top face.
+		expect(assembly.extent).toEqual({ w: view(source).deckW, d: view(source).deckH, h: 42 });
+		expect(assembly.dragPlaneZ).toBe(42);
 		expect(assembly.finish).toBe('kraft');
 	});
 

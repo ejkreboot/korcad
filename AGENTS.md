@@ -80,7 +80,7 @@ src/
       export/
         svg.ts
         design-file.ts           envelope: serialize, and unwrap before normalizing
-      assembly/model.ts          plain-data description of an assembled design
+      assembly/model.ts          plain-data assembled model: plates, walls, draggable groups
 
     features/
       workspaces.ts              the workspace registry, and document-wide reconcile/validate
@@ -92,7 +92,7 @@ src/
       view.ts                    PackagingView, packagingData, withPackaging
       defaults.ts                packaging, pocket, and support defaults
       normalize.ts               reads workspaces.packaging from a saved file
-      fold.ts                    bend deduction, flat panel widths
+      fold.ts                    bend deduction, flat panel widths, MIN_FLAT_PANEL
       gcode.ts                   packagingGcode: the program plus the fold header
       model.ts                   allGeometry: flat geometry for a sheet
       geometry.ts                pocket openings, walls, finger pulls
@@ -133,6 +133,7 @@ src/
         Icon.svelte              inline SVG glyph
       editor/                    the shell: no workspace imports (workspace-boundary.spec.ts)
         Canvas.svelte            2D sheet: grid, zoom/pan, paths, draft rectangle
+        AssemblyViewer.svelte    3D renderer, camera, orbit, drag; builds via workspace.assembly
         SimulationDialog.svelte  toolpath playback
         Inspector.svelte         Material and Machine panels, then the workspace's
         Toolbar.svelte           the active workspace's tools
@@ -140,13 +141,13 @@ src/
         CollapsiblePanel.svelte
         SheetTabs.svelte
       workspaces/
-        index.ts                 UI registry: inspector, canvas layer and controller, 3D viewer
+        index.ts                 UI registry: inspector, canvas layer and controller, assembly controller
         packaging/
           canvas.ts              what a press or a drawn rectangle does
           PackagingCanvasLayer.svelte     deck, hit targets, handles, labels
           PackagingInspector.svelte       opening, support, and deck panels
           PackagingMaterialFields.svelte  fold allowance
-          PackagingAssemblyViewer.svelte  3D viewer lifecycle and support drags
+          assembly.svelte.ts     support drags and the readout in the 3D viewer
         solid/
           canvas.ts              press and draft; moving a part carries its holes
           SolidCanvasLayer.svelte         hit targets, handles, part labels
@@ -172,7 +173,7 @@ e2e/
 Two layering rules matter more than the tree itself:
 
 - `core` may not import from `features`, `editor`, `viewer`, or `components`; `tests/unit/core/cam-boundary.spec.ts` enforces it. When a packaging rule has to run at an import boundary, apply it in `editor/persistence.ts` or the packaging reader, not in `core/design/normalize.ts`.
-- `viewer/` owns Three.js. `features/packaging/assembly.ts` produces the plain-data assembly description; `viewer/assembly-scene.ts` turns it into meshes. Geometry decisions belong in the former so they can be unit-tested without a browser.
+- `viewer/` owns Three.js. A workspace's `assembly` (packaging's `buildAssembly`) produces the plain-data description in `core/assembly/model.ts`, which names no workspace's parts; `viewer/assembly-scene.ts` turns it into meshes, and `components/editor/AssemblyViewer.svelte` owns the renderer and hands drags to the workspace's assembly controller. Geometry decisions belong in the workspace's builder so they can be unit-tested without a browser.
 
 Do not create a package workspace or publish a package prematurely. Keep the core as an internal module until its public API has stabilized through real use.
 
@@ -552,6 +553,10 @@ Done:
     a sheet of another, adding one when there is none, and disarms a tool left from the old
     workspace; the Machine panel adds, duplicates, assigns, and deletes profiles, and a
     deletion names the sheets that move to another machine before it happens.
+17. Slice 6 cleanup: `core/assembly/model.ts` names no workspace's parts (`plate`, `fades`,
+    `draggableId`, `extent`, `dragPlaneZ`); the 3D viewer is a generic editor component
+    that builds through `workspace.assembly` and hands drags to a workspace assembly
+    controller; `MIN_FLAT_PANEL` lives with packaging's fold allowance.
 
 Not yet ported from the reference implementation:
 
@@ -566,15 +571,15 @@ entities, material behaviour — `packaging` and `solid`) chosen per
 sheet, and a **machine profile** (process and postprocessor) referenced per
 sheet. Stock size is fixed at 24 in for now.
 
-Next, in order. Each step leaves check, lint, unit, build, and e2e green, with
-goldens byte-identical.
+This round of the roadmap is complete: compatibility cleanup, registry wiring,
+the Solid workspace, the workspace switcher and profiles UI, and the slice 6
+cleanup. Whatever comes next keeps check, lint, unit, build, and e2e green,
+with goldens byte-identical unless a change is deliberate and documented here.
 
-1. **Slice 6 — cleanup.** Move deck-shaped fields out of
-   `core/assembly/model.ts` (then split the Three.js lifecycle out of
-   `PackagingAssemblyViewer.svelte` into a generic viewer that builds through
-   `workspace.assembly`) and `MIN_FLAT_PANEL` out of `core/constants.ts`;
-   promote sheet nesting (`placement.ts`) once both workspaces use it; leave
-   `mounting.ts`/`anchoring.ts` in packaging. Update this file and `README.md`.
+Sheet nesting (`features/packaging/placement.ts`) stays in packaging: only
+tray nets are auto-placed, and it moves to shared code when a second workspace
+places parts automatically. `mounting.ts` and `anchoring.ts` stay in packaging
+for good.
 
 Deferred beyond this round: configurable stock size; laser and vinyl profiles
 and `engrave`/`mark`/`drill` operations; geometric canvas hit testing (dataset
@@ -715,7 +720,7 @@ is paid for again on each later turn. Be deliberate about both.
 **Read only the parts of large files you need.**
 
 - Several modules are hundreds of lines (`Inspector.svelte`, `Canvas.svelte`,
-  `PackagingAssemblyViewer.svelte`, `PackagingInspector.svelte`, `SimulationDialog.svelte`,
+  `AssemblyViewer.svelte`, `PackagingInspector.svelte`, `SimulationDialog.svelte`,
   `features/packaging/assembly.ts`, `perimeter.ts`, `validation.ts`). Locate
   the relevant symbol with `grep -n` first, then read that range with an offset
   and limit rather than the whole file.

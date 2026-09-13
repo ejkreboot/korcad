@@ -54,7 +54,7 @@ describe('the UI registry', () => {
 		for (const workspace of WORKSPACES) {
 			const ui = WORKSPACE_UI[workspace.id];
 			expect(ui, workspace.id).toBeDefined();
-			expect(ui.AssemblyViewer !== undefined, workspace.id).toBe(workspace.capabilities.assembly);
+			expect(ui.assembly !== undefined, workspace.id).toBe(workspace.capabilities.assembly);
 		}
 	});
 });

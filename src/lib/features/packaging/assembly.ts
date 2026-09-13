@@ -217,10 +217,10 @@ export function joistAssemblyParts(
 }
 
 /** Part constructors. Each returns a fresh object; nothing here mutates input. */
-const shaped = (shape: PartShape, material: AssemblyMaterial, deckPart: boolean): AssemblyPart => ({
+const shaped = (shape: PartShape, material: AssemblyMaterial, fades: boolean): AssemblyPart => ({
 	...shape,
 	material,
-	deckPart
+	fades
 });
 
 /**
@@ -245,17 +245,17 @@ export function buildAssembly(
 	const deckParts: AssemblyPart[] = [];
 	const box = (
 		material: AssemblyMaterial,
-		deckPart: boolean,
+		fades: boolean,
 		x: number,
 		y: number,
 		z: number,
 		w: number,
 		d: number,
 		h: number
-	) => shaped({ form: 'box', x, y, z, w, d, h }, material, deckPart);
+	) => shaped({ form: 'box', x, y, z, w, d, h }, material, fades);
 	const flange = (
 		material: AssemblyMaterial,
-		deckPart: boolean,
+		fades: boolean,
 		a: Point,
 		b: Point,
 		extension: Point,
@@ -266,11 +266,11 @@ export function buildAssembly(
 		shaped(
 			{ form: 'panel', vertices: hingedFlangeVertices(a, b, extension, chamfer, z), thickness },
 			material,
-			deckPart
+			fades
 		);
 	const wall = (
 		material: AssemblyMaterial,
-		deckPart: boolean,
+		fades: boolean,
 		edges: Pick<
 			Extract<PartShape, { form: 'wall' }>,
 			'topA' | 'topB' | 'bottomA' | 'bottomB' | 'inward'
@@ -279,7 +279,7 @@ export function buildAssembly(
 		topZ: number,
 		bottomZ: number,
 		notch: WallNotch | null = null
-	) => shaped({ form: 'wall', ...edges, thickness, topZ, bottomZ, notch }, material, deckPart);
+	) => shaped({ form: 'wall', ...edges, thickness, topZ, bottomZ, notch }, material, fades);
 
 	// --- Deck panel, with every opening punched through it -------------------
 	// The scene is deck-local: the deck spans 0..deckW by 0..deckH, so design
@@ -309,7 +309,7 @@ export function buildAssembly(
 	deckParts.push(
 		shaped(
 			{
-				form: 'deck',
+				form: 'plate',
 				outline: [
 					point(0, 0),
 					point(design.deckW, 0),
@@ -320,7 +320,7 @@ export function buildAssembly(
 				z: deckZ,
 				thickness: Math.max(0.5, design.material)
 			},
-			'deck',
+			'plate',
 			true
 		)
 	);
@@ -501,17 +501,17 @@ export function buildAssembly(
 		for (const side of SIDES) {
 			if (!pocket.sides[side]) continue;
 			const spec = walls[side];
-			deckParts.push(wall('pocket', true, spec.edges, t, deckZ, farZ, notch(side)));
+			deckParts.push(wall('recess', true, spec.edges, t, deckZ, farZ, notch(side)));
 			if (pocket.flangeEnabled && pocket.flange > 0) {
 				const [a, b, extension] = spec.hinge;
-				deckParts.push(flange('pocket', true, a, b, extension, flangeChamfer, flangeZ, t));
+				deckParts.push(flange('recess', true, a, b, extension, flangeChamfer, flangeZ, t));
 			}
 		}
 	}
 
 	groups.push({
 		id: 'deck',
-		supportId: null,
+		draggableId: null,
 		origin: point(0, 0),
 		selected: false,
 		parts: deckParts
@@ -524,10 +524,9 @@ export function buildAssembly(
 
 	return {
 		groups,
-		deckZ,
-		deckSurfaceZ: surface,
-		deckW: design.deckW,
-		deckH: design.deckH,
+		extent: { w: design.deckW, d: design.deckH, h: surface },
+		// Supports are dragged across the deck's top face.
+		dragPlaneZ: surface,
 		finish: design.boardFinish
 	};
 }
@@ -555,8 +554,8 @@ function buildSupportGroup(
 		w,
 		d,
 		h,
-		material: 'support',
-		deckPart: false
+		material: 'part',
+		fades: false
 	});
 	const flangePanel = (
 		a: Point,
@@ -569,8 +568,8 @@ function buildSupportGroup(
 		form: 'panel',
 		vertices: hingedFlangeVertices(a, b, extension, chamfer, z),
 		thickness,
-		material: 'support',
-		deckPart: false
+		material: 'part',
+		fades: false
 	});
 
 	if (support.kind === 'tray') {
@@ -634,8 +633,8 @@ function buildSupportGroup(
 				notch: trayHasPull(support, side)
 					? { diameter: trayPullWidthAtMouth(support), depth: support.pullDepth }
 					: null,
-				material: 'support',
-				deckPart: false
+				material: 'part',
+				fades: false
 			});
 		}
 
@@ -704,10 +703,10 @@ function buildSupportGroup(
 			z: surface + 0.8,
 			w: support.w,
 			d: support.d,
-			material: 'support',
-			deckPart: false
+			material: 'part',
+			fades: false
 		});
-		return { id: owner, supportId: support.id, origin, selected, parts };
+		return { id: owner, draggableId: support.id, origin, selected, parts };
 	}
 
 	// --- Riser or platform: four walls closed by a top panel ----------------
@@ -762,8 +761,8 @@ function buildSupportGroup(
 				{ x, y: freeY, z: tabLow + taper }
 			],
 			thickness: t * 0.72,
-			material: 'support',
-			deckPart: false
+			material: 'part',
+			fades: false
 		});
 	}
 
@@ -774,8 +773,8 @@ function buildSupportGroup(
 		z: surface + 0.8,
 		w: support.w,
 		d: support.d,
-		material: 'support',
-		deckPart: false
+		material: 'part',
+		fades: false
 	});
-	return { id: owner, supportId: support.id, origin, selected, parts };
+	return { id: owner, draggableId: support.id, origin, selected, parts };
 }

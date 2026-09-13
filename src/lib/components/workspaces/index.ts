@@ -50,6 +50,33 @@ export type CanvasController = {
 	finishDraft(rect: { x: number; y: number; w: number; h: number }): void;
 };
 
+/** A group being dragged across the assembly's drag plane. */
+export type AssemblyDrag = {
+	/**
+	 * Previews the group with its origin at `global`, and returns where the
+	 * workspace actually put it, which the viewer moves the group to.
+	 */
+	move(global: Point): Point | null;
+	/** Settles the drop. The viewer then commits one undo step and rebuilds. */
+	drop(global: Point): void;
+};
+
+/** How a workspace answers the pointer in the 3D viewer. */
+export type AssemblyController = {
+	/** What the viewer's readout says: the selection, and mid-drag where a drop would land. */
+	readonly readout: string;
+	/** Starts dragging the group with this `draggableId`; `null` when it cannot move. */
+	grab(id: string): { readonly origin: Point; readonly drag: AssemblyDrag } | null;
+};
+
+export type AssemblyUi = {
+	/** Accessible name of the 3D canvas. */
+	readonly canvasLabel: string;
+	/** Label of the control that fades the enclosing piece. */
+	readonly fadeLabel: string;
+	controller(editor: EditorState, tools: ToolState): AssemblyController;
+};
+
 export type WorkspaceUi = {
 	/** The selection panels, below the Material and Machine panels. */
 	readonly Inspector: Component<EditorProps>;
@@ -60,7 +87,7 @@ export type WorkspaceUi = {
 	readonly CanvasLayer: Component<CanvasLayerProps>;
 	canvasController(editor: EditorState, tools: ToolState): CanvasController;
 	/** Present exactly when the workspace has the `assembly` capability. */
-	readonly AssemblyViewer?: Component<ViewportProps>;
+	readonly assembly?: AssemblyUi;
 };
 
 export const WORKSPACE_UI: { readonly [K in WorkspaceId]: WorkspaceUi } = {

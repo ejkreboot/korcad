@@ -2,49 +2,49 @@
 	import { onMount } from 'svelte';
 	import type * as ThreeModule from 'three';
 	import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-	import { buildAssembly } from '$lib/features/packaging/assembly.js';
 	import {
-		applyDeckOpacity,
+		applyFadeOpacity,
 		buildScene,
 		createPaperTexture,
 		disposeGroup,
 		type BuiltScene
 	} from '$lib/viewer/assembly-scene.js';
-	import { resolveDrop, supportUnderPoint } from '$lib/features/packaging/anchoring.js';
-	import { packagingView } from '$lib/features/packaging/view.js';
-	import { supportAssemblyOrigin } from '$lib/features/packaging/mounting.js';
-	import type { EditorState } from '$lib/editor/state.svelte.js';
-	import { packagingActions } from '$lib/features/packaging/actions.js';
-	import type { ToolState } from '$lib/editor/tools.svelte.js';
+	import type { Assembly } from '$lib/core/assembly/model.js';
 	import type { Point } from '$lib/core/geometry/primitives.js';
-	import type { Support } from '$lib/features/packaging/types.js';
-	import { display } from '$lib/core/units.js';
-
-	let { editor, tools }: { editor: EditorState; tools: ToolState } = $props();
+	import type { EditorState } from '$lib/editor/state.svelte.js';
+	import type { ToolState } from '$lib/editor/tools.svelte.js';
+	import { workspaceUi, type AssemblyDrag } from '$lib/components/workspaces/index.js';
 
 	/**
-	 * How solid the deck is drawn. Anything below 1 lets the operator see the
-	 * supports that sit inside the box.
+	 * The 3D assembly preview: renderer lifecycle, camera, orbit, and the drag
+	 * gesture. What is drawn comes from the active workspace's `assembly`, and
+	 * what a drag means from its assembly controller, so nothing here knows a
+	 * deck from a support. Mounted only for a workspace with that capability.
 	 */
-	const DECK_OPACITIES = [
+	let { editor, tools }: { editor: EditorState; tools: ToolState } = $props();
+
+	/** How solid the enclosing piece is drawn; below 1 shows what sits inside it. */
+	const FADE_OPACITIES = [
 		{ value: 1, label: 'Solid' },
 		{ value: 0.58, label: 'Translucent' },
 		{ value: 0.22, label: 'Ghosted' },
 		{ value: 0, label: 'Hidden' }
 	] as const;
-	const actions = $derived(packagingActions(editor));
+	const EMPTY: Assembly = {
+		groups: [],
+		extent: { w: 1, d: 1, h: 1 },
+		dragPlaneZ: 0,
+		finish: 'white'
+	};
 
+	const ui = $derived(workspaceUi(editor.workspace.id).assembly);
+	const controller = $derived(ui?.controller(editor, tools) ?? null);
 	/**
 	 * The assembled description of the current design. Everything geometric is
-	 * decided here, in framework-free code; this component only owns the
-	 * renderer's lifecycle and the pointer gestures.
+	 * decided in framework-free code; this component only owns the renderer's
+	 * lifecycle and the pointer gestures.
 	 */
-	const assembly = $derived(buildAssembly(editor.design, actions.selectedSupportId));
-	/**
-	 * Dropping resolves anchors and heights, which depend on the machine, and
-	 * lands on the snap grid when snap is on.
-	 */
-	const view = $derived({ ...packagingView(editor.design), snapEnabled: tools.snapEnabled });
+	const assembly = $derived(editor.workspace.assembly?.(editor.design, editor.selection) ?? EMPTY);
 
 	type Runtime = {
 		readonly THREE: typeof ThreeModule;
@@ -67,51 +67,15 @@
 	let needsFit = true;
 	let drag = $state<{
 		pointerId: number;
-		supportId: string;
 		group: ThreeModule.Object3D;
-		/** Pointer offset within the part, so it does not jump to the cursor. */
+		/** Pointer offset within the group, so it does not jump to the cursor. */
 		grab: Point;
-		/** Live global assembly position, resolved into a mount on drop. */
+		/** Live position of the group's origin, settled by the workspace on drop. */
 		global: Point;
-		/** The support it would stack on if dropped now, for the readout. */
-		hostName: string | null;
+		gesture: AssemblyDrag;
 	} | null>(null);
 
-	const selected = $derived(
-		actions.view.supports.find((support) => support.id === actions.selectedSupportId) ?? null
-	);
-	const units = $derived(editor.design.stock.units);
-	const readout = $derived.by(() => {
-		if (!selected) return 'Drag a support to position it';
-		const origin = supportAssemblyOrigin(selected, actions.view.supports);
-		const places = units === 'in' ? 3 : 1;
-		const position = `X ${display(origin.x, units).toFixed(places)} · Y ${display(
-			origin.y,
-			units
-		).toFixed(places)} ${units}`;
-		// Dropping picks a surface, so say which one before the button comes up.
-		if (drag?.supportId === selected.id && drag.hostName) {
-			return `${selected.name} · ${position} · drop to stack on ${drag.hostName}`;
-		}
-		return `${selected.name} · ${position} · ${anchorLabel(selected)}`;
-	});
-
-	/** Plain-language name for the surface a support is built from. */
-	function anchorLabel(item: Support): string {
-		const { mount } = item;
-		switch (mount.anchor) {
-			case 'box-floor':
-				return 'on the box floor';
-			case 'deck-top':
-				return 'on the top deck';
-			case 'deck-underside':
-				return 'under the top deck';
-			case 'support-top': {
-				const host = actions.view.supports.find((candidate) => candidate.id === mount.supportId);
-				return host ? `on ${host.name}` : 'on a missing support';
-			}
-		}
-	}
+	const readout = $derived(controller?.readout ?? '');
 
 	function render(): void {
 		if (!runtime) return;
@@ -142,12 +106,12 @@
 	function fitCamera(): void {
 		if (!runtime) return;
 		const { camera, controls } = runtime;
-		const width = Math.max(assembly.deckW, 1);
-		const depth = Math.max(assembly.deckH, 1);
-		const height = Math.max(assembly.deckSurfaceZ, 1);
+		const width = Math.max(assembly.extent.w, 1);
+		const depth = Math.max(assembly.extent.d, 1);
+		const height = Math.max(assembly.extent.h, 1);
 		const radius = Math.hypot(width, depth, height) / 2;
 
-		const targetZ = assembly.deckSurfaceZ * 0.28;
+		const targetZ = assembly.extent.h * 0.28;
 		controls.target.set(width / 2, depth / 2, targetZ);
 
 		const verticalFov = (camera.fov * Math.PI) / 180;
@@ -172,13 +136,13 @@
 		disposeGroup(built?.root ?? null);
 		built = buildScene(assembly, runtime.paperTexture);
 		runtime.scene.add(built.root);
-		applyDeckOpacity(built.deckObjects, tools.deckOpacity);
+		applyFadeOpacity(built.fadingObjects, tools.deckOpacity);
 		resize();
 		if (needsFit) fitCamera();
 		render();
 	}
 
-	/** Pointer position on the horizontal plane just above the deck surface. */
+	/** Pointer position on the horizontal plane just above the drag plane. */
 	function planePoint(event: PointerEvent): Point | null {
 		if (!runtime || !canvas) return null;
 		const rect = canvas.getBoundingClientRect();
@@ -192,10 +156,7 @@
 		return { x: hit.x, y: hit.y };
 	}
 
-	function supportIdAt(event: PointerEvent): {
-		supportId: string;
-		group: ThreeModule.Object3D;
-	} | null {
+	function draggableAt(event: PointerEvent): { id: string; group: ThreeModule.Object3D } | null {
 		if (!runtime || !built || !canvas) return null;
 		const rect = canvas.getBoundingClientRect();
 		runtime.raycaster.setFromCamera(
@@ -205,37 +166,33 @@
 			),
 			runtime.camera
 		);
-		const hit = runtime.raycaster.intersectObjects([...built.supportTargets], true)[0];
+		const hit = runtime.raycaster.intersectObjects([...built.dragTargets], true)[0];
 		if (!hit) return null;
-		// The support id lives on the group, so walk up from the mesh that was hit.
+		// The id lives on the group, so walk up from the mesh that was hit.
 		let current: ThreeModule.Object3D | null = hit.object;
-		while (current && !current.userData.supportId) current = current.parent;
-		const supportId = current?.userData.supportId;
-		return typeof supportId === 'string' && current ? { supportId, group: current } : null;
+		while (current && !current.userData.draggableId) current = current.parent;
+		const id = current?.userData.draggableId;
+		return typeof id === 'string' && current ? { id, group: current } : null;
 	}
 
 	function beginDrag(event: PointerEvent): void {
-		if (!runtime || !canvas || event.button !== 0) return;
-		const target = supportIdAt(event);
+		if (!runtime || !canvas || !controller || event.button !== 0) return;
+		const target = draggableAt(event);
 		if (!target) return;
-		const support = actions.view.supports.find((item) => item.id === target.supportId);
-		if (!support) return;
 		event.preventDefault();
 		// Orbiting and dragging share the left button, so the grab must win.
 		event.stopImmediatePropagation();
-		runtime.dragPlane.constant = -(assembly.deckSurfaceZ + 1);
+		runtime.dragPlane.constant = -(assembly.dragPlaneZ + 1);
 		const start = planePoint(event);
 		if (!start) return;
-		actions.selectSupport(support.id);
-		editor.setActiveSheet(support.sheetId);
-		const origin = supportAssemblyOrigin(support, actions.view.supports);
+		const grabbed = controller.grab(target.id);
+		if (!grabbed) return;
 		drag = {
 			pointerId: event.pointerId,
-			supportId: support.id,
 			group: target.group,
-			grab: { x: start.x - origin.x, y: start.y - origin.y },
-			global: origin,
-			hostName: null
+			grab: { x: start.x - grabbed.origin.x, y: start.y - grabbed.origin.y },
+			global: grabbed.origin,
+			gesture: grabbed.drag
 		};
 		runtime.controls.enabled = false;
 		canvas.setPointerCapture(event.pointerId);
@@ -243,46 +200,23 @@
 
 	function moveDrag(event: PointerEvent): void {
 		if (!drag || event.pointerId !== drag.pointerId) return;
-		const support = actions.view.supports.find((item) => item.id === drag?.supportId);
 		const current = planePoint(event);
-		if (!support || !current) return;
-
+		if (!current) return;
 		const global = { x: current.x - drag.grab.x, y: current.y - drag.grab.y };
 		drag.global = global;
-		// The mount itself is only decided on release, so the part does not
-		// re-parent and change height under the pointer mid-gesture.
-		const host = supportUnderPoint(
-			support,
-			global.x + support.w / 2,
-			global.y + support.d / 2,
-			view
-		);
-		drag.hostName = host?.name ?? null;
-
-		const placed = resolveDrop(support, global.x, global.y, view);
-		actions.previewSupport(support.id, {
-			assemblyX: placed.assemblyX,
-			assemblyY: placed.assemblyY
-		});
 		// The scene is not rebuilt mid-gesture; the group is moved instead, which
 		// keeps a drag at one translation per frame rather than a full rebuild.
-		const moved = actions.view.supports.find((item) => item.id === drag?.supportId);
-		if (moved) {
-			const next = supportAssemblyOrigin(moved, actions.view.supports);
-			drag.group.position.x = next.x;
-			drag.group.position.y = next.y;
+		const origin = drag.gesture.move(global);
+		if (origin) {
+			drag.group.position.x = origin.x;
+			drag.group.position.y = origin.y;
 		}
 		render();
 	}
 
 	function endDrag(event: PointerEvent): void {
 		if (!drag || event.pointerId !== drag.pointerId) return;
-		const support = actions.view.supports.find((item) => item.id === drag?.supportId);
-		if (support) {
-			// The drop chooses a surface, never a bare Z: `resolveDrop` turns the
-			// landing position into a mount, and the height follows from it.
-			actions.previewSupport(support.id, resolveDrop(support, drag.global.x, drag.global.y, view));
-		}
+		drag.gesture.drop(drag.global);
 		drag = null;
 		if (runtime) runtime.controls.enabled = true;
 		// One gesture becomes one undo step, then the scene catches up.
@@ -407,7 +341,7 @@
 	$effect(() => {
 		const opacity = tools.deckOpacity;
 		if (!ready || !built) return;
-		applyDeckOpacity(built.deckObjects, opacity);
+		applyFadeOpacity(built.fadingObjects, opacity);
 		render();
 	});
 </script>
@@ -415,16 +349,16 @@
 <!-- `canvas-wrap` is the shared editor canvas slot, so the 3D viewer occupies
      exactly the same space as the 2D canvas it replaces. -->
 <div class="canvas-wrap assembly-viewer" bind:this={host}>
-	<canvas bind:this={canvas} aria-label="3D packaging assembly"></canvas>
+	<canvas bind:this={canvas} aria-label={ui?.canvasLabel ?? '3D assembly'}></canvas>
 
 	<div class="viewer-controls">
 		<label>
-			Deck
+			{ui?.fadeLabel ?? 'Shell'}
 			<select
 				value={tools.deckOpacity}
 				onchange={(event) => tools.setDeckOpacity(Number(event.currentTarget.value))}
 			>
-				{#each DECK_OPACITIES as option (option.value)}
+				{#each FADE_OPACITIES as option (option.value)}
 					<option value={option.value}>{option.label}</option>
 				{/each}
 			</select>
