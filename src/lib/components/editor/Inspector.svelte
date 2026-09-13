@@ -13,20 +13,22 @@
 	import { supportHasAncestor } from '$lib/features/packaging/mounting.js';
 	import CollapsiblePanel from './CollapsiblePanel.svelte';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
+	import { packagingActions } from '$lib/features/packaging/actions.js';
 
 	let { editor }: { editor: EditorState } = $props();
+	const actions = $derived(packagingActions(editor));
 
 	const design = $derived(editor.design);
 	/** The active sheet as packaging sees it: deck, perimeter, pockets, supports. */
-	const packaging = $derived(editor.packaging);
+	const packaging = $derived(actions.view);
 	/** The profile the active sheet is cut on; the Machine panel edits it. */
 	const machine = $derived(editor.machine);
 	const sheetName = $derived(
 		design.sheets.find((sheet) => sheet.id === design.activeSheetId)?.name ?? 'sheet'
 	);
 	const units = $derived(design.stock.units);
-	const pocket = $derived(packaging.pockets.find((p) => p.id === editor.selectedPocketId));
-	const support = $derived(packaging.supports.find((r) => r.id === editor.selectedSupportId));
+	const pocket = $derived(packaging.pockets.find((p) => p.id === actions.selectedPocketId));
+	const support = $derived(packaging.supports.find((r) => r.id === actions.selectedSupportId));
 	const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
 
 	const unitLabel = $derived(units === 'in' ? 'in' : 'mm');
@@ -40,12 +42,12 @@
 	}
 	function setPackaging(key: NumericKey<PackagingData>, raw: string): void {
 		const value = parseDisplay(raw, units);
-		if (Number.isFinite(value)) editor.setPackaging(key, value);
+		if (Number.isFinite(value)) actions.setPackaging(key, value);
 	}
 	function setPocket(key: keyof Pocket, raw: string): void {
 		if (!pocket) return;
 		const value = parseDisplay(raw, units);
-		if (Number.isFinite(value)) editor.updatePocket(pocket.id, { [key]: value });
+		if (Number.isFinite(value)) actions.updatePocket(pocket.id, { [key]: value });
 	}
 	/** Writes a machine setting onto the profile the active sheet is cut on. */
 	function setMachine(key: keyof MachineSettings, raw: string): void {
@@ -55,7 +57,7 @@
 	function setSupport(key: keyof Support, raw: string): void {
 		if (!support) return;
 		const value = parseDisplay(raw, units);
-		if (Number.isFinite(value)) editor.resizeSupport(support.id, { [key]: value });
+		if (Number.isFinite(value)) actions.resizeSupport(support.id, { [key]: value });
 	}
 
 	/**
@@ -101,24 +103,24 @@
 		// A height that can no longer span falls back to the height it had, so
 		// the part never silently collapses to nothing.
 		const heightMode: Support['heightMode'] =
-			support.heightMode === 'span' && !canSpanToDeck({ ...support, mount }, editor.packaging)
+			support.heightMode === 'span' && !canSpanToDeck({ ...support, mount }, actions.view)
 				? 'fixed'
 				: support.heightMode;
-		editor.updateSupport(support.id, { mount, heightMode });
+		actions.updateSupport(support.id, { mount, heightMode });
 	}
 
 	function setMountOffset(raw: string): void {
 		if (!support) return;
 		const offset = parseDisplay(raw, units);
 		if (!Number.isFinite(offset)) return;
-		editor.updateSupport(support.id, { mount: { ...support.mount, offset } });
+		actions.updateSupport(support.id, { mount: { ...support.mount, offset } });
 	}
 
 	function setHeightMode(mode: Support['heightMode']): void {
 		if (!support) return;
 		// Switching to a fixed height keeps the height it is showing, so the
 		// part does not jump when the operator takes manual control.
-		editor.updateSupport(support.id, { heightMode: mode, h: support.h });
+		actions.updateSupport(support.id, { heightMode: mode, h: support.h });
 	}
 
 	const purposeLabel = (value: Pocket['purpose']) =>
@@ -196,7 +198,7 @@
 				<select
 					value={packaging.foldCompensation}
 					onchange={(e) =>
-						editor.setPackaging(
+						actions.setPackaging(
 							'foldCompensation',
 							e.currentTarget.value as PackagingData['foldCompensation']
 						)}
@@ -224,7 +226,7 @@
 						type="number"
 						step="0.05"
 						value={packaging.foldRadiusFactor}
-						oninput={(e) => editor.setPackaging('foldRadiusFactor', Number(e.currentTarget.value))}
+						oninput={(e) => actions.setPackaging('foldRadiusFactor', Number(e.currentTarget.value))}
 					/>
 				</label>
 				<label class="field">
@@ -233,7 +235,7 @@
 						type="number"
 						step="0.05"
 						value={packaging.foldKFactor}
-						oninput={(e) => editor.setPackaging('foldKFactor', Number(e.currentTarget.value))}
+						oninput={(e) => actions.setPackaging('foldKFactor', Number(e.currentTarget.value))}
 					/>
 				</label>
 			{/if}
@@ -346,7 +348,7 @@
 		<section class="panel">
 			<div class="panel-head">
 				<h2>{pocket.name}</h2>
-				<button class="link danger" onclick={() => editor.removePocket(pocket.id)}>Delete</button>
+				<button class="link danger" onclick={() => actions.removePocket(pocket.id)}>Delete</button>
 			</div>
 			<p class="badge">{purposeLabel(pocket.purpose)}</p>
 
@@ -355,7 +357,7 @@
 					Name
 					<input
 						value={pocket.name}
-						oninput={(e) => editor.updatePocket(pocket.id, { name: e.currentTarget.value })}
+						oninput={(e) => actions.updatePocket(pocket.id, { name: e.currentTarget.value })}
 					/>
 				</label>
 				<label class="field wide">
@@ -363,7 +365,7 @@
 					<select
 						value={pocket.purpose}
 						onchange={(e) =>
-							editor.updatePocket(pocket.id, {
+							actions.updatePocket(pocket.id, {
 								purpose: e.currentTarget.value as Pocket['purpose']
 							})}
 					>
@@ -379,7 +381,7 @@
 					<select
 						value={pocket.shape}
 						onchange={(e) =>
-							editor.updatePocket(pocket.id, { shape: e.currentTarget.value as Pocket['shape'] })}
+							actions.updatePocket(pocket.id, { shape: e.currentTarget.value as Pocket['shape'] })}
 					>
 						<option value="rectangle">Rectangle</option>
 						<option value="rounded">Rounded rectangle</option>
@@ -446,7 +448,7 @@
 								type="checkbox"
 								checked={pocket.sides[side]}
 								onchange={(e) =>
-									editor.updatePocket(pocket.id, {
+									actions.updatePocket(pocket.id, {
 										sides: { ...pocket.sides, [side]: e.currentTarget.checked }
 									})}
 							/>
@@ -479,7 +481,7 @@
 						<select
 							value={pocket.flangeEnabled ? 'yes' : 'no'}
 							onchange={(e) =>
-								editor.updatePocket(pocket.id, { flangeEnabled: e.currentTarget.value === 'yes' })}
+								actions.updatePocket(pocket.id, { flangeEnabled: e.currentTarget.value === 'yes' })}
 						>
 							<option value="yes">Enabled</option>
 							<option value="no">Disabled</option>
@@ -506,7 +508,7 @@
 								type="checkbox"
 								checked={pocket.pulls[side]}
 								onchange={(e) =>
-									editor.updatePocket(pocket.id, {
+									actions.updatePocket(pocket.id, {
 										pulls: { ...pocket.pulls, [side]: e.currentTarget.checked }
 									})}
 							/>
@@ -547,7 +549,8 @@
 		<section class="panel">
 			<div class="panel-head">
 				<h2>{support.name}</h2>
-				<button class="link danger" onclick={() => editor.removeSupport(support.id)}>Delete</button>
+				<button class="link danger" onclick={() => actions.removeSupport(support.id)}>Delete</button
+				>
 			</div>
 			<p class="badge">{supportLabel(support)}</p>
 
@@ -556,7 +559,7 @@
 					Name
 					<input
 						value={support.name}
-						oninput={(e) => editor.updateSupport(support.id, { name: e.currentTarget.value })}
+						oninput={(e) => actions.updateSupport(support.id, { name: e.currentTarget.value })}
 					/>
 				</label>
 				<label class="field wide">
@@ -564,7 +567,7 @@
 					<select
 						value={support.kind}
 						onchange={(e) =>
-							editor.updateSupport(support.id, { kind: e.currentTarget.value as Support['kind'] })}
+							actions.updateSupport(support.id, { kind: e.currentTarget.value as Support['kind'] })}
 					>
 						{#each SUPPORT_PRESETS as preset (preset.id)}
 							{#if preset.id !== 'riser-lock'}
@@ -619,7 +622,7 @@
 					Cutting sheet
 					<select
 						value={support.sheetId}
-						onchange={(e) => editor.resizeSupport(support.id, { sheetId: e.currentTarget.value })}
+						onchange={(e) => actions.resizeSupport(support.id, { sheetId: e.currentTarget.value })}
 					>
 						{#each design.sheets as sheet (sheet.id)}
 							<option value={sheet.id}>{sheet.name}</option>
@@ -660,7 +663,7 @@
 							onchange={(e) => setHeightMode(e.currentTarget.value as Support['heightMode'])}
 						>
 							<option value="fixed">Fixed height</option>
-							<option value="span" disabled={!canSpanToDeck(support, editor.packaging)}>
+							<option value="span" disabled={!canSpanToDeck(support, actions.view)}>
 								Spans to deck
 							</option>
 						</select>
@@ -691,7 +694,7 @@
 						<select
 							value={support.openSide}
 							onchange={(e) =>
-								editor.updateSupport(support.id, {
+								actions.updateSupport(support.id, {
 									openSide: e.currentTarget.value as Support['openSide']
 								})}
 						>
@@ -714,7 +717,7 @@
 						<select
 							value={support.cornerClosure}
 							onchange={(e) =>
-								editor.updateSupport(support.id, {
+								actions.updateSupport(support.id, {
 									cornerClosure: e.currentTarget.value as Support['cornerClosure']
 								})}
 						>
@@ -727,7 +730,9 @@
 						<select
 							value={support.bottomFlange ? 'yes' : 'no'}
 							onchange={(e) =>
-								editor.updateSupport(support.id, { bottomFlange: e.currentTarget.value === 'yes' })}
+								actions.updateSupport(support.id, {
+									bottomFlange: e.currentTarget.value === 'yes'
+								})}
 						>
 							<option value="yes">Enabled</option>
 							<option value="no">Disabled</option>
@@ -744,7 +749,7 @@
 							type="checkbox"
 							checked={support.pulls[side]}
 							onchange={(e) =>
-								editor.updateSupport(support.id, {
+								actions.updateSupport(support.id, {
 									pulls: { ...support.pulls, [side]: e.currentTarget.checked }
 								})}
 						/>
@@ -798,7 +803,7 @@
 					<select
 						value={packaging.perimeterType}
 						onchange={(e) =>
-							editor.setPackaging(
+							actions.setPackaging(
 								'perimeterType',
 								e.currentTarget.value as PackagingData['perimeterType']
 							)}
@@ -843,7 +848,7 @@
 						<select
 							value={packaging.joistAxis}
 							onchange={(e) =>
-								editor.setPackaging(
+								actions.setPackaging(
 									'joistAxis',
 									e.currentTarget.value as PackagingData['joistAxis']
 								)}
@@ -860,7 +865,7 @@
 							max="5"
 							step="1"
 							value={packaging.joistFolds}
-							oninput={(e) => editor.setPackaging('joistFolds', Number(e.currentTarget.value))}
+							oninput={(e) => actions.setPackaging('joistFolds', Number(e.currentTarget.value))}
 						/>
 					</label>
 					<label class="field">

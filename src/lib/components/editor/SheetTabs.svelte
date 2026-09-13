@@ -33,11 +33,11 @@
 					role="tab"
 					aria-selected={active}
 					onclick={() => editor.setActiveSheet(sheet.id)}
-					ondblclick={() => sheet.id !== editor.packaging.deckSheetId && (renaming = sheet.id)}
+					ondblclick={() => editor.canEditSheet(sheet.id) && (renaming = sheet.id)}
 				>
 					{sheet.name}
 				</button>
-				{#if sheet.id !== editor.packaging.deckSheetId && active}
+				{#if editor.canEditSheet(sheet.id) && active}
 					<button
 						class="sheet-close"
 						aria-label="Delete {sheet.name} and the supports cut from it"

@@ -1,12 +1,5 @@
 <script lang="ts">
-	import {
-		CUTOUT_PRESETS,
-		SUPPORT_PRESETS,
-		type CutoutPreset,
-		type SupportPreset
-	} from '$lib/features/packaging/presets.js';
 	import Icon from '$lib/components/icons/Icon.svelte';
-	import type { IconName } from '$lib/components/icons/paths.js';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
 	import type { ToolState } from '$lib/editor/tools.svelte.js';
 
@@ -28,37 +21,15 @@
 		onSimulate: () => void;
 	} = $props();
 
-	let openMenu = $state<'cutout' | 'support' | null>(null);
+	/** The drawing tool whose preset menu is open. */
+	let openMenu = $state<string | null>(null);
 	const blocked = $derived(editor.diagnostics.length > 0);
 	// Drawing happens on the flat sheet, so those tools are unavailable in 3D.
 	const assembling = $derived(tools.viewMode === 'assembly');
-	const router = $derived(editor.machine.fabricationMode === 'router');
 
-	/**
-	 * Icons for the drawing presets, matching the reference implementation's
-	 * choices so the menus stay recognisable to anyone who used it.
-	 */
-	const CUTOUT_ICONS: Readonly<Record<CutoutPreset, IconName>> = {
-		rectangle: 'rectangle',
-		folded: 'move_to_inbox',
-		rounded: 'rounded_corner',
-		ellipse: 'circle',
-		slot: 'horizontal_rule',
-		cable: 'cable',
-		registration: 'my_location'
-	};
-
-	const SUPPORT_ICONS: Readonly<Record<SupportPreset, IconName>> = {
-		'riser-glue': 'inventory_2',
-		'riser-lock': 'lock',
-		platform: 'stairs_2',
-		tray: 'system_update_alt'
-	};
-
-	function choose(menu: 'cutout' | 'support', id: string): void {
+	function choose(toolId: string, presetId: string): void {
 		openMenu = null;
-		if (menu === 'cutout') tools.drawCutout(id as never);
-		else tools.drawSupport(id as never);
+		tools.draw(toolId, presetId);
 	}
 </script>
 
@@ -87,89 +58,63 @@
 			<Icon name="arrow_selector_tool" />
 		</button>
 
-		<div class="menu-host">
-			<button
-				class="button icon split"
-				class:active={tools.tool === 'cutout'}
-				aria-haspopup="menu"
-				aria-expanded={openMenu === 'cutout'}
-				aria-label="Cutout"
-				title="Draw a cutout"
-				disabled={assembling}
-				onclick={() => (openMenu = openMenu === 'cutout' ? null : 'cutout')}
-			>
-				<Icon name="activity_zone" />
-				<Icon name="expand_more" size={14} />
-			</button>
-			{#if openMenu === 'cutout'}
-				<div class="menu" role="menu">
-					{#each CUTOUT_PRESETS as preset (preset.id)}
-						<button role="menuitem" onclick={() => choose('cutout', preset.id)}>
-							<Icon name={CUTOUT_ICONS[preset.id]} />
-							<span>
-								<strong>{preset.label}</strong>
-								<small>{preset.description}</small>
-							</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</div>
-
-		<div class="menu-host">
-			<button
-				class="button icon split"
-				class:active={tools.tool === 'support'}
-				aria-haspopup="menu"
-				aria-expanded={openMenu === 'support'}
-				aria-label="Support"
-				title={router
-					? 'Supports are folded parts; switch to drag knife to add them'
-					: 'Draw a support'}
-				disabled={router || assembling}
-				onclick={() => (openMenu = openMenu === 'support' ? null : 'support')}
-			>
-				<Icon name="brick" />
-				<Icon name="expand_more" size={14} />
-			</button>
-			{#if openMenu === 'support'}
-				<div class="menu" role="menu">
-					{#each SUPPORT_PRESETS as preset (preset.id)}
-						<button role="menuitem" onclick={() => choose('support', preset.id)}>
-							<Icon name={SUPPORT_ICONS[preset.id]} />
-							<span>
-								<strong>{preset.label}</strong>
-								<small>{preset.description}</small>
-							</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</div>
+		{#each editor.workspace.tools as tool (tool.id)}
+			{@const unavailable = tool.unavailable(editor.machine)}
+			<div class="menu-host">
+				<button
+					class="button icon split"
+					class:active={tools.tool === tool.id}
+					aria-haspopup="menu"
+					aria-expanded={openMenu === tool.id}
+					aria-label={tool.label}
+					title={unavailable ?? tool.title}
+					disabled={unavailable !== null || assembling}
+					onclick={() => (openMenu = openMenu === tool.id ? null : tool.id)}
+				>
+					<Icon name={tool.icon} />
+					<Icon name="expand_more" size={14} />
+				</button>
+				{#if openMenu === tool.id}
+					<div class="menu" role="menu">
+						{#each tool.presets as preset (preset.id)}
+							<button role="menuitem" onclick={() => choose(tool.id, preset.id)}>
+								<Icon name={preset.icon} />
+								<span>
+									<strong>{preset.label}</strong>
+									<small>{preset.description}</small>
+								</span>
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/each}
 	</div>
 
-	<div class="group">
-		<button
-			class="button icon"
-			class:active={tools.viewMode === 'flat'}
-			aria-pressed={tools.viewMode === 'flat'}
-			aria-label="2D"
-			title="Flat cutting sheet"
-			onclick={() => tools.setViewMode('flat')}
-		>
-			<Icon name="crop_square" />
-		</button>
-		<button
-			class="button icon"
-			class:active={tools.viewMode === 'assembly'}
-			aria-pressed={tools.viewMode === 'assembly'}
-			aria-label="3D"
-			title="Assembled 3D preview"
-			onclick={() => tools.setViewMode('assembly')}
-		>
-			<Icon name="view_in_ar" />
-		</button>
-	</div>
+	{#if editor.workspace.capabilities.assembly}
+		<div class="group">
+			<button
+				class="button icon"
+				class:active={tools.viewMode === 'flat'}
+				aria-pressed={tools.viewMode === 'flat'}
+				aria-label="2D"
+				title="Flat cutting sheet"
+				onclick={() => tools.setViewMode('flat')}
+			>
+				<Icon name="crop_square" />
+			</button>
+			<button
+				class="button icon"
+				class:active={tools.viewMode === 'assembly'}
+				aria-pressed={tools.viewMode === 'assembly'}
+				aria-label="3D"
+				title="Assembled 3D preview"
+				onclick={() => tools.setViewMode('assembly')}
+			>
+				<Icon name="view_in_ar" />
+			</button>
+		</div>
+	{/if}
 
 	<div class="group">
 		<button

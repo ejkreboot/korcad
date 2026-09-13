@@ -2,7 +2,7 @@ import { STORAGE_KEY } from '$lib/core/constants.js';
 import { serializeDesign } from '$lib/core/export/design-file.js';
 import { parseDesign } from '$lib/features/document.js';
 import type { DesignState } from '$lib/core/design/types.js';
-import { resolveSupportHeights } from '$lib/features/packaging/levels.js';
+import { reconcileDocument } from '$lib/features/workspaces.js';
 
 /**
  * Local drafts only. Durable sharing is an explicit file export, so a lost or
@@ -31,13 +31,12 @@ export function saveDraft(design: DesignState): void {
 }
 
 /**
- * A spanning height is a function of the deck, so it is recomputed on the way
- * in rather than trusted: the file may have been saved before a wall change,
- * or hand-edited. `core` stays framework- and feature-free, so this is where
- * the packaging rule is applied.
+ * Derived values, such as a spanning support height, are recomputed on the way
+ * in rather than trusted: the file may have been hand-edited. `core` stays
+ * feature-free, so every workspace's reconciliation is applied here.
  */
 export function readDesignFile(text: string): DesignState {
-	return resolveSupportHeights(parseDesign(text));
+	return reconcileDocument(parseDesign(text));
 }
 
 export function designFileText(design: DesignState): string {

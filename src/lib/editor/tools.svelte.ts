@@ -10,9 +10,11 @@ import {
 	type View,
 	type ViewportBox
 } from './viewport.js';
-import type { CutoutPreset, SupportPreset } from '$lib/features/packaging/presets.js';
-
-export type Tool = 'select' | 'cutout' | 'support';
+/**
+ * `select`, or the id of one of the active workspace's drawing tools. Which
+ * tools exist is the workspace's business; see `WorkspaceTool`.
+ */
+export type Tool = 'select' | (string & {});
 
 /** The flat cutting sheet, or the assembled 3D preview of the same design. */
 export type ViewMode = 'flat' | 'assembly';
@@ -31,8 +33,8 @@ export const DECK_OPACITIES = [
 /** Transient editor state: the active tool, the cursor, and the viewport. */
 export function createToolState() {
 	let tool = $state<Tool>('select');
-	let cutoutPreset = $state<CutoutPreset>('rectangle');
-	let supportPreset = $state<SupportPreset>('riser-glue');
+	/** The preset of the drawing tool, meaningless while selecting. */
+	let preset = $state('');
 	let cursor = $state<Point | null>(null);
 	let view = $state<View>(fitView());
 	let panArmed = $state(false);
@@ -47,11 +49,8 @@ export function createToolState() {
 		get tool() {
 			return tool;
 		},
-		get cutoutPreset() {
-			return cutoutPreset;
-		},
-		get supportPreset() {
-			return supportPreset;
+		get preset() {
+			return preset;
 		},
 		get cursor() {
 			return cursor;
@@ -82,13 +81,10 @@ export function createToolState() {
 		select() {
 			tool = 'select';
 		},
-		drawCutout(preset: CutoutPreset) {
-			cutoutPreset = preset;
-			tool = 'cutout';
-		},
-		drawSupport(preset: SupportPreset) {
-			supportPreset = preset;
-			tool = 'support';
+		/** Arms a workspace drawing tool with one of its presets. */
+		draw(toolId: string, presetId: string) {
+			tool = toolId;
+			preset = presetId;
 		},
 		setCursor(next: Point | null) {
 			cursor = next;

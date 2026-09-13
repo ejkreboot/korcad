@@ -80,10 +80,12 @@ src/
       assembly/model.ts          plain-data description of an assembled design
 
     features/
-      workspaces.ts              the workspace registry (id, label, data scope, reader)
+      workspaces.ts              the workspace registry, and document-wide reconcile/validate
       document.ts                createDefaultDesign, normalizeState, parseDesign
     features/packaging/          packaging domain, built on core
       types.ts                   Pocket, Support, PackagingData; augments the map
+      workspace.ts               PACKAGING_WORKSPACE: packaging's registry entry
+      actions.ts                 packaging's verbs, pure and bound to the editor
       view.ts                    PackagingView, packagingData, withPackaging
       defaults.ts                packaging, pocket, and support defaults
       normalize.ts               reads workspaces.packaging from a saved file
@@ -98,7 +100,7 @@ src/
       mounting.ts                mount chain: parents, origins, limits
       anchoring.ts               what a dropped support becomes anchored to
       placement.ts               finding room for a net on a sheet
-      presets.ts                 cutout and support presets
+      presets.ts                 cutout and support presets, with their icons
       assembly.ts                buildAssembly: design -> assembly description
       validation.ts              manufacturability diagnostics
 
@@ -128,7 +130,7 @@ src/
   routes/+page.svelte            the editor shell
 
 tests/
-  unit/{core,packaging,editor}/
+  unit/{core,features,packaging,editor}/
   fixtures/{designs,expected-gcode}/
 e2e/
   helpers.ts                     shared navigation that waits for hydration
@@ -137,7 +139,7 @@ e2e/
   support-mounting.e2e.ts        anchors and spanning heights
   simulation.e2e.ts              toolpath playback and tool changes
   machine-profiles.e2e.ts        profile editing and per-sheet machines
-  document-format.e2e.ts         the saved shape, legacy drafts, selection outside it
+  document-format.e2e.ts         the saved shape, unreadable drafts, selection outside it
 ```
 
 Two layering rules matter more than the tree itself:
@@ -296,8 +298,9 @@ Consequences for anything that reads a machine setting:
   disagree on fabrication mode, so for any exportable design the choice of
   sheet cannot change the answer.
 - The editor exposes `editor.view` (the active sheet's `SheetView`),
-  `editor.packaging` (its `PackagingView`), and `editor.machine` (its profile).
-  Components read those rather than resolving profiles themselves.
+  `editor.workspace` (its registry entry), and `editor.machine` (its profile).
+  Components read those rather than resolving profiles themselves. Packaging
+  components get `PackagingView` from `packagingActions(editor).view`.
 - **G-code for a packaging sheet goes through `packagingGcode`.** Core
   `generateGcode` knows nothing about folds; packaging passes its fold-allowance
   line in `GcodeOptions.headerNotes`, printed where it always was.
@@ -517,29 +520,29 @@ sheet. Stock size is fixed at 24 in for now.
 Next, in order. Each step leaves check, lint, unit, build, and e2e green, with
 goldens byte-identical.
 
-1. **Slice 4 — registry wiring.** `features/workspaces.ts` is the registry: one
-   typed entry per workspace. Today an entry has `id`, `label`, `dataScope`, and
-   `normalize`. Grow it with `defaults`, `reconcile`, `tools`, `geometry`,
-   `validate`, optional `assembly`, `capabilities` (`folding`, `assembly`), and
-   `gcodeOptions`, so the editor, toolbar, and export look up the active sheet's
-   workspace instead of importing packaging.
-   - `reconcile` (packaging's `resolveSupportHeights`) runs for every workspace
-     present in the document, not only the active sheet's.
-   - No generic entity CRUD. The editor exposes one primitive — update a
-     workspace's data as one undo step, plus a preview variant for drags — and
-     each feature keeps its verbs (`addPocket`, …) in its own actions module.
-   - A UI half, `components/workspaces/index.ts`, maps a workspace to its
+1. **Slice 4 — registry wiring.** The state/registry half is done:
+   `Workspace` in `features/workspaces.ts` carries `capabilities`, `tools`,
+   `defaults`, `reconcile`, `geometry`, `validate`, optional `assembly`,
+   `gcodeOptions`, plus `labels`, `selectionExists`, `selectionBounds`,
+   `protectsSheet`, and `releaseSheet`, which the shell and sheet tabs needed.
+   The editor state, toolbar, export, and persistence no longer import
+   packaging; `reconcileDocument` and `validateDocument` run every workspace
+   present. The editor's primitive is `update`/`preview` over the document (not
+   only a workspace's data, because placing a tray may add a sheet), and
+   packaging's verbs live in `features/packaging/actions.ts`. Remaining:
+   - The UI half, `components/workspaces/index.ts`, maps a workspace to its
      inspector panels and canvas layer. Move the packaging panels out of
      `Inspector.svelte` and the packaging overlays out of `Canvas.svelte`;
-     the canvas keeps grid, zoom/pan, paths, and the draft rectangle. The
-     toolbar shows the active workspace's tools, each carrying its own icon
-     (removing the duplicate icon maps in `Toolbar.svelte`). `DECK_OPACITIES`
-     moves to the packaging UI.
-   - Known hazard: `editor.packaging` and `packagingData` throw when a document
-     has no packaging data. That is unreachable today, but the UI must stop
-     assuming packaging exists here.
-   - If it grows unwieldy, land the state/registry half before the component
-     split.
+     the canvas keeps grid, zoom/pan, paths, and the draft rectangle, and
+     turns a finished draft into an entity through the workspace (today it
+     still calls packaging's presets). `AssemblyViewer` should build through
+     `workspace.assembly`. `DECK_OPACITIES` and `editor/manipulation.ts`'s
+     packaging drags move to the packaging UI; the legend's fold swatches
+     follow `capabilities.folding`.
+   - Known hazard: `packagingActions(editor).view` and `packagingData` throw
+     when a document has no packaging data. `Inspector`, `Canvas`, and
+     `AssemblyViewer` still call it unconditionally; only packaging UI mounted
+     for a packaging sheet may.
 2. **Slice 5 — the Solid workspace.** Sheet-scoped data (each plate is
    independent). Entities: outer profile (rectangle, rounded, ellipse,
    polygon), hole, slot. Profiles cut `outside`, holes `inside` — the first real
@@ -589,18 +592,20 @@ These are deliberate and covered by tests. Do not "restore" them to match `inser
 
 Use Svelte 5 runes for editor-local reactivity. Keep the canonical design document in a dedicated editor-state module and make state transitions explicit.
 
-Prefer action-oriented updates. The state module exposes them, and they are the only way the document changes:
+Prefer action-oriented updates. The editor exposes generic ones and a single document-change primitive; each workspace binds its own verbs to that primitive, and they are the only way the document changes:
 
 ```ts
-editor.addPocket(...);
-editor.updateSupport(id, values);   // one undo step
-editor.previewSupport(id, values);  // mid-gesture, no history
-editor.commit();                    // ends a gesture: one gesture, one undo step
-editor.setSetting(key, value);
+const actions = packagingActions(editor); // features/packaging/actions.ts
+actions.addPocket(pocket); // one undo step, selects it
+actions.updateSupport(id, values); // one undo step
+actions.previewSupport(id, values); // mid-gesture, no history
+editor.commit(); // ends a gesture: one gesture, one undo step
+editor.update((design) => change(design)); // the primitive the verbs use
+editor.setStock(key, value);
 editor.undo();
 ```
 
-Do not let multiple components independently mutate the design document. Every change funnels through `apply` or `preview`, which is also where spanning support heights are re-resolved — add derived-document work there rather than in a component.
+Do not let multiple components independently mutate the design document. Every change funnels through `update` or `preview`, which is also where every present workspace's `reconcile` runs (spanning support heights, for packaging) — add derived-document work to a workspace's `reconcile` rather than to a component. The editor never learns a workspace's vocabulary; keep verbs pure in the feature's actions module so they are unit-tested without Svelte.
 
 A drag calls `preview*` on every pointer move and `commit()` once at the end. Both the 2D canvas and the 3D viewer follow this, which is what keeps a drag from filling the undo stack.
 

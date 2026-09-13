@@ -15,19 +15,21 @@
 	import { supportAssemblyOrigin } from '$lib/features/packaging/mounting.js';
 	import { DECK_OPACITIES } from '$lib/editor/tools.svelte.js';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
+	import { packagingActions } from '$lib/features/packaging/actions.js';
 	import type { ToolState } from '$lib/editor/tools.svelte.js';
 	import type { Point } from '$lib/core/geometry/primitives.js';
 	import type { Support } from '$lib/features/packaging/types.js';
 	import { display } from '$lib/core/units.js';
 
 	let { editor, tools }: { editor: EditorState; tools: ToolState } = $props();
+	const actions = $derived(packagingActions(editor));
 
 	/**
 	 * The assembled description of the current design. Everything geometric is
 	 * decided here, in framework-free code; this component only owns the
 	 * renderer's lifecycle and the pointer gestures.
 	 */
-	const assembly = $derived(buildAssembly(editor.design, editor.selectedSupportId));
+	const assembly = $derived(buildAssembly(editor.design, actions.selectedSupportId));
 	/**
 	 * Dropping resolves anchors and heights, which depend on the machine, and
 	 * lands on the snap grid when snap is on.
@@ -66,12 +68,12 @@
 	} | null>(null);
 
 	const selected = $derived(
-		editor.packaging.supports.find((support) => support.id === editor.selectedSupportId) ?? null
+		actions.view.supports.find((support) => support.id === actions.selectedSupportId) ?? null
 	);
 	const units = $derived(editor.design.stock.units);
 	const readout = $derived.by(() => {
 		if (!selected) return 'Drag a support to position it';
-		const origin = supportAssemblyOrigin(selected, editor.packaging.supports);
+		const origin = supportAssemblyOrigin(selected, actions.view.supports);
 		const places = units === 'in' ? 3 : 1;
 		const position = `X ${display(origin.x, units).toFixed(places)} · Y ${display(
 			origin.y,
@@ -95,9 +97,7 @@
 			case 'deck-underside':
 				return 'under the top deck';
 			case 'support-top': {
-				const host = editor.packaging.supports.find(
-					(candidate) => candidate.id === mount.supportId
-				);
+				const host = actions.view.supports.find((candidate) => candidate.id === mount.supportId);
 				return host ? `on ${host.name}` : 'on a missing support';
 			}
 		}
@@ -208,7 +208,7 @@
 		if (!runtime || !canvas || event.button !== 0) return;
 		const target = supportIdAt(event);
 		if (!target) return;
-		const support = editor.packaging.supports.find((item) => item.id === target.supportId);
+		const support = actions.view.supports.find((item) => item.id === target.supportId);
 		if (!support) return;
 		event.preventDefault();
 		// Orbiting and dragging share the left button, so the grab must win.
@@ -216,9 +216,9 @@
 		runtime.dragPlane.constant = -(assembly.deckSurfaceZ + 1);
 		const start = planePoint(event);
 		if (!start) return;
-		editor.selectSupport(support.id);
+		actions.selectSupport(support.id);
 		editor.setActiveSheet(support.sheetId);
-		const origin = supportAssemblyOrigin(support, editor.packaging.supports);
+		const origin = supportAssemblyOrigin(support, actions.view.supports);
 		drag = {
 			pointerId: event.pointerId,
 			supportId: support.id,
@@ -233,7 +233,7 @@
 
 	function moveDrag(event: PointerEvent): void {
 		if (!drag || event.pointerId !== drag.pointerId) return;
-		const support = editor.packaging.supports.find((item) => item.id === drag?.supportId);
+		const support = actions.view.supports.find((item) => item.id === drag?.supportId);
 		const current = planePoint(event);
 		if (!support || !current) return;
 
@@ -250,15 +250,15 @@
 		drag.hostName = host?.name ?? null;
 
 		const placed = resolveDrop(support, global.x, global.y, view);
-		editor.previewSupport(support.id, {
+		actions.previewSupport(support.id, {
 			assemblyX: placed.assemblyX,
 			assemblyY: placed.assemblyY
 		});
 		// The scene is not rebuilt mid-gesture; the group is moved instead, which
 		// keeps a drag at one translation per frame rather than a full rebuild.
-		const moved = editor.packaging.supports.find((item) => item.id === drag?.supportId);
+		const moved = actions.view.supports.find((item) => item.id === drag?.supportId);
 		if (moved) {
-			const next = supportAssemblyOrigin(moved, editor.packaging.supports);
+			const next = supportAssemblyOrigin(moved, actions.view.supports);
 			drag.group.position.x = next.x;
 			drag.group.position.y = next.y;
 		}
@@ -267,11 +267,11 @@
 
 	function endDrag(event: PointerEvent): void {
 		if (!drag || event.pointerId !== drag.pointerId) return;
-		const support = editor.packaging.supports.find((item) => item.id === drag?.supportId);
+		const support = actions.view.supports.find((item) => item.id === drag?.supportId);
 		if (support) {
 			// The drop chooses a surface, never a bare Z: `resolveDrop` turns the
 			// landing position into a mount, and the height follows from it.
-			editor.previewSupport(support.id, resolveDrop(support, drag.global.x, drag.global.y, view));
+			actions.previewSupport(support.id, resolveDrop(support, drag.global.x, drag.global.y, view));
 		}
 		drag = null;
 		if (runtime) runtime.controls.enabled = true;

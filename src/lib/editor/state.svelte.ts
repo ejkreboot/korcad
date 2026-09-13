@@ -1,12 +1,15 @@
 import type { DesignState, MachineSettings, Sheet, StockSettings } from '$lib/core/design/types.js';
+import type { Selection } from '$lib/core/design/workspace.js';
 import { machineProfileFor, sheetView } from '$lib/core/design/machine.js';
 import { createDefaultDesign } from '$lib/features/document.js';
-import type { PackagingData, Pocket, Support } from '$lib/features/packaging/types.js';
-import { packagingSheetView, withPackaging } from '$lib/features/packaging/view.js';
-import { allGeometry } from '$lib/features/packaging/model.js';
-import { validate } from '$lib/features/packaging/validation.js';
-import { constrainSupportFlat, placeSupport } from '$lib/features/packaging/placement.js';
-import { resolveSupportHeights } from '$lib/features/packaging/levels.js';
+import {
+	activeSheet,
+	activeWorkspace,
+	presentWorkspaces,
+	reconcileDocument,
+	validateDocument,
+	workspaceById
+} from '$lib/features/workspaces.js';
 import { createHistory } from './history.js';
 
 const newId = () => crypto.randomUUID();
@@ -14,60 +17,57 @@ const newId = () => crypto.randomUUID();
 const clone = (design: DesignState): DesignState =>
 	JSON.parse(JSON.stringify(design)) as DesignState;
 
-/** What is selected on the canvas. One slot, so two things can never both be. */
-export type Selection = { readonly kind: 'pocket' | 'support'; readonly id: string };
+export type { Selection };
 
 /**
  * The single owner of the design document. Components read derived values and
  * call actions; nothing else mutates the document.
  *
- * Every mutation funnels through `apply` or `preview`, which is where spanning
- * support heights are re-resolved. That keeps a stored `h` in step with the
- * deck it meets, whichever setting moved — so no consumer has to re-derive it.
+ * The editor knows no workspace's vocabulary. It looks the active sheet's
+ * workspace up in the registry for geometry, tools, and export, and offers one
+ * primitive for changing the document — `update` as one undo step, `preview`
+ * mid-gesture. Each workspace keeps its own verbs in its own actions module,
+ * built on that primitive.
+ *
+ * Every mutation funnels through `apply` or `preview`, which is where every
+ * workspace present reconciles derived values, such as spanning support
+ * heights — so no consumer has to re-derive them.
  *
  * Selection is held here but outside the document: it is editor state, so it
  * is never saved and never makes an undo step.
  */
 export function createEditorState(initial: DesignState = createDefaultDesign()) {
 	let design = $state<DesignState>(clone(initial));
-	let selection = $state<Selection | null>(null);
+	let selected = $state<Selection | null>(null);
 	const history = createHistory(initial);
 	// History lives outside the reactive graph, so its availability is mirrored
 	// here whenever a command runs.
 	let canUndo = $state(false);
 	let canRedo = $state(false);
 
-	const geometry = $derived(allGeometry(design));
-	const diagnostics = $derived(validate(design));
+	/** The workspace the active sheet is drawn in. */
+	const workspace = $derived(activeWorkspace(design));
+	const geometry = $derived(workspace.geometry(design));
+	const diagnostics = $derived(validateDocument(design));
 	/**
 	 * The active sheet's document view: stock plus the machine settings of the
 	 * profile that sheet is cut on. CAM and export are answered per sheet, so
 	 * this is what they are handed.
 	 */
 	const view = $derived(sheetView(design));
-	/** The same sheet as packaging sees it, with the deck, pockets, and supports. */
-	const packaging = $derived(packagingSheetView(design));
 	const machine = $derived(machineProfileFor(design, design.activeSheetId));
 	/**
 	 * A selection is only reported while the thing it names exists, so an undo
-	 * that removes a freshly added pocket cannot leave the inspector pointing at
+	 * that removes a freshly added entity cannot leave the inspector pointing at
 	 * nothing.
 	 */
-	const selectedPocketId = $derived(
-		selection?.kind === 'pocket' && packaging.pockets.some((pocket) => pocket.id === selection?.id)
-			? selection.id
-			: null
-	);
-	const selectedSupportId = $derived(
-		selection?.kind === 'support' &&
-			packaging.supports.some((support) => support.id === selection?.id)
-			? selection.id
-			: null
+	const selection = $derived(
+		selected && workspace.selectionExists(design, selected) ? selected : null
 	);
 
 	/** Applies a design change and records one undo step. */
 	function apply(next: DesignState): void {
-		design = resolveSupportHeights(next);
+		design = reconcileDocument(next);
 		history.commit(design);
 		syncHistory();
 	}
@@ -77,26 +77,9 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 		canRedo = history.canRedo;
 	}
 
-	/**
-	 * Applies a change without recording history. A drag calls this on every
-	 * pointer move and `commit()` once at the end, so one gesture is one undo
-	 * step rather than hundreds.
-	 */
-	function preview(next: DesignState): void {
-		design = resolveSupportHeights(next);
-	}
-
-	const updatePackaging = (update: (data: PackagingData) => PackagingData) =>
-		withPackaging(design, update);
-
-	const mapPockets = (id: string, values: Partial<Pocket>) =>
-		updatePackaging((data) => ({
-			...data,
-			pockets: data.pockets.map((pocket) => (pocket.id === id ? { ...pocket, ...values } : pocket))
-		}));
-
-	const mapSupports = (update: (support: Support) => Support) =>
-		updatePackaging((data) => ({ ...data, supports: data.supports.map(update) }));
+	/** Whether a workspace needs this sheet, so it may not be renamed or removed. */
+	const protectsSheet = (id: string) =>
+		presentWorkspaces(design).some((candidate) => candidate.protectsSheet(design, id));
 
 	return {
 		get design() {
@@ -105,8 +88,8 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 		get view() {
 			return view;
 		},
-		get packaging() {
-			return packaging;
+		get workspace() {
+			return workspace;
 		},
 		/** The machine profile the active sheet is cut on. */
 		get machine() {
@@ -124,22 +107,37 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 		get canRedo() {
 			return canRedo;
 		},
-		get selectedPocketId() {
-			return selectedPocketId;
+		get selection() {
+			return selection;
 		},
-		get selectedSupportId() {
-			return selectedSupportId;
+
+		/** Changes the document as one undo step. */
+		update(change: (design: DesignState) => DesignState) {
+			apply(change(design));
+		},
+		/**
+		 * Changes the document without recording history. A drag calls this on
+		 * every pointer move and `commit()` once at the end, so one gesture is one
+		 * undo step rather than hundreds.
+		 */
+		preview(change: (design: DesignState) => DesignState) {
+			design = reconcileDocument(change(design));
+		},
+		/** Ends a gesture, recording everything since the last commit as one step. */
+		commit() {
+			history.commit(design);
+			syncHistory();
+		},
+		select(next: Selection | null) {
+			selected = next;
 		},
 
 		setDesign(next: DesignState) {
-			selection = null;
+			selected = null;
 			apply(clone(next));
 		},
 		setStock<K extends keyof StockSettings>(key: K, value: StockSettings[K]) {
 			apply({ ...design, stock: { ...design.stock, [key]: value } });
-		},
-		setPackaging<K extends keyof PackagingData>(key: K, value: PackagingData[K]) {
-			apply(updatePackaging((data) => ({ ...data, [key]: value })));
 		},
 		/**
 		 * Edits the profile the active sheet is cut on. Every sheet sharing that
@@ -165,113 +163,55 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 		setActiveSheet(sheetId: string) {
 			design = { ...design, activeSheetId: sheetId };
 		},
-		selectPocket(id: string | null) {
-			selection = id === null ? null : { kind: 'pocket', id };
-		},
-		selectSupport(id: string | null) {
-			selection = id === null ? null : { kind: 'support', id };
-		},
-
-		addPocket(pocket: Pocket) {
-			apply(updatePackaging((data) => ({ ...data, pockets: [...data.pockets, pocket] })));
-			selection = { kind: 'pocket', id: pocket.id };
-		},
-		updatePocket(id: string, values: Partial<Pocket>) {
-			apply(mapPockets(id, values));
-		},
-		removePocket(id: string) {
-			apply(
-				updatePackaging((data) => ({
-					...data,
-					pockets: data.pockets.filter((pocket) => pocket.id !== id)
-				}))
-			);
-		},
-
-		/**
-		 * Adds a support, finding room for its net. A tray is drawn on the deck
-		 * but cut from a parts sheet, so placement may add a sheet.
-		 */
-		addSupport(support: Support) {
-			const placement = support.kind === 'tray' ? placeSupport(support, packaging, newId) : null;
-			const placed = placement
-				? { ...support, sheetId: placement.sheetId, flatX: placement.flatX, flatY: placement.flatY }
-				: support;
-			const next = updatePackaging((data) => ({ ...data, supports: [...data.supports, placed] }));
-			apply(placement?.newSheet ? { ...next, sheets: [...next.sheets, placement.newSheet] } : next);
-			selection = { kind: 'support', id: placed.id };
-		},
-		updateSupport(id: string, values: Partial<Support>) {
-			apply(mapSupports((support) => (support.id === id ? { ...support, ...values } : support)));
-		},
-		/** Like `updateSupport`, but keeps the resulting net on its sheet. */
-		resizeSupport(id: string, values: Partial<Support>) {
-			apply(
-				mapSupports((support) => {
-					if (support.id !== id) return support;
-					const next = { ...support, ...values };
-					return { ...next, ...constrainSupportFlat(next, packaging) };
-				})
-			);
-		},
-		removeSupport(id: string) {
-			apply(
-				updatePackaging((data) => ({
-					...data,
-					supports: data.supports.filter((support) => support.id !== id)
-				}))
-			);
-		},
 
 		addSheet(name?: string) {
 			// A new sheet is cut on the machine the operator is already working on,
 			// and drawn in the same workspace.
-			const active = design.sheets.find((sheet) => sheet.id === design.activeSheetId);
+			const workspaceId = activeSheet(design).workspace;
 			const sheet: Sheet = {
 				id: newId(),
 				name: name ?? `Parts ${design.sheets.length}`,
-				workspace: active?.workspace ?? 'packaging',
+				workspace: workspaceId,
 				machineProfileId: machine.id
 			};
-			apply({ ...design, sheets: [...design.sheets, sheet], activeSheetId: sheet.id });
+			const workspaces =
+				design.workspaces[workspaceId] === undefined
+					? { ...design.workspaces, [workspaceId]: workspaceById(workspaceId).defaults() }
+					: design.workspaces;
+			apply({
+				...design,
+				workspaces,
+				sheets: [...design.sheets, sheet],
+				activeSheetId: sheet.id
+			});
+		},
+		/** A sheet a workspace cannot do without, such as the packaging deck, is locked. */
+		canEditSheet(id: string) {
+			return !protectsSheet(id);
 		},
 		renameSheet(id: string, name: string) {
+			if (protectsSheet(id)) return;
 			apply({
 				...design,
 				sheets: design.sheets.map((sheet) => (sheet.id === id ? { ...sheet, name } : sheet))
 			});
 		},
 		/**
-		 * Removes a sheet and the supports cut from it. The deck sheet is the
-		 * design itself and cannot be removed.
+		 * Removes a sheet and every part cut from it. A sheet a workspace cannot
+		 * do without, and the last sheet, stay.
 		 */
 		removeSheet(id: string) {
-			const deckSheetId = packaging.deckSheetId;
-			if (id === deckSheetId || design.sheets.length < 2) return;
-			const next = updatePackaging((data) => ({
-				...data,
-				supports: data.supports.filter((support) => support.sheetId !== id)
-			}));
+			if (protectsSheet(id) || design.sheets.length < 2) return;
+			const released = presentWorkspaces(design).reduce(
+				(next, candidate) => candidate.releaseSheet(next, id),
+				design
+			);
+			const sheets = released.sheets.filter((sheet) => sheet.id !== id);
 			apply({
-				...next,
-				sheets: next.sheets.filter((sheet) => sheet.id !== id),
-				activeSheetId: next.activeSheetId === id ? deckSheetId : next.activeSheetId
+				...released,
+				sheets,
+				activeSheetId: released.activeSheetId === id ? sheets[0]!.id : released.activeSheetId
 			});
-		},
-
-		previewPackaging(values: Partial<PackagingData>) {
-			preview(updatePackaging((data) => ({ ...data, ...values })));
-		},
-		previewPocket(id: string, values: Partial<Pocket>) {
-			preview(mapPockets(id, values));
-		},
-		previewSupport(id: string, values: Partial<Support>) {
-			preview(mapSupports((support) => (support.id === id ? { ...support, ...values } : support)));
-		},
-		/** Ends a gesture, recording everything since the last commit as one step. */
-		commit() {
-			history.commit(design);
-			syncHistory();
 		},
 
 		undo() {

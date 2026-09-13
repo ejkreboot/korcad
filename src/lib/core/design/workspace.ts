@@ -28,3 +28,10 @@ export type WorkspaceId = keyof WorkspaceDataMap & string;
  * uses — a document with no packaging sheet carries no deck.
  */
 export type WorkspaceData = { readonly [K in WorkspaceId]?: WorkspaceDataMap[K] };
+
+/**
+ * What is selected on the canvas: one entity of the active sheet's workspace,
+ * named by the kind that workspace gives it. One slot, so two things can never
+ * both be selected.
+ */
+export type Selection = { readonly kind: string; readonly id: string };

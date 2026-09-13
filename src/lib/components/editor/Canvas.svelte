@@ -9,6 +9,8 @@
 	import {
 		createPocketFromPreset,
 		createSupportFromPreset,
+		isCutoutPreset,
+		isSupportPreset,
 		presetDrawsOnDeck
 	} from '$lib/features/packaging/presets.js';
 	import {
@@ -31,9 +33,11 @@
 		wheelWidth
 	} from '$lib/editor/viewport.js';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
+	import { packagingActions } from '$lib/features/packaging/actions.js';
 	import type { ToolState } from '$lib/editor/tools.svelte.js';
 
 	let { editor, tools }: { editor: EditorState; tools: ToolState } = $props();
+	const actions = $derived(packagingActions(editor));
 
 	let svg = $state<SVGSVGElement>();
 
@@ -82,14 +86,14 @@
 	 * Perimeter bounds, net bounds, and whether this sheet folds all depend on
 	 * the machine it is cut on, so the canvas works from this sheet view.
 	 */
-	const packaging = $derived(editor.packaging);
+	const packaging = $derived(actions.view);
 	/** What a drag reads: the sheet view plus the snap toggle. */
 	const dragView = $derived({ ...packaging, snapEnabled: tools.snapEnabled });
 	const isDeckSheet = $derived(design.activeSheetId === packaging.deckSheetId);
 	const screenUnit = $derived(1 / tools.scale);
-	const selectedPocket = $derived(packaging.pockets.find((p) => p.id === editor.selectedPocketId));
+	const selectedPocket = $derived(packaging.pockets.find((p) => p.id === actions.selectedPocketId));
 	const selectedSupport = $derived(
-		packaging.supports.find((r) => r.id === editor.selectedSupportId)
+		packaging.supports.find((r) => r.id === actions.selectedSupportId)
 	);
 	const sheetSupports = $derived(
 		packaging.supports.filter((support) => support.sheetId === design.activeSheetId)
@@ -266,7 +270,7 @@
 			const supportTarget = target.closest<HTMLElement>('[data-support]');
 			const placementTarget = target.closest<HTMLElement>('[data-support-placement]');
 			if (!deckTarget && !pocketTarget && !supportTarget && !placementTarget) {
-				editor.selectPocket(null);
+				actions.selectPocket(null);
 				return;
 			}
 			event.preventDefault();
@@ -276,7 +280,7 @@
 					(r) => r.id === placementTarget.dataset.supportPlacement
 				);
 				if (!support) return;
-				editor.selectSupport(support.id);
+				actions.selectSupport(support.id);
 				manipulation = {
 					kind: 'placement',
 					pointerId: event.pointerId,
@@ -287,7 +291,7 @@
 			} else if (supportTarget) {
 				const support = packaging.supports.find((r) => r.id === supportTarget.dataset.support);
 				if (!support) return;
-				editor.selectSupport(support.id);
+				actions.selectSupport(support.id);
 				manipulation = {
 					kind: 'support',
 					pointerId: event.pointerId,
@@ -310,7 +314,7 @@
 			} else if (pocketTarget) {
 				const pocket = packaging.pockets.find((p) => p.id === pocketTarget.dataset.pocket);
 				if (!pocket) return;
-				editor.selectPocket(pocket.id);
+				actions.selectPocket(pocket.id);
 				manipulation = {
 					kind: 'pocket',
 					pointerId: event.pointerId,
@@ -321,7 +325,7 @@
 					original: { x: pocket.x, y: pocket.y, w: pocket.w, h: pocket.h }
 				};
 			} else if (deckTarget) {
-				editor.selectPocket(null);
+				actions.selectPocket(null);
 				manipulation = {
 					kind: 'deck',
 					pointerId: event.pointerId,
@@ -342,7 +346,7 @@
 		}
 
 		event.preventDefault();
-		const onDeck = tools.tool === 'cutout' || presetDrawsOnDeck(tools.supportPreset);
+		const onDeck = drawsOnDeck();
 		const start = onDeck ? pointerToDeck(event) : pointerToStock(event);
 		draft = { pointerId: event.pointerId, start, end: start };
 		svg?.setPointerCapture(event.pointerId);
@@ -367,7 +371,7 @@
 		const active = manipulation;
 		if (active && event.pointerId === active.pointerId) {
 			if (active.kind === 'deck') {
-				editor.previewPackaging(
+				actions.previewPackaging(
 					applyDeckDrag(
 						dragView,
 						active.action,
@@ -377,7 +381,7 @@
 					)
 				);
 			} else if (active.kind === 'pocket') {
-				editor.previewPocket(
+				actions.previewPocket(
 					active.id,
 					applyPocketDrag(
 						dragView,
@@ -391,7 +395,7 @@
 			} else {
 				const support = packaging.supports.find((r) => r.id === active.id);
 				if (!support) return;
-				editor.previewSupport(
+				actions.previewSupport(
 					active.id,
 					active.kind === 'support'
 						? applySupportDrag(
@@ -416,9 +420,17 @@
 		}
 
 		if (draft && event.pointerId === draft.pointerId) {
-			const onDeck = tools.tool === 'cutout' || presetDrawsOnDeck(tools.supportPreset);
+			const onDeck = drawsOnDeck();
 			draft = { ...draft, end: onDeck ? pointerToDeck(event) : pointerToStock(event) };
 		}
+	}
+
+	/** An opening, and a tray's deck opening, are drawn on the deck; other supports on the sheet. */
+	function drawsOnDeck(): boolean {
+		return (
+			tools.tool === 'cutout' ||
+			(tools.tool === 'support' && isSupportPreset(tools.preset) && presetDrawsOnDeck(tools.preset))
+		);
 	}
 
 	function handlePointerUp(event: PointerEvent): void {
@@ -439,19 +451,19 @@
 			tools.select();
 			return;
 		}
-		if (tools.tool === 'cutout') {
-			editor.addPocket(
+		if (tools.tool === 'cutout' && isCutoutPreset(tools.preset)) {
+			actions.addPocket(
 				createPocketFromPreset(
-					tools.cutoutPreset,
+					tools.preset,
 					rect,
 					crypto.randomUUID(),
 					packaging.pockets.length + 1
 				)
 			);
-		} else {
-			editor.addSupport(
+		} else if (tools.tool === 'support' && isSupportPreset(tools.preset)) {
+			actions.addSupport(
 				createSupportFromPreset(
-					tools.supportPreset,
+					tools.preset,
 					rect,
 					crypto.randomUUID(),
 					packaging.supports.length + 1,
@@ -582,7 +594,7 @@
 				{#each packaging.pockets as pocket (pocket.id)}
 					<rect
 						class="pocket-hit"
-						class:selected={pocket.id === editor.selectedPocketId}
+						class:selected={pocket.id === actions.selectedPocketId}
 						data-pocket={pocket.id}
 						x={pocket.x}
 						y={pocket.y}
@@ -608,7 +620,7 @@
 					{@const bounds = riserFlatBounds(support, packaging)}
 					<rect
 						class="support-hit"
-						class:selected={support.id === editor.selectedSupportId}
+						class:selected={support.id === actions.selectedSupportId}
 						data-support={support.id}
 						x={bounds.left}
 						y={bounds.bottom}

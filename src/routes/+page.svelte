@@ -1,12 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { packagingGcode } from '$lib/features/packaging/gcode.js';
+	import { generateGcode } from '$lib/core/cam/gcode.js';
 	import { designSvg } from '$lib/core/export/svg.js';
-	import { riserFlatBounds } from '$lib/features/packaging/supports.js';
 	import { createEditorState } from '$lib/editor/state.svelte.js';
 	import { createToolState } from '$lib/editor/tools.svelte.js';
 	import { display } from '$lib/core/units.js';
-	import { riserFlatBounds as netBounds } from '$lib/features/packaging/supports.js';
 	import {
 		designFileText,
 		download,
@@ -50,22 +48,16 @@
 
 	/** Frames the current selection, or the whole sheet when nothing is selected. */
 	function zoomFit(event: MouseEvent): void {
-		const pocket = editor.packaging.pockets.find((p) => p.id === editor.selectedPocketId);
-		const support = editor.packaging.supports.find((r) => r.id === editor.selectedSupportId);
-		if (event.shiftKey && pocket) {
-			tools.frame({
-				left: pocket.x,
-				right: pocket.x + pocket.w,
-				bottom: pocket.y,
-				top: pocket.y + pocket.h
-			});
-			return;
-		}
-		if (event.shiftKey && support && support.sheetId === editor.design.activeSheetId) {
-			tools.frame(netBounds(support, editor.packaging));
-			return;
-		}
-		tools.fit();
+		const bounds =
+			event.shiftKey && editor.selection
+				? editor.workspace.selectionBounds(
+						editor.design,
+						editor.selection,
+						editor.design.activeSheetId
+					)
+				: null;
+		if (bounds) tools.frame(bounds);
+		else tools.fit();
 	}
 
 	function saveDesign(): void {
@@ -78,25 +70,7 @@
 	}
 
 	function exportSvg(): void {
-		const labels = [
-			...(editor.design.activeSheetId === editor.packaging.deckSheetId
-				? editor.packaging.pockets.map((p) => ({
-						name: p.name,
-						x: p.x + 5 + (p.labelOffset?.x ?? 0),
-						y: p.y + p.h - 9 - (p.labelOffset?.y ?? 0)
-					}))
-				: []),
-			...editor.packaging.supports
-				.filter((r) => r.sheetId === editor.design.activeSheetId)
-				.map((r) => {
-					const bounds = riserFlatBounds(r, editor.packaging);
-					return {
-						name: r.name,
-						x: bounds.left + 5 + (r.labelOffset?.x ?? 0),
-						y: bounds.top - 9 - (r.labelOffset?.y ?? 0)
-					};
-				})
-		];
+		const labels = editor.workspace.labels(editor.design, editor.design.activeSheetId);
 		download(`${baseName}.svg`, designSvg(editor.geometry, labels), 'image/svg+xml');
 		notice = 'Design SVG exported.';
 	}
@@ -107,12 +81,11 @@
 			return;
 		}
 		const paths = editor.geometry.paths;
-		download(
-			`${baseName}-01-crease.nc`,
-			packagingGcode(paths, editor.packaging, 'crease'),
-			'text/plain'
-		);
-		download(`${baseName}-02-cut.nc`, packagingGcode(paths, editor.packaging, 'cut'), 'text/plain');
+		const options = editor.workspace.gcodeOptions(editor.design, editor.design.activeSheetId);
+		const program = (operation: 'crease' | 'cut') =>
+			generateGcode(paths, editor.view, operation, options);
+		download(`${baseName}-01-crease.nc`, program('crease'), 'text/plain');
+		download(`${baseName}-02-cut.nc`, program('cut'), 'text/plain');
 		error = '';
 		notice = 'Crease and cut programs exported. Run the crease program first, spindle off.';
 	}
@@ -172,7 +145,7 @@
 
 		<SheetTabs {editor} />
 
-		{#if tools.viewMode === 'assembly'}
+		{#if tools.viewMode === 'assembly' && editor.workspace.capabilities.assembly}
 			<AssemblyViewer {editor} {tools} />
 		{:else}
 			<Canvas {editor} {tools} />

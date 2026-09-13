@@ -1,3 +1,4 @@
+import type { IconName } from '$lib/components/icons/paths.js';
 import type { PackagingView } from './view.js';
 import { round } from '$lib/core/units.js';
 import { supportDefaults } from './defaults.js';
@@ -10,21 +11,66 @@ import type { Pocket, PocketPurpose, Support } from './types.js';
 export type CutoutPreset =
 	'rectangle' | 'folded' | 'rounded' | 'ellipse' | 'slot' | 'cable' | 'registration';
 
+/**
+ * A preset as the toolbar shows it. The icon is a name from the vendored icon
+ * set — data, not markup — chosen to match the reference implementation so the
+ * menus stay recognisable to anyone who used it.
+ */
 export type CutoutPresetInfo = {
 	readonly id: CutoutPreset;
 	readonly label: string;
 	readonly description: string;
+	readonly icon: IconName;
 };
 
 export const CUTOUT_PRESETS: readonly CutoutPresetInfo[] = [
-	{ id: 'rectangle', label: 'Product opening', description: 'Rectangular through cut' },
-	{ id: 'folded', label: 'Folded pocket', description: 'Four walls with optional glue flanges' },
-	{ id: 'rounded', label: 'Rounded opening', description: 'Rounded rectangular through cut' },
-	{ id: 'ellipse', label: 'Circle or ellipse', description: 'Draw its enclosing bounds' },
-	{ id: 'slot', label: 'Material slot', description: 'Narrow functional through cut' },
-	{ id: 'cable', label: 'Cable opening', description: 'Rounded pass-through for cabling' },
-	{ id: 'registration', label: 'Registration hole', description: 'Square-bounded locating hole' }
+	{
+		id: 'rectangle',
+		label: 'Product opening',
+		description: 'Rectangular through cut',
+		icon: 'rectangle'
+	},
+	{
+		id: 'folded',
+		label: 'Folded pocket',
+		description: 'Four walls with optional glue flanges',
+		icon: 'move_to_inbox'
+	},
+	{
+		id: 'rounded',
+		label: 'Rounded opening',
+		description: 'Rounded rectangular through cut',
+		icon: 'rounded_corner'
+	},
+	{
+		id: 'ellipse',
+		label: 'Circle or ellipse',
+		description: 'Draw its enclosing bounds',
+		icon: 'circle'
+	},
+	{
+		id: 'slot',
+		label: 'Material slot',
+		description: 'Narrow functional through cut',
+		icon: 'horizontal_rule'
+	},
+	{
+		id: 'cable',
+		label: 'Cable opening',
+		description: 'Rounded pass-through for cabling',
+		icon: 'cable'
+	},
+	{
+		id: 'registration',
+		label: 'Registration hole',
+		description: 'Square-bounded locating hole',
+		icon: 'my_location'
+	}
 ];
+
+export function isCutoutPreset(id: string): id is CutoutPreset {
+	return CUTOUT_PRESETS.some((preset) => preset.id === id);
+}
 
 const CUTOUT_NAMES: Readonly<Record<CutoutPreset, string>> = {
 	rectangle: 'Pocket',
@@ -94,18 +140,39 @@ export type SupportPresetInfo = {
 	readonly id: SupportPreset;
 	readonly label: string;
 	readonly description: string;
+	readonly icon: IconName;
 };
 
 export const SUPPORT_PRESETS: readonly SupportPresetInfo[] = [
-	{ id: 'riser-glue', label: 'Glued riser box', description: 'Cross net with corner glue tabs' },
-	{ id: 'riser-lock', label: 'Locking riser box', description: 'Derived corner tabs and slots' },
+	{
+		id: 'riser-glue',
+		label: 'Glued riser box',
+		description: 'Cross net with corner glue tabs',
+		icon: 'inventory_2'
+	},
+	{
+		id: 'riser-lock',
+		label: 'Locking riser box',
+		description: 'Derived corner tabs and slots',
+		icon: 'lock'
+	},
 	{
 		id: 'platform',
 		label: 'Platform step',
-		description: 'Closed support mounted at a chosen level'
+		description: 'Closed support mounted at a chosen level',
+		icon: 'stairs_2'
 	},
-	{ id: 'tray', label: 'Recessed tray', description: 'Linked deck opening and suspended tray' }
+	{
+		id: 'tray',
+		label: 'Recessed tray',
+		description: 'Linked deck opening and suspended tray',
+		icon: 'system_update_alt'
+	}
 ];
+
+export function isSupportPreset(id: string): id is SupportPreset {
+	return SUPPORT_PRESETS.some((preset) => preset.id === id);
+}
 
 export function supportKindForPreset(preset: SupportPreset): Support['kind'] {
 	if (preset === 'tray') return 'tray';
