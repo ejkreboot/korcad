@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import {
-	DEFAULT_MACHINE_PROFILE_ID,
-	createDefaultDesign,
-	supportDefaults
-} from '$lib/core/design/defaults.js';
-import type { DesignPath, DesignState, Support } from '$lib/core/design/types.js';
+import { DEFAULT_MACHINE_PROFILE_ID } from '$lib/core/design/defaults.js';
+import { supportDefaults } from '$lib/features/packaging/defaults.js';
+import { createDefaultDesign } from '$lib/features/document.js';
+import type { DesignPath, DesignState } from '$lib/core/design/types.js';
+import type { Support } from '$lib/features/packaging/types.js';
 import { point } from '$lib/core/geometry/primitives.js';
-import { generateGcode } from '$lib/core/cam/gcode.js';
+import { packagingGcode } from '$lib/features/packaging/gcode.js';
 import {
 	moveLabel,
 	phaseTool,
@@ -18,13 +17,11 @@ import {
 	type SimulationMove
 } from '$lib/core/cam/simulation.js';
 import { allGeometry } from '$lib/features/packaging/model.js';
-import { view, withMachine } from '../../support/designs.js';
+import { view, withMachine, patchDesign, type DesignPatch } from '../../support/designs.js';
 import { intent } from '../../support/paths.js';
 
-const design = (overrides: Partial<DesignState> = {}): DesignState => ({
-	...createDefaultDesign(),
-	...overrides
-});
+const design = (overrides: DesignPatch = {}): DesignState =>
+	patchDesign(createDefaultDesign(), overrides);
 
 const score = (direction: 'up' | 'down'): DesignPath => ({
 	points: [point(10, 10), point(60, 10)],
@@ -57,37 +54,47 @@ const cutting = (body: string) => `; 1: cut exterior\n${body}`;
  * A design whose net carries up-folds, so it is a two-pass job. A tray's walls
  * fold up out of the sheet, and its net is cut from a parts sheet.
  */
-const trayDesign = (): DesignState => ({
-	...createDefaultDesign(),
-	sheets: [
-		{ id: 'deck', name: 'Deck', machineProfileId: DEFAULT_MACHINE_PROFILE_ID },
-		{ id: 'parts', name: 'Parts 1', machineProfileId: DEFAULT_MACHINE_PROFILE_ID }
-	],
-	activeSheetId: 'parts',
-	risers: [
-		{
-			...supportDefaults(),
-			kind: 'tray',
-			id: 'tray',
-			name: 'Tablet tray',
-			w: 120,
-			d: 80,
-			h: 25,
-			heightMode: 'fixed',
-			overlap: 6,
-			taper: 8,
-			flange: 12,
-			openSide: 'none',
-			sheetId: 'parts',
-			flatX: 100,
-			flatY: 100,
-			assemblyX: 40,
-			assemblyY: 50,
-			mount: { anchor: 'deck-underside', offset: 0 },
-			netVersion: 3
-		} satisfies Support
-	]
-});
+const trayDesign = (): DesignState =>
+	patchDesign(createDefaultDesign(), {
+		sheets: [
+			{
+				id: 'deck',
+				name: 'Deck',
+				workspace: 'packaging',
+				machineProfileId: DEFAULT_MACHINE_PROFILE_ID
+			},
+			{
+				id: 'parts',
+				name: 'Parts 1',
+				workspace: 'packaging',
+				machineProfileId: DEFAULT_MACHINE_PROFILE_ID
+			}
+		],
+		activeSheetId: 'parts',
+		supports: [
+			{
+				...supportDefaults(),
+				kind: 'tray',
+				id: 'tray',
+				name: 'Tablet tray',
+				w: 120,
+				d: 80,
+				h: 25,
+				heightMode: 'fixed',
+				overlap: 6,
+				taper: 8,
+				flange: 12,
+				openSide: 'none',
+				sheetId: 'parts',
+				flatX: 100,
+				flatY: 100,
+				assemblyX: 40,
+				assemblyY: 50,
+				mount: { anchor: 'deck-underside', offset: 0 },
+				netVersion: 3
+			} satisfies Support
+		]
+	});
 
 describe('playback timing', () => {
 	// 60mm at 600mm/min is 6 seconds; 60mm at G0 rapid (3000mm/min) is 1.2.
@@ -163,7 +170,7 @@ describe('the cut trail', () => {
 	});
 
 	it('carries the move type so folds can be drawn differently from cuts', () => {
-		const program = generateGcode(allGeometry(design()).paths, view(design()), 'all');
+		const program = packagingGcode(allGeometry(design()).paths, view(design()), 'all');
 		const trail = simulationFrame(
 			simulationMoves(program, view(design())),
 			simulationDuration(simulationMoves(program, view(design())))
@@ -244,7 +251,7 @@ describe('simulating the emitted program', () => {
 		const paths = allGeometry(base).paths;
 		for (const phase of simulationPhases(paths, view(base))) {
 			const moves: readonly SimulationMove[] = simulationMoves(
-				generateGcode(paths, view(base), phase.operation),
+				packagingGcode(paths, view(base), phase.operation),
 				view(base)
 			);
 			expect(moves.length).toBeGreaterThan(0);
@@ -258,7 +265,7 @@ describe('simulating the emitted program', () => {
 	it('creases only up-folds and never cuts in the crease program', () => {
 		const base = trayDesign();
 		const paths = allGeometry(base).paths;
-		const moves = simulationMoves(generateGcode(paths, view(base), 'crease'), view(base));
+		const moves = simulationMoves(packagingGcode(paths, view(base), 'crease'), view(base));
 		const marks = new Set(
 			moves.filter((move) => move.type !== 'travel' && move.type !== 'dwell').map((m) => m.type)
 		);

@@ -135,13 +135,15 @@ function sheets(value: unknown, profiles: readonly MachineProfile[], readers: Do
 
 /**
  * Whether untrusted JSON is shaped like a design document of any version: a
- * current one names its sheets or workspaces, a version 6 or 7 one lists its
- * pockets.
+ * current one has workspaces or at least one sheet, a version 6 or 7 one lists
+ * its pockets. An empty sheet list alone describes nothing.
  */
 function isDocument(raw: unknown): raw is Record_ {
 	return (
 		isRecord(raw) &&
-		(Array.isArray(raw.sheets) || isRecord(raw.workspaces) || Array.isArray(raw.pockets))
+		((Array.isArray(raw.sheets) && raw.sheets.length > 0) ||
+			isRecord(raw.workspaces) ||
+			Array.isArray(raw.pockets))
 	);
 }
 
@@ -169,11 +171,7 @@ export function normalizeDocument(
 
 	let document: DesignState = {
 		stock: stock(saved.stock),
-		toolpathOrder: enumerated(
-			saved.toolpathOrder,
-			['optimized', 'design'] as const,
-			'optimized'
-		),
+		toolpathOrder: enumerated(saved.toolpathOrder, ['optimized', 'design'] as const, 'optimized'),
 		machineProfiles: profiles,
 		sheets: sheets(saved.sheets, profiles, readers),
 		activeSheetId: typeof saved.activeSheetId === 'string' ? saved.activeSheetId : '',

@@ -1,6 +1,8 @@
-import type { DesignState, Support, SheetView } from '$lib/core/design/types.js';
+import type { DesignState } from '$lib/core/design/types.js';
+import type { Support } from './types.js';
+import type { PackagingView } from './view.js';
 import { supportParent } from './mounting.js';
-import { packagingView } from './view.js';
+import { packagingView, withPackaging } from './view.js';
 
 /**
  * Where things sit in Z once the design is folded up.
@@ -13,8 +15,8 @@ import { packagingView } from './view.js';
 
 /** Everything a Z level depends on. */
 export type LevelSettings = Pick<
-	SheetView,
-	'fabricationMode' | 'perimeterType' | 'perimeterWall' | 'joistHeight' | 'material' | 'risers'
+	PackagingView,
+	'fabricationMode' | 'perimeterType' | 'perimeterWall' | 'joistHeight' | 'material' | 'supports'
 >;
 
 /** Nominal standoff used where no perimeter holds the deck up. */
@@ -70,7 +72,7 @@ export function supportMountPlane(
 		case 'deck-underside':
 			return deckUndersideZ(settings) + along;
 		case 'support-top': {
-			const parent = supportParent(support, settings.risers);
+			const parent = supportParent(support, settings.supports);
 			if (!parent || ancestors.has(parent.id)) return along;
 			return supportTopZ(parent, settings, new Set([...ancestors, support.id])) + along;
 		}
@@ -115,14 +117,16 @@ export function supportTopZ(
  * a stored `h` can never drift from the deck it is meant to meet.
  */
 export function resolveSupportHeights(document: DesignState): DesignState {
-	if (!document.risers.some((support) => support.heightMode === 'span')) return document;
+	const data = document.workspaces.packaging;
+	// A document with no packaging workspace has nothing to resolve.
+	if (!data?.supports.some((support) => support.heightMode === 'span')) return document;
 	const design = packagingView(document);
-	const risers = document.risers.map((support) => {
+	const supports = data.supports.map((support) => {
 		if (support.heightMode !== 'span') return support;
 		const resolved = resolveSupportHeight(support, design);
 		return resolved === support.h ? support : { ...support, h: resolved };
 	});
-	return { ...document, risers };
+	return withPackaging(document, (packaging) => ({ ...packaging, supports }));
 }
 
 /** Whether a support is inside the box, and so has the deck above it. */

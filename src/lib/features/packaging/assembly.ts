@@ -8,7 +8,9 @@ import {
 	type PartShape,
 	type WallNotch
 } from '$lib/core/assembly/model.js';
-import type { DesignState, Side, Support, SheetView } from '$lib/core/design/types.js';
+import type { DesignState, Side } from '$lib/core/design/types.js';
+import type { Support } from './types.js';
+import type { PackagingView } from './view.js';
 import { assemblyFoldDirection, assemblyFoldSign } from './folds.js';
 import {
 	deckSurfaceZ,
@@ -29,7 +31,7 @@ import { trayOpeningPath } from './model.js';
  * dimensions, not flat ones: a folded wall stands at its design height even
  * though its blank was cut short by the bend deduction.
  */
-export type AssemblySettings = SheetView;
+export type AssemblySettings = PackagingView;
 
 /** Minimum board thickness used for parts that would otherwise be invisible. */
 const MIN_BOARD = 1.2;
@@ -229,7 +231,10 @@ const shaped = (shape: PartShape, material: AssemblyMaterial, deckPart: boolean)
  * Pure and framework-free. The viewer turns these parts into meshes; nothing
  * in here knows how they will be drawn.
  */
-export function buildAssembly(source: DesignState): Assembly {
+export function buildAssembly(
+	source: DesignState,
+	selectedSupportId: string | null = null
+): Assembly {
 	// Spanning heights are resolved up front so that every part below reads a
 	// concrete `h`, whoever handed us the design.
 	const design = packagingView(resolveSupportHeights(source));
@@ -298,7 +303,7 @@ export function buildAssembly(source: DesignState): Assembly {
 					].reverse();
 		holes.push(opening.map(local));
 	}
-	for (const tray of design.risers.filter((support) => support.kind === 'tray')) {
+	for (const tray of design.supports.filter((support) => support.kind === 'tray')) {
 		holes.push(trayOpeningPath(tray, design).points.map(local));
 	}
 	deckParts.push(
@@ -513,8 +518,8 @@ export function buildAssembly(source: DesignState): Assembly {
 	});
 
 	// --- One group per support, placed at its assembly origin ---------------
-	for (const support of design.risers) {
-		groups.push(buildSupportGroup(support, design, surface));
+	for (const support of design.supports) {
+		groups.push(buildSupportGroup(support, design, surface, support.id === selectedSupportId));
 	}
 
 	return {
@@ -534,10 +539,10 @@ export function buildAssembly(source: DesignState): Assembly {
 function buildSupportGroup(
 	support: Support,
 	design: AssemblySettings,
-	surface: number
+	surface: number,
+	selected: boolean
 ): AssemblyGroup {
-	const origin = supportAssemblyOrigin(support, design.risers);
-	const selected = support.id === design.selectedRiserId;
+	const origin = supportAssemblyOrigin(support, design.supports);
 	const parts: AssemblyPart[] = [];
 	const t = Math.max(MIN_BOARD, design.material);
 	const owner = `riser:${support.id}`;

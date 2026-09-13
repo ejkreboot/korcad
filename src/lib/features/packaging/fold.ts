@@ -1,9 +1,9 @@
 import { MIN_FLAT_PANEL } from '$lib/core/constants.js';
 import { clamp, round } from '$lib/core/units.js';
-import type { SheetView } from './types.js';
+import type { PackagingView } from './view.js';
 
 export type FoldSettings = Pick<
-	SheetView,
+	PackagingView,
 	| 'fabricationMode'
 	| 'foldCompensation'
 	| 'foldDeduction'
@@ -47,7 +47,10 @@ export function panelClamped(nominal: number, settings: FoldSettings): boolean {
 	return nominal > 0 && nominal - bendDeduction(settings) < MIN_FLAT_PANEL;
 }
 
-/** Human-readable fold allowance, recorded in the G-code header. */
+/**
+ * Human-readable fold allowance, recorded in the G-code header through
+ * `packagingGcode`, since core CAM does not know what a fold is.
+ */
 export function foldAllowanceLabel(settings: FoldSettings): string {
 	if (settings.foldCompensation === 'none') return 'none (panels cut to drawn size)';
 	if (settings.foldCompensation === 'manual') {

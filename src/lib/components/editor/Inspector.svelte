@@ -1,14 +1,13 @@
 <script lang="ts">
 	import { display, parseDisplay } from '$lib/core/units.js';
+	import type { Side, MachineSettings, StockSettings } from '$lib/core/design/types.js';
 	import type {
-		DesignState,
+		PackagingData,
 		Pocket,
-		Side,
-		MachineSettings,
 		Support,
 		SupportAnchor,
 		SupportMount
-	} from '$lib/core/design/types.js';
+	} from '$lib/features/packaging/types.js';
 	import { CUTOUT_PRESETS, SUPPORT_PRESETS } from '$lib/features/packaging/presets.js';
 	import { canSpanToDeck } from '$lib/features/packaging/levels.js';
 	import { supportHasAncestor } from '$lib/features/packaging/mounting.js';
@@ -18,22 +17,30 @@
 	let { editor }: { editor: EditorState } = $props();
 
 	const design = $derived(editor.design);
+	/** The active sheet as packaging sees it: deck, perimeter, pockets, supports. */
+	const packaging = $derived(editor.packaging);
 	/** The profile the active sheet is cut on; the Machine panel edits it. */
 	const machine = $derived(editor.machine);
 	const sheetName = $derived(
 		design.sheets.find((sheet) => sheet.id === design.activeSheetId)?.name ?? 'sheet'
 	);
-	const units = $derived(design.units);
-	const pocket = $derived(design.pockets.find((p) => p.id === design.selectedId));
-	const support = $derived(design.risers.find((r) => r.id === design.selectedRiserId));
+	const units = $derived(design.stock.units);
+	const pocket = $derived(packaging.pockets.find((p) => p.id === editor.selectedPocketId));
+	const support = $derived(packaging.supports.find((r) => r.id === editor.selectedSupportId));
 	const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
 
 	const unitLabel = $derived(units === 'in' ? 'in' : 'mm');
 	const mm = (value: number) => display(value, units);
 
-	function setSetting(key: keyof DesignState, raw: string): void {
+	type NumericKey<T> = { [K in keyof T]: T[K] extends number ? K : never }[keyof T];
+
+	function setStock(key: NumericKey<StockSettings>, raw: string): void {
 		const value = parseDisplay(raw, units);
-		if (Number.isFinite(value)) editor.setSetting(key, value as never);
+		if (Number.isFinite(value)) editor.setStock(key, value);
+	}
+	function setPackaging(key: NumericKey<PackagingData>, raw: string): void {
+		const value = parseDisplay(raw, units);
+		if (Number.isFinite(value)) editor.setPackaging(key, value);
 	}
 	function setPocket(key: keyof Pocket, raw: string): void {
 		if (!pocket) return;
@@ -62,12 +69,12 @@
 			{ value: 'box-floor', label: 'Box floor' },
 			{ value: 'deck-top', label: 'Top of deck' },
 			{ value: 'deck-underside', label: 'Underside of deck' },
-			...design.risers
+			...packaging.supports
 				.filter(
 					(candidate) =>
 						candidate.id !== support.id &&
 						candidate.kind !== 'tray' &&
-						!supportHasAncestor(candidate, support.id, design.risers)
+						!supportHasAncestor(candidate, support.id, packaging.supports)
 				)
 				.map((candidate) => ({
 					value: `support:${candidate.id}`,
@@ -94,7 +101,7 @@
 		// A height that can no longer span falls back to the height it had, so
 		// the part never silently collapses to nothing.
 		const heightMode: Support['heightMode'] =
-			support.heightMode === 'span' && !canSpanToDeck({ ...support, mount }, editor.view)
+			support.heightMode === 'span' && !canSpanToDeck({ ...support, mount }, editor.packaging)
 				? 'fixed'
 				: support.heightMode;
 		editor.updateSupport(support.id, { mount, heightMode });
@@ -144,8 +151,8 @@
 				<input
 					type="number"
 					step="0.001"
-					value={mm(design.material)}
-					oninput={(e) => setSetting('material', e.currentTarget.value)}
+					value={mm(design.stock.material)}
+					oninput={(e) => setStock('material', e.currentTarget.value)}
 				/>
 			</label>
 			<label class="field">
@@ -153,16 +160,16 @@
 				<input
 					type="number"
 					step="0.001"
-					value={mm(design.minimumWeb)}
-					oninput={(e) => setSetting('minimumWeb', e.currentTarget.value)}
+					value={mm(design.stock.minimumWeb)}
+					oninput={(e) => setStock('minimumWeb', e.currentTarget.value)}
 				/>
 			</label>
 			<label class="field wide">
 				Board appearance
 				<select
-					value={design.boardFinish}
+					value={design.stock.boardFinish}
 					onchange={(e) =>
-						editor.setSetting('boardFinish', e.currentTarget.value as DesignState['boardFinish'])}
+						editor.setStock('boardFinish', e.currentTarget.value as StockSettings['boardFinish'])}
 				>
 					<option value="kraft">Natural kraft</option>
 					<option value="white">White board</option>
@@ -172,11 +179,11 @@
 			<label class="field wide">
 				Grain / flute direction
 				<select
-					value={design.grainDirection}
+					value={design.stock.grainDirection}
 					onchange={(e) =>
-						editor.setSetting(
+						editor.setStock(
 							'grainDirection',
-							e.currentTarget.value as DesignState['grainDirection']
+							e.currentTarget.value as StockSettings['grainDirection']
 						)}
 				>
 					<option value="y">Along Y</option>
@@ -187,11 +194,11 @@
 			<label class="field wide">
 				Fold allowance
 				<select
-					value={design.foldCompensation}
+					value={packaging.foldCompensation}
 					onchange={(e) =>
-						editor.setSetting(
+						editor.setPackaging(
 							'foldCompensation',
-							e.currentTarget.value as DesignState['foldCompensation']
+							e.currentTarget.value as PackagingData['foldCompensation']
 						)}
 				>
 					<option value="none">None (cut to drawn size)</option>
@@ -199,25 +206,25 @@
 					<option value="manual">Measured deduction</option>
 				</select>
 			</label>
-			{#if design.foldCompensation === 'manual'}
+			{#if packaging.foldCompensation === 'manual'}
 				<label class="field wide">
 					Deduction per fold ({unitLabel})
 					<input
 						type="number"
 						step="0.001"
-						value={mm(design.foldDeduction)}
-						oninput={(e) => setSetting('foldDeduction', e.currentTarget.value)}
+						value={mm(packaging.foldDeduction)}
+						oninput={(e) => setPackaging('foldDeduction', e.currentTarget.value)}
 					/>
 				</label>
 			{/if}
-			{#if design.foldCompensation === 'computed'}
+			{#if packaging.foldCompensation === 'computed'}
 				<label class="field">
 					Radius factor
 					<input
 						type="number"
 						step="0.05"
-						value={design.foldRadiusFactor}
-						oninput={(e) => editor.setSetting('foldRadiusFactor', Number(e.currentTarget.value))}
+						value={packaging.foldRadiusFactor}
+						oninput={(e) => editor.setPackaging('foldRadiusFactor', Number(e.currentTarget.value))}
 					/>
 				</label>
 				<label class="field">
@@ -225,8 +232,8 @@
 					<input
 						type="number"
 						step="0.05"
-						value={design.foldKFactor}
-						oninput={(e) => editor.setSetting('foldKFactor', Number(e.currentTarget.value))}
+						value={packaging.foldKFactor}
+						oninput={(e) => editor.setPackaging('foldKFactor', Number(e.currentTarget.value))}
 					/>
 				</label>
 			{/if}
@@ -254,9 +261,9 @@
 			<label class="field">
 				Units
 				<select
-					value={design.units}
+					value={design.stock.units}
 					onchange={(e) =>
-						editor.setSetting('units', e.currentTarget.value as DesignState['units'])}
+						editor.setStock('units', e.currentTarget.value as StockSettings['units'])}
 				>
 					<option value="in">Inches</option>
 					<option value="mm">Millimeters</option>
@@ -653,7 +660,7 @@
 							onchange={(e) => setHeightMode(e.currentTarget.value as Support['heightMode'])}
 						>
 							<option value="fixed">Fixed height</option>
-							<option value="span" disabled={!canSpanToDeck(support, editor.view)}>
+							<option value="span" disabled={!canSpanToDeck(support, editor.packaging)}>
 								Spans to deck
 							</option>
 						</select>
@@ -755,8 +762,8 @@
 					<input
 						type="number"
 						step="0.001"
-						value={mm(design.deckX)}
-						oninput={(e) => setSetting('deckX', e.currentTarget.value)}
+						value={mm(packaging.deckX)}
+						oninput={(e) => setPackaging('deckX', e.currentTarget.value)}
 					/>
 				</label>
 				<label class="field">
@@ -764,8 +771,8 @@
 					<input
 						type="number"
 						step="0.001"
-						value={mm(design.deckY)}
-						oninput={(e) => setSetting('deckY', e.currentTarget.value)}
+						value={mm(packaging.deckY)}
+						oninput={(e) => setPackaging('deckY', e.currentTarget.value)}
 					/>
 				</label>
 				<label class="field">
@@ -773,8 +780,8 @@
 					<input
 						type="number"
 						step="0.001"
-						value={mm(design.deckW)}
-						oninput={(e) => setSetting('deckW', e.currentTarget.value)}
+						value={mm(packaging.deckW)}
+						oninput={(e) => setPackaging('deckW', e.currentTarget.value)}
 					/>
 				</label>
 				<label class="field">
@@ -782,18 +789,18 @@
 					<input
 						type="number"
 						step="0.001"
-						value={mm(design.deckH)}
-						oninput={(e) => setSetting('deckH', e.currentTarget.value)}
+						value={mm(packaging.deckH)}
+						oninput={(e) => setPackaging('deckH', e.currentTarget.value)}
 					/>
 				</label>
 				<label class="field wide">
 					Perimeter
 					<select
-						value={design.perimeterType}
+						value={packaging.perimeterType}
 						onchange={(e) =>
-							editor.setSetting(
+							editor.setPackaging(
 								'perimeterType',
-								e.currentTarget.value as DesignState['perimeterType']
+								e.currentTarget.value as PackagingData['perimeterType']
 							)}
 					>
 						<option value="folded">Walls with inward glue flanges</option>
@@ -801,14 +808,14 @@
 						<option value="plain">Plain through cut</option>
 					</select>
 				</label>
-				{#if design.perimeterType === 'folded'}
+				{#if packaging.perimeterType === 'folded'}
 					<label class="field">
 						Wall ({unitLabel})
 						<input
 							type="number"
 							step="0.001"
-							value={mm(design.perimeterWall)}
-							oninput={(e) => setSetting('perimeterWall', e.currentTarget.value)}
+							value={mm(packaging.perimeterWall)}
+							oninput={(e) => setPackaging('perimeterWall', e.currentTarget.value)}
 						/>
 					</label>
 					<label class="field">
@@ -816,8 +823,8 @@
 						<input
 							type="number"
 							step="0.001"
-							value={mm(design.perimeterFlange)}
-							oninput={(e) => setSetting('perimeterFlange', e.currentTarget.value)}
+							value={mm(packaging.perimeterFlange)}
+							oninput={(e) => setPackaging('perimeterFlange', e.currentTarget.value)}
 						/>
 					</label>
 					<label class="field">
@@ -825,18 +832,21 @@
 						<input
 							type="number"
 							step="0.001"
-							value={mm(design.perimeterRelief)}
-							oninput={(e) => setSetting('perimeterRelief', e.currentTarget.value)}
+							value={mm(packaging.perimeterRelief)}
+							oninput={(e) => setPackaging('perimeterRelief', e.currentTarget.value)}
 						/>
 					</label>
 				{/if}
-				{#if design.perimeterType === 'joist'}
+				{#if packaging.perimeterType === 'joist'}
 					<label class="field">
 						Joist axis
 						<select
-							value={design.joistAxis}
+							value={packaging.joistAxis}
 							onchange={(e) =>
-								editor.setSetting('joistAxis', e.currentTarget.value as DesignState['joistAxis'])}
+								editor.setPackaging(
+									'joistAxis',
+									e.currentTarget.value as PackagingData['joistAxis']
+								)}
 						>
 							<option value="vertical">Left and right</option>
 							<option value="horizontal">Top and bottom</option>
@@ -849,8 +859,8 @@
 							min="1"
 							max="5"
 							step="1"
-							value={design.joistFolds}
-							oninput={(e) => editor.setSetting('joistFolds', Number(e.currentTarget.value))}
+							value={packaging.joistFolds}
+							oninput={(e) => editor.setPackaging('joistFolds', Number(e.currentTarget.value))}
 						/>
 					</label>
 					<label class="field">
@@ -858,8 +868,8 @@
 						<input
 							type="number"
 							step="0.001"
-							value={mm(design.joistHeight)}
-							oninput={(e) => setSetting('joistHeight', e.currentTarget.value)}
+							value={mm(packaging.joistHeight)}
+							oninput={(e) => setPackaging('joistHeight', e.currentTarget.value)}
 						/>
 					</label>
 					<label class="field">
@@ -867,8 +877,8 @@
 						<input
 							type="number"
 							step="0.001"
-							value={mm(design.joistDepth)}
-							oninput={(e) => setSetting('joistDepth', e.currentTarget.value)}
+							value={mm(packaging.joistDepth)}
+							oninput={(e) => setPackaging('joistDepth', e.currentTarget.value)}
 						/>
 					</label>
 				{/if}

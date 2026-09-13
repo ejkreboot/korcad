@@ -1,9 +1,10 @@
 import { SHEET } from '$lib/core/constants.js';
 import { DEFAULT_MACHINE_PROFILE_ID } from '$lib/core/design/defaults.js';
 import { round } from '$lib/core/units.js';
-import type { Sheet, Support, SheetView } from '$lib/core/design/types.js';
+import type { Sheet } from '$lib/core/design/types.js';
+import type { Support } from './types.js';
+import type { PackagingView } from './view.js';
 import { perimeterBounds, type PerimeterSettings } from './perimeter.js';
-import { DECK_SHEET_ID } from './view.js';
 import { riserFlatBounds, type SupportSettings } from './supports.js';
 
 /** Clear border kept around a sheet when auto-placing a net. */
@@ -13,7 +14,7 @@ const STEP = 12.7;
 
 export type PlacementSettings = SupportSettings &
 	PerimeterSettings &
-	Pick<SheetView, 'sheets' | 'activeSheetId' | 'risers'>;
+	Pick<PackagingView, 'sheets' | 'activeSheetId' | 'supports' | 'deckSheetId'>;
 
 export type Placement = {
 	readonly sheetId: string;
@@ -46,10 +47,10 @@ export function placeSupport(
 	const fitsAt = (sheet: Sheet, left: number, bottom: number): boolean => {
 		const candidate = { left, right: left + width, bottom, top: bottom + height };
 		if (candidate.right > SHEET - MARGIN || candidate.top > SHEET - MARGIN) return false;
-		const obstacles = design.risers
+		const obstacles = design.supports
 			.filter((other) => other.sheetId === sheet.id && other.id !== support.id)
 			.map((other) => riserFlatBounds(other, design));
-		if (sheet.id === DECK_SHEET_ID) obstacles.push(perimeterBounds(design));
+		if (sheet.id === design.deckSheetId) obstacles.push(perimeterBounds(design));
 		return obstacles.every(
 			(obstacle) =>
 				candidate.right <= obstacle.left ||
@@ -78,6 +79,7 @@ export function placeSupport(
 	const newSheet: Sheet = {
 		id: makeSheetId(),
 		name: `Parts ${design.sheets.length}`,
+		workspace: 'packaging',
 		machineProfileId:
 			design.sheets.find((sheet) => sheet.id === design.activeSheetId)?.machineProfileId ??
 			design.sheets[0]?.machineProfileId ??

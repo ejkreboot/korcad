@@ -55,7 +55,7 @@
 	const total = $derived(simulationDuration(moves));
 	const frame = $derived(simulationFrame(moves, time));
 
-	const units = $derived(design.units);
+	const units = $derived(design.stock.units);
 	const places = $derived(units === 'in' ? 3 : 2);
 	const fixed = (mm: number) => display(mm, units).toFixed(places);
 

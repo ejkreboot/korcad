@@ -1,6 +1,7 @@
+import type { PackagingView } from './view.js';
 import { round } from '$lib/core/units.js';
-import { supportDefaults } from '$lib/core/design/defaults.js';
-import type { Pocket, PocketPurpose, Support } from '$lib/core/design/types.js';
+import { supportDefaults } from './defaults.js';
+import type { Pocket, PocketPurpose, Support } from './types.js';
 
 /**
  * Semantic opening types. The preset chooses shape, purpose, and construction
@@ -127,7 +128,7 @@ export function createSupportFromPreset(
 	rect: { x: number; y: number; w: number; h: number },
 	id: string,
 	index: number,
-	context: { readonly activeSheetId: string; readonly deckX: number; readonly deckY: number }
+	context: Pick<PackagingView, 'activeSheetId' | 'deckSheetId' | 'deckX' | 'deckY'>
 ): Support {
 	const kind = supportKindForPreset(preset);
 	const tray = kind === 'tray';
@@ -138,7 +139,7 @@ export function createSupportFromPreset(
 				? `Platform step ${index}`
 				: `Riser ${index}`;
 	return {
-		...supportDefaults(),
+		...supportDefaults(context.deckSheetId),
 		kind,
 		id,
 		name,
@@ -155,7 +156,7 @@ export function createSupportFromPreset(
 		cornerClosure: preset === 'riser-lock' ? 'lock' : 'glue',
 		pulls: { top: false, right: false, bottom: tray, left: false },
 		pullDepth: 15,
-		sheetId: tray ? 'deck' : context.activeSheetId,
+		sheetId: tray ? context.deckSheetId : context.activeSheetId,
 		flatX: tray ? 25.4 : round(rect.x),
 		flatY: tray ? 25.4 : round(rect.y),
 		assemblyX: tray ? round(rect.x - context.deckX) : 0,

@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
-import { gotoEditor } from './helpers.js';
+import { gotoEditor, readPackagingDraft } from './helpers.js';
+
+/** The fields of a saved support these tests read. */
+type Support = { h: number; heightMode: string; mount: { anchor: string } };
 
 /**
  * Vertical placement, end to end: the anchor a support is built from, and the
@@ -75,14 +78,11 @@ test('a spanning height follows the wall it has to meet', async ({ page }) => {
 	// Read the stored document: the height is resolved on the way in, so the
 	// riser now fills the taller cavity exactly. 2.25in is 57.15mm.
 	await expect
-		.poll(async () =>
-			page.evaluate(() => {
-				const raw = localStorage.getItem('voisee-insert-generator-v02');
-				const design = raw ? JSON.parse(raw) : null;
-				const riser = design?.risers?.[0];
-				return riser ? { h: riser.h, mode: riser.heightMode, wall: design.perimeterWall } : null;
-			})
-		)
+		.poll(async () => {
+			const packaging = await readPackagingDraft(page);
+			const riser = (packaging?.supports as Support[] | undefined)?.[0];
+			return riser ? { h: riser.h, mode: riser.heightMode, wall: packaging?.perimeterWall } : null;
+		})
 		.toEqual({ h: 57.15, mode: 'span', wall: 57.15 });
 });
 
@@ -176,7 +176,7 @@ test('dragging a support in 3D re-anchors it instead of setting a bare height', 
 
 	await page.getByRole('button', { name: '3D', exact: true }).click();
 	await expect(page.locator('.viewer-loading')).toHaveCount(0);
-	// Both new risers start at the deck origin, so the second already sits over
+	// Both new supports start at the deck origin, so the second already sits over
 	// the first: releasing it there is what commits the relationship.
 	await expect(readout(page)).toContainText('Riser 2');
 
@@ -191,11 +191,10 @@ test('dragging a support in 3D re-anchors it instead of setting a bare height', 
 	await page.mouse.up();
 
 	// However the drag landed, the document only ever holds a named anchor.
-	const mounts = await page.evaluate(() => {
-		const raw = localStorage.getItem('voisee-insert-generator-v02');
-		const design = raw ? JSON.parse(raw) : null;
-		return (design?.risers ?? []).map((r: { mount: { anchor: string } }) => r.mount.anchor);
-	});
+	const packaging = await readPackagingDraft(page);
+	const mounts = ((packaging?.supports as Support[] | undefined) ?? []).map(
+		(support) => support.mount.anchor
+	);
 	expect(mounts.length).toBe(2);
 	for (const anchor of mounts) {
 		expect(['box-floor', 'deck-top', 'deck-underside', 'support-top']).toContain(anchor);

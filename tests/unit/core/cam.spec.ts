@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { packagingData } from '$lib/features/packaging/view.js';
 import { point } from '$lib/core/geometry/primitives.js';
 import { round } from '$lib/core/units.js';
-import { createDefaultDesign } from '$lib/core/design/defaults.js';
+import { createDefaultDesign } from '$lib/features/document.js';
 import type { DesignPath, DesignState } from '$lib/core/design/types.js';
 import { compensatedPoints, toolpathPoints } from '$lib/core/cam/compensation.js';
 import { machiningStage, plannedToolpaths } from '$lib/core/cam/routing.js';
 import { generateGcode, pathOperation } from '$lib/core/cam/gcode.js';
+import { packagingGcode } from '$lib/features/packaging/gcode.js';
 import { simulationMoves } from '$lib/core/cam/simulation.js';
 import { allGeometry } from '$lib/features/packaging/model.js';
 import { validate } from '$lib/features/packaging/validation.js';
-import { view, withMachine } from '../../support/designs.js';
+import { view, withMachine, patchDesign } from '../../support/designs.js';
 import { intent } from '../../support/paths.js';
 
 const line = (
@@ -26,7 +28,7 @@ const line = (
 });
 
 const gcodeFor = (design: DesignState, operation: 'all' | 'cut' | 'crease' = 'all') =>
-	generateGcode(allGeometry(design).paths, view(design), operation);
+	packagingGcode(allGeometry(design).paths, view(design), operation);
 
 describe('knife program', () => {
 	const design = createDefaultDesign();
@@ -66,8 +68,8 @@ describe('operation split', () => {
 		expect(pathOperation(downPath)).toBe('cut');
 
 		const design = createDefaultDesign();
-		const crease = generateGcode(paths, view(design), 'crease');
-		const cut = generateGcode(paths, view(design), 'cut');
+		const crease = packagingGcode(paths, view(design), 'crease');
+		const cut = packagingGcode(paths, view(design), 'cut');
 		expect(simulationMoves(crease, view(design)).some((move) => move.type === 'score-up')).toBe(
 			true
 		);
@@ -103,7 +105,7 @@ describe('router program', () => {
 		expect(validate(design)).toEqual([]);
 		const moves = simulationMoves(gcodeFor(design), view(design));
 		expect(moves.filter((move) => move.type === 'dwell')[0]?.end).toBe(2);
-		expect(moves.some((move) => move.b.x < design.deckX && move.b.x > 0)).toBe(true);
+		expect(moves.some((move) => move.b.x < packagingData(design).deckX && move.b.x > 0)).toBe(true);
 	});
 });
 
@@ -117,7 +119,7 @@ describe('validation gates export', () => {
 	);
 
 	it('blocks a zero material thickness', () => {
-		expect(validate({ ...createDefaultDesign(), material: 0 }).length).toBeGreaterThan(0);
+		expect(validate(patchDesign(createDefaultDesign(), { material: 0 })).length).toBeGreaterThan(0);
 	});
 });
 
@@ -302,5 +304,20 @@ describe('stated CAM intent', () => {
 			'cut'
 		);
 		expect(program).toContain('; 1: cut slot (Left bracket)');
+	});
+
+	it('knows nothing about folds, and prints a workspace header note where it is given', () => {
+		const paths = [line(point(10, 10), point(60, 10), 'cut')];
+		const generic = generateGcode(paths, view(design), 'cut').split('\n');
+		expect(generic.some((entry) => entry.includes('Fold allowance'))).toBe(false);
+
+		const noted = generateGcode(paths, view(design), 'cut', {
+			headerNotes: ['; Workspace note']
+		}).split('\n');
+		// Straight after the stock description, which is where packaging's fold
+		// allowance has always been printed.
+		const stock = noted.findIndex((entry) => entry.startsWith('; Grain / flute direction'));
+		expect(noted[stock + 1]).toBe('; Workspace note');
+		expect(noted.length).toBe(generic.length + 1);
 	});
 });

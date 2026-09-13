@@ -1,11 +1,12 @@
 import type { DesignState } from '$lib/core/design/types.js';
 
 /**
- * Identity of a design for undo purposes. Selection, the active sheet, and
- * the snap toggle are editor state: changing them must not create an undo
- * step, and must not mark the design dirty.
+ * Identity of a design for undo purposes. The active sheet is saved with the
+ * document but is a view choice: changing it must not create an undo step, and
+ * must not mark the design dirty. Selection and snap are not in the document
+ * at all.
  */
-const TRANSIENT_KEYS = ['selectedId', 'selectedRiserId', 'activeSheetId', 'snapEnabled'] as const;
+const TRANSIENT_KEYS = ['activeSheetId'] as const;
 
 export function designHistorySignature(design: DesignState): string {
 	const durable = Object.fromEntries(

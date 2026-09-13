@@ -5,7 +5,7 @@ import { riserFlatBounds, trayHasPull, trayMetrics, trayPullWidthAtMouth } from 
 import { supportHasAncestor, supportPlacementLimits } from './mounting.js';
 import { deckUndersideZ, resolveSupportHeight, sitsInsideBox, supportTopZ } from './levels.js';
 import { machineProfileFor } from '$lib/core/design/machine.js';
-import { DECK_SHEET_ID, packagingView } from './view.js';
+import { packagingView } from './view.js';
 
 const NO_SIDES: SideFlags = { top: false, right: false, bottom: false, left: false };
 const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
@@ -46,10 +46,11 @@ export function validate(document: DesignState): string[] {
 	 */
 	const sheetsWithParts = design.sheets.filter(
 		(sheet) =>
-			sheet.id === DECK_SHEET_ID || design.risers.some((support) => support.sheetId === sheet.id)
+			sheet.id === design.deckSheetId ||
+			design.supports.some((support) => support.sheetId === sheet.id)
 	);
 	const modes = new Set(
-		sheetsWithParts.map((sheet) => machineProfileFor(design, sheet.id).fabricationMode)
+		sheetsWithParts.map((sheet) => machineProfileFor(document, sheet.id).fabricationMode)
 	);
 	if (modes.size > 1) {
 		errors.push('Sheets of one insert must all be cut with the same fabrication mode');
@@ -206,7 +207,7 @@ export function validate(document: DesignState): string[] {
 		}
 	}
 
-	const trayOpenings = design.risers
+	const trayOpenings = design.supports
 		.filter((support) => support.kind === 'tray')
 		.map((tray) => ({
 			item: tray,
@@ -240,7 +241,7 @@ export function validate(document: DesignState): string[] {
 		}
 	}
 
-	for (const r of design.risers) {
+	for (const r of design.supports) {
 		if (!r.name.trim()) errors.push('A support needs a name');
 		if (r.w <= 0 || r.d <= 0 || r.h <= 0) {
 			errors.push(`${r.name}: assembled dimensions must be positive`);
@@ -299,12 +300,12 @@ export function validate(document: DesignState): string[] {
 			}
 		} else if (r.mount.anchor === 'support-top') {
 			const { supportId } = r.mount;
-			if (!design.risers.some((candidate) => candidate.id === supportId)) {
+			if (!design.supports.some((candidate) => candidate.id === supportId)) {
 				errors.push(`${r.name}: assembly mount is missing`);
 			}
 		}
 
-		if (supportHasAncestor(r, r.id, design.risers)) {
+		if (supportHasAncestor(r, r.id, design.supports)) {
 			errors.push(`${r.name}: assembly mounts contain a cycle`);
 		}
 
@@ -320,8 +321,8 @@ export function validate(document: DesignState): string[] {
 		if (
 			r.kind !== 'tray' &&
 			r.heightMode === 'fixed' &&
-			sitsInsideBox(r, design.risers) &&
-			!supportHasAncestor(r, r.id, design.risers) &&
+			sitsInsideBox(r, design.supports) &&
+			!supportHasAncestor(r, r.id, design.supports) &&
 			supportTopZ(r, design) > deckUndersideZ(design) + DECK_INTERFERENCE_TOLERANCE
 		) {
 			errors.push(`${r.name}: stands taller than the space under the top deck`);
@@ -336,7 +337,7 @@ export function validate(document: DesignState): string[] {
 		}
 		if (
 			!router &&
-			r.sheetId === 'deck' &&
+			r.sheetId === design.deckSheetId &&
 			flat.left < bounds.right &&
 			flat.right > bounds.left &&
 			flat.bottom < bounds.top &&
@@ -345,7 +346,7 @@ export function validate(document: DesignState): string[] {
 			errors.push(`${r.name}: flat pattern overlaps the top deck`);
 		}
 
-		const placementLimits = supportPlacementLimits(r, design.risers, design);
+		const placementLimits = supportPlacementLimits(r, design.supports, design);
 		if (
 			r.assemblyX < 0 ||
 			r.assemblyY < 0 ||
@@ -357,10 +358,10 @@ export function validate(document: DesignState): string[] {
 	}
 
 	if (!router) {
-		for (let i = 0; i < design.risers.length; i++) {
-			for (let j = i + 1; j < design.risers.length; j++) {
-				const a = design.risers[i]!;
-				const b = design.risers[j]!;
+		for (let i = 0; i < design.supports.length; i++) {
+			for (let j = i + 1; j < design.supports.length; j++) {
+				const a = design.supports[i]!;
+				const b = design.supports[j]!;
 				if (a.sheetId !== b.sheetId) continue;
 				const ab = riserFlatBounds(a, design);
 				const bb = riserFlatBounds(b, design);

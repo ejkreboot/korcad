@@ -38,6 +38,8 @@ export function createToolState() {
 	let panArmed = $state(false);
 	let viewMode = $state<ViewMode>('flat');
 	let deckOpacity = $state(1);
+	// A drawing aid rather than a property of the design, so it is not saved.
+	let snapEnabled = $state(false);
 	// Kept current by the canvas; zooming needs it to anchor on a pixel.
 	let box = $state<ViewportBox>({ width: 0, height: 0 });
 
@@ -68,6 +70,9 @@ export function createToolState() {
 		},
 		get deckOpacity() {
 			return deckOpacity;
+		},
+		get snapEnabled() {
+			return snapEnabled;
 		},
 		/** Painted size of the canvas, needed to know what is actually on screen. */
 		get viewportBox() {
@@ -115,6 +120,9 @@ export function createToolState() {
 			viewMode = next;
 			// The 3D view owns its own camera, so pan must not stay armed behind it.
 			if (next === 'assembly') panArmed = false;
+		},
+		setSnap(enabled: boolean) {
+			snapEnabled = enabled;
 		},
 		setDeckOpacity(next: number) {
 			deckOpacity = next;

@@ -20,13 +20,7 @@ export type PocketShape = 'rectangle' | 'rounded' | 'ellipse' | 'profile';
  * operator) can tell a locating hole from a cable pass-through.
  */
 export type PocketPurpose =
-	| 'product'
-	| 'rounded'
-	| 'ellipse'
-	| 'slot'
-	| 'cable'
-	| 'registration'
-	| 'imported';
+	'product' | 'rounded' | 'ellipse' | 'slot' | 'cable' | 'registration' | 'imported';
 
 export type Pocket = {
 	readonly id: string;

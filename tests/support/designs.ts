@@ -1,12 +1,73 @@
+import { DEFAULT_MACHINE_PROFILE_ID } from '$lib/core/design/defaults.js';
+import type { DesignState, MachineSettings, Sheet, StockSettings } from '$lib/core/design/types.js';
+import { createPocket, supportDefaults } from '$lib/features/packaging/defaults.js';
+import { createDefaultDesign } from '$lib/features/document.js';
+import type { PackagingData, Support } from '$lib/features/packaging/types.js';
 import {
-	createDefaultDesign,
-	createPocket,
-	DEFAULT_MACHINE_PROFILE_ID,
-	supportDefaults
-} from '$lib/core/design/defaults.js';
-import type { MachineSettings, SheetView } from '$lib/core/design/types.js';
-import { sheetView } from '$lib/core/design/machine.js';
-import type { DesignState, Support } from '$lib/core/design/types.js';
+	packagingData,
+	packagingSheetView,
+	type PackagingView
+} from '$lib/features/packaging/view.js';
+import type { DragView } from '$lib/editor/manipulation.js';
+
+/**
+ * Any field of the document, written flat the way tests think about it:
+ * a stock setting, a packaging setting, or a top-level document field.
+ */
+export type DesignPatch = Partial<StockSettings> &
+	Partial<PackagingData> &
+	Partial<Pick<DesignState, 'toolpathOrder' | 'machineProfiles' | 'sheets' | 'activeSheetId'>>;
+
+const STOCK_KEYS: readonly (keyof StockSettings)[] = [
+	'units',
+	'material',
+	'boardFinish',
+	'grainDirection',
+	'minimumWeb',
+	'tabWidth',
+	'tabCount'
+];
+const DOCUMENT_KEYS: readonly string[] = [
+	'toolpathOrder',
+	'machineProfiles',
+	'sheets',
+	'activeSheetId'
+];
+
+/**
+ * The document with flat fields routed to where they live: `stock`, the top
+ * level, or `workspaces.packaging`. Keeps test setup readable now that the
+ * document is namespaced.
+ */
+export function patchDesign(design: DesignState, patch: DesignPatch): DesignState {
+	const stock: Record<string, unknown> = {};
+	const top: Record<string, unknown> = {};
+	const packaging: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(patch)) {
+		if ((STOCK_KEYS as readonly string[]).includes(key)) stock[key] = value;
+		else if (DOCUMENT_KEYS.includes(key)) top[key] = value;
+		else packaging[key] = value;
+	}
+	return {
+		...design,
+		...top,
+		stock: { ...design.stock, ...stock },
+		workspaces: {
+			...design.workspaces,
+			packaging: { ...packagingData(design), ...packaging }
+		}
+	};
+}
+
+/** The default document with `patch` applied. */
+export function makeDesign(patch: DesignPatch = {}): DesignState {
+	return patchDesign(createDefaultDesign(), patch);
+}
+
+/** A packaging sheet on the default profile. */
+export function packagingSheet(id: string, name: string): Sheet {
+	return { id, name, workspace: 'packaging', machineProfileId: DEFAULT_MACHINE_PROFILE_ID };
+}
 
 /**
  * The reviewed fixture designs, shared by the golden output tests and the CAM
@@ -33,8 +94,7 @@ export function withMachine(design: DesignState, settings: Partial<MachineSettin
 
 /** The default document: a folded perimeter with one folded pocket. */
 export function foldedDesign(): DesignState {
-	return {
-		...createDefaultDesign(),
+	return patchDesign(createDefaultDesign(), {
 		pockets: [
 			createPocket({
 				id: 'pocket-1',
@@ -50,7 +110,7 @@ export function foldedDesign(): DesignState {
 				sides: { top: true, right: true, bottom: true, left: true }
 			})
 		]
-	};
+	});
 }
 
 /**
@@ -58,15 +118,14 @@ export function foldedDesign(): DesignState {
  * stage 1) and the joist end/tab/terminal cuts that release with the exterior.
  */
 export function joistDesign(): DesignState {
-	return {
-		...foldedDesign(),
+	return patchDesign(foldedDesign(), {
 		perimeterType: 'joist',
 		joistAxis: 'vertical',
 		joistFolds: 5,
 		joistHeight: 12.7,
 		joistDepth: 6.35,
 		joistLockWidth: 25.4
-	};
+	});
 }
 
 /**
@@ -115,14 +174,10 @@ export function supportDesign(): DesignState {
 		mount: { anchor: 'box-floor', offset: 0 },
 		netVersion: 2
 	};
-	return {
-		...foldedDesign(),
-		sheets: [
-			{ id: 'deck', name: 'Deck', machineProfileId: DEFAULT_MACHINE_PROFILE_ID },
-			{ id: 'parts', name: 'Parts 1', machineProfileId: DEFAULT_MACHINE_PROFILE_ID }
-		],
-		risers: [tray, riser]
-	};
+	return patchDesign(foldedDesign(), {
+		sheets: [packagingSheet('deck', 'Deck'), packagingSheet('parts', 'Parts 1')],
+		supports: [tray, riser]
+	});
 }
 
 /** Router work: openings and a deck perimeter, cut rather than folded. */
@@ -183,14 +238,10 @@ export function* everyPackagingVariant(): Generator<DesignState> {
 									netVersion: kind === 'tray' ? 3 : 2
 								};
 								yield withMachine(
-									{
-										...createDefaultDesign(),
+									patchDesign(createDefaultDesign(), {
 										perimeterType,
 										joistFolds,
-										sheets: [
-											{ id: 'deck', name: 'Deck', machineProfileId: DEFAULT_MACHINE_PROFILE_ID },
-											{ id: 'parts', name: 'Parts', machineProfileId: DEFAULT_MACHINE_PROFILE_ID }
-										],
+										sheets: [packagingSheet('deck', 'Deck'), packagingSheet('parts', 'Parts')],
 										pockets: [
 											createPocket({
 												id: 'pocket',
@@ -207,21 +258,26 @@ export function* everyPackagingVariant(): Generator<DesignState> {
 												pullDepth: 10
 											})
 										],
-										risers: [support]
-									},
+										supports: [support]
+									}),
 									{ fabricationMode }
 								);
 							}
 }
 
 /**
- * A document as one sheet sees it: the design plus the machine settings of the
- * profile that sheet is cut on.
+ * A document as one packaging sheet sees it: stock, packaging data, and the
+ * machine settings of the profile that sheet is cut on.
  *
  * Geometry, CAM, and the packaging level model are all answered per sheet, so
  * a test that calls them directly hands over a view rather than the document.
  * Defaults to the active sheet, which is what the editor would pass.
  */
-export function view(design: DesignState, sheetId: string = design.activeSheetId): SheetView {
-	return sheetView(design, sheetId);
+export function view(design: DesignState, sheetId: string = design.activeSheetId): PackagingView {
+	return packagingSheetView(design, sheetId);
+}
+
+/** What a canvas drag reads: the sheet view plus the snap toggle, off by default. */
+export function dragView(design: DesignState, snapEnabled = false): DragView {
+	return { ...view(design), snapEnabled };
 }

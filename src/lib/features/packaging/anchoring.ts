@@ -1,5 +1,6 @@
 import { round, snapWithin } from '$lib/core/units.js';
-import type { Support, SupportAnchor, SupportMount, SheetView } from '$lib/core/design/types.js';
+import type { Support, SupportAnchor, SupportMount } from './types.js';
+import type { PackagingView } from './view.js';
 import { canSpanToDeck, supportTopZ, type LevelSettings } from './levels.js';
 import { supportAssemblyOrigin, supportHasAncestor, supportParent } from './mounting.js';
 
@@ -16,7 +17,10 @@ import { supportAssemblyOrigin, supportHasAncestor, supportParent } from './moun
  */
 
 export type DropSettings = LevelSettings &
-	Pick<SheetView, 'risers' | 'deckW' | 'deckH' | 'snapEnabled'>;
+	Pick<PackagingView, 'supports' | 'deckW' | 'deckH'> & {
+		/** The editor's snap toggle; a drop lands on the snap grid when set. */
+		readonly snapEnabled: boolean;
+	};
 
 export type Drop = Pick<Support, 'mount' | 'heightMode' | 'assemblyX' | 'assemblyY'>;
 
@@ -64,9 +68,9 @@ export function supportUnderPoint(
 ): Support | null {
 	let best: Support | null = null;
 	let bestTop = -Infinity;
-	for (const candidate of settings.risers) {
-		if (!canStackOn(dragged, candidate, settings.risers)) continue;
-		const origin = supportAssemblyOrigin(candidate, settings.risers);
+	for (const candidate of settings.supports) {
+		if (!canStackOn(dragged, candidate, settings.supports)) continue;
+		const origin = supportAssemblyOrigin(candidate, settings.supports);
 		const inside =
 			x >= origin.x && x <= origin.x + candidate.w && y >= origin.y && y <= origin.y + candidate.d;
 		if (!inside) continue;
@@ -102,7 +106,7 @@ export function resolveDrop(
 		: dragged.mount.anchor === 'support-top'
 			? // Dragged clear of its stack, so it falls back to the base that stack
 				// stood on rather than jumping to the box floor.
-				{ anchor: baseAnchorOf(dragged, settings.risers), offset: 0 }
+				{ anchor: baseAnchorOf(dragged, settings.supports), offset: 0 }
 			: dragged.mount;
 
 	// A part re-anchored onto a surface with no deck above it cannot span, so it
@@ -113,7 +117,7 @@ export function resolveDrop(
 			? 'fixed'
 			: dragged.heightMode;
 
-	const hostOrigin = host ? supportAssemblyOrigin(host, settings.risers) : { x: 0, y: 0 };
+	const hostOrigin = host ? supportAssemblyOrigin(host, settings.supports) : { x: 0, y: 0 };
 	const maxX = Math.max(0, (host?.w ?? settings.deckW) - dragged.w);
 	const maxY = Math.max(0, (host?.d ?? settings.deckH) - dragged.d);
 

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { packagingData } from '$lib/features/packaging/view.js';
 import { MM_PER_IN, SHEET } from '$lib/core/constants.js';
 import { point } from '$lib/core/geometry/primitives.js';
-import { createDefaultDesign, createPocket } from '$lib/core/design/defaults.js';
-import type { DesignState, Support } from '$lib/core/design/types.js';
-import { supportDefaults } from '$lib/core/design/defaults.js';
+import { createPocket } from '$lib/features/packaging/defaults.js';
+import { createDefaultDesign } from '$lib/features/document.js';
+import type { DesignState } from '$lib/core/design/types.js';
+import type { Support } from '$lib/features/packaging/types.js';
+import { supportDefaults } from '$lib/features/packaging/defaults.js';
 import {
 	clampView,
 	fitView,
@@ -28,7 +31,7 @@ import {
 	MIN_DECK,
 	type DeckOriginal
 } from '$lib/editor/manipulation.js';
-import { view } from '../../support/designs.js';
+import { patchDesign, dragView } from '../../support/designs.js';
 import { designHistorySignature, createHistory } from '$lib/editor/history.js';
 
 const design = createDefaultDesign();
@@ -228,17 +231,16 @@ describe('viewport', () => {
 
 describe('deck manipulation', () => {
 	const original: DeckOriginal = {
-		x: design.deckX,
-		y: design.deckY,
-		w: design.deckW,
-		h: design.deckH,
-		wall: design.perimeterWall,
+		x: packagingData(design).deckX,
+		y: packagingData(design).deckY,
+		w: packagingData(design).deckW,
+		h: packagingData(design).deckH,
+		wall: packagingData(design).perimeterWall,
 		pockets: []
 	};
 
 	it('carries openings along when the deck is moved', () => {
-		const withPocket: DesignState = {
-			...design,
+		const withPocket: DesignState = patchDesign(design, {
 			pockets: [
 				{
 					...createPocket({ id: 'p', name: 'P' }),
@@ -248,52 +250,78 @@ describe('deck manipulation', () => {
 					h: 50
 				}
 			]
-		};
+		});
 		const patch = applyDeckDrag(
-			view(withPocket),
+			dragView(withPocket),
 			'move',
 			{ ...original, pockets: [{ id: 'p', x: 200, y: 200 }] },
 			point(100, 100),
 			point(120, 120)
 		);
-		expect(patch.deckX).toBe(design.deckX + 20);
-		expect(patch.deckY).toBe(design.deckY + 20);
+		expect(patch.deckX).toBe(packagingData(design).deckX + 20);
+		expect(patch.deckY).toBe(packagingData(design).deckY + 20);
 		expect(patch.pockets?.[0]).toMatchObject({ x: 220, y: 220 });
 	});
 
 	it('stops the deck where the unfolded perimeter would leave the stock', () => {
-		const patch = applyDeckDrag(view(design), 'move', original, point(100, 100), point(100, 9000));
+		const patch = applyDeckDrag(
+			dragView(design),
+			'move',
+			original,
+			point(100, 100),
+			point(100, 9000)
+		);
 		// Wall plus flange must still fit above the deck.
 		expect(
-			(patch.deckY ?? 0) + design.deckH + design.perimeterWall + design.perimeterFlange
+			(patch.deckY ?? 0) +
+				packagingData(design).deckH +
+				packagingData(design).perimeterWall +
+				packagingData(design).perimeterFlange
 		).toBeCloseTo(SHEET, 6);
 	});
 
 	it('never lets an edge drag shrink the deck below the minimum', () => {
-		const patch = applyDeckDrag(view(design), 'right', original, point(500, 100), point(0, 100));
+		const patch = applyDeckDrag(
+			dragView(design),
+			'right',
+			original,
+			point(500, 100),
+			point(0, 100)
+		);
 		expect(patch.deckW).toBe(MIN_DECK);
 	});
 
 	it('keeps the unfolded blank on the stock when an edge is dragged out', () => {
-		const patch = applyDeckDrag(view(design), 'right', original, point(100, 100), point(9000, 100));
-		expect(design.deckX + (patch.deckW ?? 0)).toBeLessThanOrEqual(SHEET);
+		const patch = applyDeckDrag(
+			dragView(design),
+			'right',
+			original,
+			point(100, 100),
+			point(9000, 100)
+		);
+		expect(packagingData(design).deckX + (patch.deckW ?? 0)).toBeLessThanOrEqual(SHEET);
 	});
 
 	it('limits the wall grip so the flange still fits the stock', () => {
 		const patch = applyDeckDrag(
-			view(design),
+			dragView(design),
 			'wall-right',
 			original,
 			point(100, 100),
 			point(9000, 100)
 		);
 		const wall = patch.perimeterWall ?? 0;
-		expect(design.deckX + design.deckW + wall + design.perimeterFlange).toBeCloseTo(SHEET, 6);
+		expect(
+			packagingData(design).deckX +
+				packagingData(design).deckW +
+				wall +
+				packagingData(design).perimeterFlange
+		).toBeCloseTo(SHEET, 6);
 	});
 
 	it('never produces a wall below one millimeter', () => {
 		const patch = applyDeckDrag(
-			view(design),
+			dragView(design),
 			'wall-right',
 			original,
 			point(500, 100),
@@ -307,14 +335,28 @@ describe('opening manipulation', () => {
 	const original = { x: 200, y: 200, w: 100, h: 80 };
 
 	it('keeps a moved opening inside the finished deck', () => {
-		const moved = applyPocketDrag(design, 'move', null, original, point(0, 0), point(-9000, -9000));
-		expect(moved.x).toBe(design.deckX);
-		expect(moved.y).toBe(design.deckY);
+		const moved = applyPocketDrag(
+			dragView(design),
+			'move',
+			null,
+			original,
+			point(0, 0),
+			point(-9000, -9000)
+		);
+		expect(moved.x).toBe(packagingData(design).deckX);
+		expect(moved.y).toBe(packagingData(design).deckY);
 		expect(moved.w).toBe(original.w);
 	});
 
 	it('resizes from the anchored corner', () => {
-		const resized = applyPocketDrag(design, 'resize', 'ne', original, point(0, 0), point(360, 330));
+		const resized = applyPocketDrag(
+			dragView(design),
+			'resize',
+			'ne',
+			original,
+			point(0, 0),
+			point(360, 330)
+		);
 		expect(resized.x).toBe(original.x);
 		expect(resized.y).toBe(original.y);
 		expect(resized.w).toBe(160);
@@ -322,7 +364,14 @@ describe('opening manipulation', () => {
 	});
 
 	it('moves the anchor when dragging a west or south handle', () => {
-		const resized = applyPocketDrag(design, 'resize', 'sw', original, point(0, 0), point(250, 240));
+		const resized = applyPocketDrag(
+			dragView(design),
+			'resize',
+			'sw',
+			original,
+			point(0, 0),
+			point(250, 240)
+		);
 		expect(resized.x).toBe(250);
 		expect(resized.y).toBe(240);
 		expect(resized.w).toBe(50);
@@ -330,14 +379,21 @@ describe('opening manipulation', () => {
 	});
 
 	it('never resizes an opening below the minimum', () => {
-		const resized = applyPocketDrag(design, 'resize', 'ne', original, point(0, 0), point(0, 0));
+		const resized = applyPocketDrag(
+			dragView(design),
+			'resize',
+			'ne',
+			original,
+			point(0, 0),
+			point(0, 0)
+		);
 		expect(resized.w).toBe(MIN_COMPONENT);
 		expect(resized.h).toBe(MIN_COMPONENT);
 	});
 
 	it('snaps to the quarter-inch grid when snapping is on', () => {
 		const snapped = applyPocketDrag(
-			{ ...design, snapEnabled: true },
+			dragView(design, true),
 			'move',
 			null,
 			original,
@@ -366,7 +422,7 @@ describe('support manipulation', () => {
 
 	it('keeps the whole unfolded net on the sheet when moved', () => {
 		const moved = applySupportDrag(
-			view(design),
+			dragView(design),
 			support,
 			'move',
 			null,
@@ -380,7 +436,7 @@ describe('support manipulation', () => {
 
 	it('raises the support with the height handle', () => {
 		const taller = applySupportDrag(
-			view(design),
+			dragView(design),
 			support,
 			'height',
 			null,
@@ -394,7 +450,7 @@ describe('support manipulation', () => {
 
 	it('re-anchors the net when a west handle shrinks it', () => {
 		const resized = applySupportDrag(
-			view(design),
+			dragView(design),
 			support,
 			'resize',
 			'sw',
@@ -410,32 +466,24 @@ describe('support manipulation', () => {
 });
 
 describe('history', () => {
-	it('ignores selection, sheet, and snap changes', () => {
+	it('ignores a change of active sheet, which is a view choice', () => {
 		const base = designHistorySignature(design);
-		expect(
-			designHistorySignature({
-				...design,
-				selectedId: 'a',
-				selectedRiserId: 'b',
-				activeSheetId: 'parts',
-				snapEnabled: true
-			})
-		).toBe(base);
-		expect(designHistorySignature({ ...design, deckW: 1 })).not.toBe(base);
+		expect(designHistorySignature({ ...design, activeSheetId: 'parts' })).toBe(base);
+		expect(designHistorySignature(patchDesign(design, { deckW: 1 }))).not.toBe(base);
 	});
 
 	it('records one step per committed change and restores it', () => {
 		const history = createHistory(design);
 		expect(history.canUndo).toBe(false);
 
-		const wider = { ...design, deckW: 300 };
+		const wider = patchDesign(design, { deckW: 300 });
 		history.commit(wider);
 		// Committing an unchanged design must not add a second step.
 		history.commit(wider);
 		expect(history.depth).toBe(1);
 
-		expect(history.undo(wider)?.deckW).toBe(design.deckW);
+		expect(packagingData(history.undo(wider)!).deckW).toBe(packagingData(design).deckW);
 		expect(history.canRedo).toBe(true);
-		expect(history.redo(design)?.deckW).toBe(300);
+		expect(packagingData(history.redo(design)!).deckW).toBe(300);
 	});
 });

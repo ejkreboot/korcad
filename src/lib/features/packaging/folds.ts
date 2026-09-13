@@ -1,5 +1,7 @@
 import type { PackagingPath } from './paths.js';
-import type { FoldDirection, Support, SheetView } from '$lib/core/design/types.js';
+import type { FoldDirection } from '$lib/core/design/types.js';
+import type { Support } from './types.js';
+import type { PackagingView } from './view.js';
 
 /** Stable identity for a fold group, used to persist per-fold direction overrides. */
 export function foldKeyForPath(path: PackagingPath, activeSheetId: string): string | null {
@@ -55,7 +57,10 @@ export function defaultFoldDirection(role: string | undefined): FoldDirection {
 	return role === 'tray-wall-fold' ? 'up' : 'down';
 }
 
-export type FoldAnnotationSettings = Pick<SheetView, 'activeSheetId' | 'foldDirections' | 'risers'>;
+export type FoldAnnotationSettings = Pick<
+	PackagingView,
+	'activeSheetId' | 'foldDirections' | 'supports'
+>;
 
 /** Attaches fold identity, direction, and label to every score path. */
 export function annotateFoldPaths(
@@ -68,7 +73,7 @@ export function annotateFoldPaths(
 		return {
 			...path,
 			foldKey,
-			foldDirection: isFixedFoldPath(path, settings.risers)
+			foldDirection: isFixedFoldPath(path, settings.supports)
 				? 'down'
 				: (settings.foldDirections[foldKey] ?? defaultFoldDirection(path.role)),
 			foldLabel: foldRoleLabel(path.role)
@@ -83,7 +88,7 @@ export function assemblyFoldDirection(
 	settings: FoldAnnotationSettings
 ): FoldDirection {
 	const supportId = owner.startsWith('riser:') ? owner.slice('riser:'.length) : null;
-	const support = supportId ? settings.risers.find((item) => item.id === supportId) : null;
+	const support = supportId ? settings.supports.find((item) => item.id === supportId) : null;
 	if (support?.kind === 'platform' && role === 'riser-bottom-flange-fold') return 'down';
 	return settings.foldDirections[`${owner}:${role}`] ?? defaultFoldDirection(role);
 }

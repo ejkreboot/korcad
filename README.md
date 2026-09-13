@@ -74,6 +74,9 @@ Also built since:
 - the toolpath simulator, with per-pass playback and tool-change checkpoints
 - named machine profiles, referenced per sheet
 - explicit manufacturing intent on every path, so CAM is feature-agnostic
+- a workspace-namespaced document (version 8): packaging data lives under
+  `workspaces.packaging`, each sheet names its workspace, and drafts are saved
+  as design files
 
 Not yet ported:
 

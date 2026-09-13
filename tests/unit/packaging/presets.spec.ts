@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { packagingData } from '$lib/features/packaging/view.js';
 import { SHEET } from '$lib/core/constants.js';
-import {
-	DEFAULT_MACHINE_PROFILE_ID,
-	createDefaultDesign,
-	supportDefaults
-} from '$lib/core/design/defaults.js';
-import type { DesignState, Support } from '$lib/core/design/types.js';
+import { DEFAULT_MACHINE_PROFILE_ID } from '$lib/core/design/defaults.js';
+import { supportDefaults } from '$lib/features/packaging/defaults.js';
+import { createDefaultDesign } from '$lib/features/document.js';
+import type { DesignState } from '$lib/core/design/types.js';
+import type { Support } from '$lib/features/packaging/types.js';
 import {
 	CUTOUT_PRESETS,
 	SUPPORT_PRESETS,
@@ -17,7 +17,7 @@ import {
 import { constrainSupportFlat, placeSupport } from '$lib/features/packaging/placement.js';
 import { riserFlatBounds } from '$lib/features/packaging/supports.js';
 import { allGeometry } from '$lib/features/packaging/model.js';
-import { view } from '../../support/designs.js';
+import { view, patchDesign } from '../../support/designs.js';
 import { validate } from '$lib/features/packaging/validation.js';
 
 const rect = { x: 200, y: 200, w: 120, h: 90 };
@@ -60,17 +60,16 @@ describe('cutout presets', () => {
 	});
 
 	it('produces geometry that validates', () => {
-		const withPocket: DesignState = {
-			...design,
+		const withPocket: DesignState = patchDesign(design, {
 			pockets: [createPocketFromPreset('folded', { x: 200, y: 200, w: 200, h: 150 }, 'p', 1)]
-		};
+		});
 		expect(validate(withPocket)).toEqual([]);
 		expect(allGeometry(withPocket).paths.some((path) => path.role === 'top-fold')).toBe(true);
 	});
 });
 
 describe('support presets', () => {
-	const context = { activeSheetId: 'deck', deckX: design.deckX, deckY: design.deckY };
+	const context = view(design);
 
 	it('offers a distinct semantic type for every preset', () => {
 		expect(new Set(SUPPORT_PRESETS.map((p) => p.id)).size).toBe(SUPPORT_PRESETS.length);
@@ -92,8 +91,8 @@ describe('support presets', () => {
 	it('positions a tray by where it was drawn on the deck', () => {
 		const tray = createSupportFromPreset('tray', rect, 't', 1, context);
 		expect(tray.kind).toBe('tray');
-		expect(tray.assemblyX).toBe(rect.x - design.deckX);
-		expect(tray.assemblyY).toBe(rect.y - design.deckY);
+		expect(tray.assemblyX).toBe(rect.x - packagingData(design).deckX);
+		expect(tray.assemblyY).toBe(rect.y - packagingData(design).deckY);
 		expect(tray.mount).toEqual({ anchor: 'deck-underside', offset: 0 });
 	});
 
@@ -143,6 +142,7 @@ describe('support placement', () => {
 		expect(placed.newSheet).toEqual({
 			id: 'new-sheet',
 			name: 'Parts 1',
+			workspace: 'packaging',
 			machineProfileId: DEFAULT_MACHINE_PROFILE_ID
 		});
 		expect(placed.sheetId).toBe('new-sheet');
@@ -152,15 +152,19 @@ describe('support placement', () => {
 		// A parts sheet carries no deck blank, so the only candidate obstacle is
 		// the support itself; re-placing it must still find room.
 		const existing = support({ sheetId: 'parts', flatX: 200, flatY: 200 });
-		const withSelf: DesignState = {
-			...design,
+		const withSelf: DesignState = patchDesign(design, {
 			sheets: [
 				...design.sheets,
-				{ id: 'parts', name: 'Parts 1', machineProfileId: DEFAULT_MACHINE_PROFILE_ID }
+				{
+					id: 'parts',
+					name: 'Parts 1',
+					workspace: 'packaging',
+					machineProfileId: DEFAULT_MACHINE_PROFILE_ID
+				}
 			],
-			risers: [existing],
+			supports: [existing],
 			activeSheetId: 'parts'
-		};
+		});
 		const placed = placeSupport(existing, view(withSelf), () => 'new-sheet');
 		expect(placed.newSheet).toBeUndefined();
 		expect(placed.sheetId).toBe('parts');
@@ -168,15 +172,19 @@ describe('support placement', () => {
 
 	it('keeps a second net clear of one already on the sheet', () => {
 		const first = support({ id: 'a', sheetId: 'parts', flatX: 120, flatY: 120 });
-		const withFirst: DesignState = {
-			...design,
+		const withFirst: DesignState = patchDesign(design, {
 			sheets: [
 				...design.sheets,
-				{ id: 'parts', name: 'Parts 1', machineProfileId: DEFAULT_MACHINE_PROFILE_ID }
+				{
+					id: 'parts',
+					name: 'Parts 1',
+					workspace: 'packaging',
+					machineProfileId: DEFAULT_MACHINE_PROFILE_ID
+				}
 			],
-			risers: [first],
+			supports: [first],
 			activeSheetId: 'parts'
-		};
+		});
 		const second = support({ id: 'b', sheetId: 'parts' });
 		const placed = placeSupport(second, view(withFirst), () => 'new-sheet');
 		const a = riserFlatBounds(first, view(withFirst));

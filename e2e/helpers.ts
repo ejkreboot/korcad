@@ -20,10 +20,24 @@ export async function gotoEditor(page: Page): Promise<void> {
 	});
 }
 
-/** Reads the autosaved design document out of the browser. */
+/**
+ * Reads the autosaved design document out of the browser.
+ *
+ * A draft is saved as a complete design file, envelope and version included, so
+ * this unwraps it and returns the document inside.
+ */
 export async function readDraft(page: Page): Promise<Record<string, unknown> | null> {
 	return page.evaluate((key) => {
 		const raw = localStorage.getItem(key);
-		return raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+		if (!raw) return null;
+		const file = JSON.parse(raw) as { design?: Record<string, unknown> };
+		return file.design ?? null;
 	}, DRAFT_KEY);
+}
+
+/** The packaging workspace of the autosaved draft. */
+export async function readPackagingDraft(page: Page): Promise<Record<string, unknown> | null> {
+	const design = await readDraft(page);
+	const workspaces = design?.workspaces as Record<string, Record<string, unknown>> | undefined;
+	return workspaces?.packaging ?? null;
 }

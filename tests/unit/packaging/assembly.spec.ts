@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createDefaultDesign, createPocket, supportDefaults } from '$lib/core/design/defaults.js';
+import { createPocket, supportDefaults } from '$lib/features/packaging/defaults.js';
+import { createDefaultDesign } from '$lib/features/document.js';
 import type { Assembly, AssemblyPart } from '$lib/core/assembly/model.js';
 import { hingedFlangeVertices } from '$lib/core/assembly/model.js';
-import type { DesignState, Support } from '$lib/core/design/types.js';
-import { view, withMachine } from '../../support/designs.js';
+import type { DesignState } from '$lib/core/design/types.js';
+import type { Support } from '$lib/features/packaging/types.js';
+import { view, withMachine, patchDesign, type DesignPatch } from '../../support/designs.js';
 import {
 	buildAssembly,
 	joistAssemblyParts,
@@ -31,10 +33,8 @@ const riser = (overrides: Partial<Support> = {}): Support => ({
 	...overrides
 });
 
-const design = (overrides: Partial<DesignState> = {}): DesignState => ({
-	...createDefaultDesign(),
-	...overrides
-});
+const design = (overrides: DesignPatch = {}): DesignState =>
+	patchDesign(createDefaultDesign(), overrides);
 
 const parts = (assembly: Assembly, groupId: string): readonly AssemblyPart[] =>
 	assembly.groups.find((group) => group.id === groupId)?.parts ?? [];
@@ -85,7 +85,7 @@ describe('mount planes', () => {
 			id: 'child',
 			mount: { anchor: 'support-top', supportId: 'parent', offset: 1 }
 		});
-		const stacked = { ...base, risers: [parent, child] };
+		const stacked = patchDesign(base, { supports: [parent, child] });
 		expect(supportTopZ(parent, view(stacked))).toBe(62);
 		expect(supportMountPlane(child, view(stacked))).toBe(63);
 	});
@@ -93,12 +93,14 @@ describe('mount planes', () => {
 	it('does not recurse forever on a mount cycle in a saved file', () => {
 		const a = riser({ id: 'a', mount: { anchor: 'support-top', supportId: 'b', offset: 0 } });
 		const b = riser({ id: 'b', mount: { anchor: 'support-top', supportId: 'a', offset: 0 } });
-		expect(Number.isFinite(supportMountPlane(a, view({ ...base, risers: [a, b] })))).toBe(true);
+		expect(
+			Number.isFinite(supportMountPlane(a, view(patchDesign(base, { supports: [a, b] }))))
+		).toBe(true);
 	});
 
 	it('reads a tray mount plane as its mouth, not its floor', () => {
 		const tray = riser({ kind: 'tray', h: 25 });
-		const withTray = { ...base, risers: [tray] };
+		const withTray = patchDesign(base, { supports: [tray] });
 		expect(supportTopZ(tray, view(withTray))).toBe(supportMountPlane(tray, view(withTray)));
 	});
 });
@@ -115,7 +117,7 @@ describe('tray profile', () => {
 		perimeterType: 'folded',
 		perimeterWall: 40,
 		material: 2,
-		risers: [tray]
+		supports: [tray]
 	});
 
 	it('widens the mouth by the overlap and draws the floor in by the taper', () => {
@@ -134,14 +136,14 @@ describe('tray profile', () => {
 describe('support flanges', () => {
 	it('folds a platform flange inward so it can be glued without widening it', () => {
 		const platform = riser({ kind: 'platform', flange: 10 });
-		const flanges = supportFlangeDescriptors(platform, view(design({ risers: [platform] })));
+		const flanges = supportFlangeDescriptors(platform, view(design({ supports: [platform] })));
 		const bottom = flanges.find((flange) => flange.side === 'bottom');
 		expect(bottom?.extension).toEqual({ x: 0, y: 10 });
 	});
 
 	it('folds a riser flange outward by default', () => {
 		const support = riser({ flange: 10 });
-		const flanges = supportFlangeDescriptors(support, view(design({ risers: [support] })));
+		const flanges = supportFlangeDescriptors(support, view(design({ supports: [support] })));
 		expect(flanges.find((flange) => flange.side === 'bottom')?.extension).toEqual({
 			x: 0,
 			y: -10
@@ -151,7 +153,7 @@ describe('support flanges', () => {
 	it('describes one flange per side', () => {
 		const support = riser({ flange: 10 });
 		expect(
-			supportFlangeDescriptors(support, view(design({ risers: [support] }))).map((f) => f.side)
+			supportFlangeDescriptors(support, view(design({ supports: [support] }))).map((f) => f.side)
 		).toEqual(['bottom', 'top', 'left', 'right']);
 	});
 });
@@ -201,7 +203,7 @@ describe('joist parts', () => {
 	});
 
 	it('stops emitting blocks at the configured fold count', () => {
-		const two = joistAssemblyParts(view({ ...joist, joistFolds: 2 }));
+		const two = joistAssemblyParts(view(patchDesign(joist, { joistFolds: 2 })));
 		expect(two.filter((part) => part.side === 'left').map((part) => part.kind)).toEqual([
 			'outer-wall',
 			'bottom'
@@ -234,7 +236,7 @@ describe('buildAssembly', () => {
 
 	it('punches a tray opening through the deck', () => {
 		const tray = riser({ kind: 'tray', assemblyX: 30, assemblyY: 20 });
-		const assembly = buildAssembly(design({ risers: [tray] }));
+		const assembly = buildAssembly(design({ supports: [tray] }));
 		const deck = parts(assembly, 'deck').find((part) => part.form === 'deck');
 		expect(deck?.form === 'deck' && deck.holes).toHaveLength(1);
 	});
@@ -278,14 +280,14 @@ describe('buildAssembly', () => {
 
 	it('marks every part of the deck piece as deck geometry, and no support part', () => {
 		const support = riser();
-		const assembly = buildAssembly(design({ perimeterType: 'folded', risers: [support] }));
+		const assembly = buildAssembly(design({ perimeterType: 'folded', supports: [support] }));
 		expect(parts(assembly, 'deck').every((part) => part.deckPart)).toBe(true);
 		expect(parts(assembly, 'riser:riser-1').some((part) => part.deckPart)).toBe(false);
 	});
 
 	it('gives a support its own draggable group at its assembly origin', () => {
 		const support = riser({ assemblyX: 40, assemblyY: 25 });
-		const group = buildAssembly(design({ risers: [support] })).groups.find(
+		const group = buildAssembly(design({ supports: [support] })).groups.find(
 			(candidate) => candidate.supportId === 'riser-1'
 		);
 		expect(group?.origin).toEqual({ x: 40, y: 25 });
@@ -300,19 +302,19 @@ describe('buildAssembly', () => {
 			assemblyY: 5,
 			mount: { anchor: 'support-top', supportId: 'parent', offset: 0 }
 		});
-		const groups = buildAssembly(design({ risers: [parent, child] })).groups;
+		const groups = buildAssembly(design({ supports: [parent, child] })).groups;
 		expect(groups.find((group) => group.supportId === 'child')?.origin).toEqual({ x: 45, y: 30 });
 	});
 
 	it('marks the selected support so the viewer can highlight it', () => {
 		const support = riser();
-		const assembly = buildAssembly(design({ risers: [support], selectedRiserId: 'riser-1' }));
+		const assembly = buildAssembly(design({ supports: [support] }), 'riser-1');
 		expect(assembly.groups.find((group) => group.supportId === 'riser-1')?.selected).toBe(true);
 	});
 
 	it('closes a riser with four walls, a top panel, and four corner tabs', () => {
 		const support = riser({ bottomFlange: false });
-		const group = parts(buildAssembly(design({ risers: [support] })), 'riser:riser-1');
+		const group = parts(buildAssembly(design({ supports: [support] })), 'riser:riser-1');
 		expect(boxes(group)).toHaveLength(5);
 		expect(group.filter((part) => part.form === 'panel')).toHaveLength(4);
 		expect(group.filter((part) => part.form === 'footprint')).toHaveLength(1);
@@ -320,14 +322,14 @@ describe('buildAssembly', () => {
 
 	it('adds a bottom flange panel per side when the riser has one', () => {
 		const support = riser({ bottomFlange: true, flange: 10 });
-		const group = parts(buildAssembly(design({ risers: [support] })), 'riser:riser-1');
+		const group = parts(buildAssembly(design({ supports: [support] })), 'riser:riser-1');
 		// Four corner tabs plus four flanges.
 		expect(group.filter((part) => part.form === 'panel')).toHaveLength(8);
 	});
 
 	it('leaves the open side of a tray without a wall', () => {
 		const tray = riser({ kind: 'tray', openSide: 'left', flange: 0 });
-		const group = parts(buildAssembly(design({ risers: [tray] })), 'riser:riser-1');
+		const group = parts(buildAssembly(design({ supports: [tray] })), 'riser:riser-1');
 		expect(group.filter((part) => part.form === 'wall')).toHaveLength(3);
 	});
 
@@ -340,7 +342,7 @@ describe('buildAssembly', () => {
 			overlap: 6,
 			pulls: { top: false, right: false, bottom: true, left: false }
 		});
-		const group = parts(buildAssembly(design({ risers: [tray] })), 'riser:riser-1');
+		const group = parts(buildAssembly(design({ supports: [tray] })), 'riser:riser-1');
 		// Three plain flanges, plus two segments either side of the pull.
 		expect(group.filter((part) => part.form === 'panel')).toHaveLength(5);
 	});
@@ -353,7 +355,7 @@ describe('buildAssembly', () => {
 			overlap: 6,
 			pulls: { top: false, right: false, bottom: true, left: false }
 		});
-		const walls = parts(buildAssembly(design({ risers: [tray] })), 'riser:riser-1').filter(
+		const walls = parts(buildAssembly(design({ supports: [tray] })), 'riser:riser-1').filter(
 			(part) => part.form === 'wall'
 		);
 		expect(walls.filter((part) => part.form === 'wall' && part.notch)).toHaveLength(1);
@@ -370,7 +372,7 @@ describe('buildAssembly', () => {
 
 	it('does not mutate the design it describes', () => {
 		const support = riser({ assemblyX: 10 });
-		const source = design({ risers: [support], pockets: [] });
+		const source = design({ supports: [support], pockets: [] });
 		const snapshot = JSON.stringify(source);
 		buildAssembly(source);
 		expect(JSON.stringify(source)).toBe(snapshot);

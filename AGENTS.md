@@ -64,12 +64,12 @@ src/
       units.ts                   mm internally; display/parse for the UI
       geometry/primitives.ts
       design/
-        types.ts                 DesignDocument and every domain type
+        types.ts                 DesignState, sheets, stock, paths, machine settings
+        workspace.ts             WorkspaceDataMap, augmented by each feature
         machine.ts               machine profiles and per-sheet views
         migrate.ts               version-stepped document migrations
-        defaults.ts
-        fold.ts                  bend deduction, flat panel widths
-        normalize.ts             untrusted JSON -> DesignState, with migrations
+        defaults.ts              generic defaults: stock, machine profile
+        normalize.ts             generic document reading; workspaces read their own
       cam/
         compensation.ts
         routing.ts
@@ -77,10 +77,19 @@ src/
         simulation.ts
       export/
         svg.ts
-        design-file.ts
+        design-file.ts           envelope: serialize, and unwrap before normalizing
       assembly/model.ts          plain-data description of an assembled design
 
+    features/
+      workspaces.ts              the workspace registry (id, label, data scope, reader)
+      document.ts                createDefaultDesign, normalizeState, parseDesign
     features/packaging/          packaging domain, built on core
+      types.ts                   Pocket, Support, PackagingData; augments the map
+      view.ts                    PackagingView, packagingData, withPackaging
+      defaults.ts                packaging, pocket, and support defaults
+      normalize.ts               reads workspaces.packaging from a saved file
+      fold.ts                    bend deduction, flat panel widths
+      gcode.ts                   packagingGcode: the program plus the fold header
       model.ts                   allGeometry: flat geometry for a sheet
       geometry.ts                pocket openings, walls, finger pulls
       perimeter.ts               folded walls and rolled joists
@@ -96,7 +105,7 @@ src/
 
     editor/                      transient editor state; may use browser APIs
       state.svelte.ts            the single owner of the design document
-      tools.svelte.ts            active tool, viewport, view mode, deck opacity
+      tools.svelte.ts            active tool, snap, viewport, view mode, deck opacity
       history.ts
       viewport.ts
       manipulation.ts            pointer deltas -> design changes
@@ -129,11 +138,12 @@ e2e/
   support-mounting.e2e.ts        anchors and spanning heights
   simulation.e2e.ts              toolpath playback and tool changes
   machine-profiles.e2e.ts        profile editing and per-sheet machines
+  document-format.e2e.ts         the saved shape, legacy drafts, selection outside it
 ```
 
 Two layering rules matter more than the tree itself:
 
-- `core` may not import from `features`, `editor`, `viewer`, or `components`. When a packaging rule has to run at an import boundary, apply it in `editor/persistence.ts`, not in `core/design/normalize.ts`.
+- `core` may not import from `features`, `editor`, `viewer`, or `components`; `tests/unit/core/cam-boundary.spec.ts` enforces it. When a packaging rule has to run at an import boundary, apply it in `editor/persistence.ts` or the packaging reader, not in `core/design/normalize.ts`.
 - `viewer/` owns Three.js. `features/packaging/assembly.ts` produces the plain-data assembly description; `viewer/assembly-scene.ts` turns it into meshes. Geometry decisions belong in the former so they can be unit-tested without a browser.
 
 Do not create a package workspace or publish a package prematurely. Keep the core as an internal module until its public API has stabilized through real use.
@@ -213,6 +223,44 @@ Transient editor state includes:
 
 Do not serialize transient UI state into an interchange design file unless there is a clearly documented reason.
 
+### The Document Is Namespaced By Workspace
+
+```ts
+type DesignState = {
+	stock: StockSettings; // units, material, finish, grain, minimum web, tabs
+	toolpathOrder: ToolpathOrder;
+	machineProfiles: MachineProfile[];
+	sheets: Sheet[]; // { id, name, workspace, machineProfileId }
+	activeSheetId: string;
+	workspaces: WorkspaceData; // { packaging?: PackagingData, ... }
+};
+```
+
+Generic concerns live at the top level. Everything a workspace invents lives
+under `workspaces[id]`, present only when the document uses that workspace.
+
+- **Core names workspace data without importing it.** `core/design/workspace.ts`
+  declares an empty `WorkspaceDataMap`; `features/packaging/types.ts` augments it
+  with `packaging: PackagingData`. `WorkspaceId` is the map's keys. A new
+  workspace adds its own augmentation and registers in `features/workspaces.ts`.
+- **Each workspace reads its own saved data.** `normalizeDocument` in core reads
+  stock, profiles, and sheets, then hands `workspaces[id]` to each registered
+  reader. `normalizeState` and `parseDesign` live in `features/document.ts`,
+  because only that layer knows every workspace; import them from there.
+- **Packaging data is document-scoped.** One `PackagingData` spans every sheet
+  tagged `packaging`: the deck sheet (named by `deckSheetId`, never assumed to be
+  `'deck'`) carries pockets and tray openings, and each support is cut from the
+  sheet its `sheetId` names. Read it flat through `PackagingView`
+  (`packagingSheetView(design, sheetId)`, or `packagingView(design)` for the deck
+  sheet), and write it with `withPackaging(design, update)`.
+- **Selection and snap are not in the document.** Selection is one slot in
+  `editor/state.svelte.ts` (`selectedPocketId` / `selectedSupportId` report it
+  only while the entity exists); snap is in `editor/tools.svelte.ts` and reaches
+  drags as `DragView = PackagingView & { snapEnabled }`.
+- **Drafts are design files.** `saveDraft` writes through `serializeDesign`, and
+  `loadDraft` reads through `parseDesign`, which still accepts the bare documents
+  earlier builds left in `localStorage`.
+
 Document migrations are version-stepped in `core/design/migrate.ts`: each
 `MigrationStep` turns a raw document of one version into the raw shape of the
 next, and `normalizeState` runs the chain before reading fields. Steps only
@@ -220,10 +268,17 @@ move data; defaulting and validating values stays normalization's job. Bump
 `DESIGN_VERSION` in `core/constants.ts` and add a step — a test asserts the two
 agree and that the chain has no gaps.
 
+Version 7 moved machine settings into profiles; version 8 moved packaging data
+under `workspaces.packaging`, renamed `risers` to `supports`, grouped `stock`,
+tagged sheets with a workspace, and dropped selection and snap. A migration
+names the historical field strings of the shape it reads — that is data about
+old files, not a dependency on the feature.
+
 Documents older than version 6 are not stepped. Fields that changed shape
 before the pipeline existed — a support's `{ target, face }` mount, `assemblyZ`,
-pre-v2 riser nets — are still recognised by shape inside `normalizeState`. That
-is the pipeline's backlog, not a gap in it.
+pre-v2 riser nets — are still recognised by shape inside
+`features/packaging/normalize.ts`. That is the pipeline's backlog, not a gap in
+it.
 
 Every design-file migration must be explicit and tested. Older files should normalize into the newest supported document shape without silently changing the intended manufactured result.
 
@@ -239,12 +294,11 @@ creased deck and a routed plate.
 
 Consequences for anything that reads a machine setting:
 
-- **Take a `SheetView`, not a `DesignState`.** A view is the document plus the
-  machine settings of one sheet's profile; build one with `sheetView(design,
-sheetId)` from `core/design/machine.ts`. Every CAM settings type
-  (`CompensationSettings`, `RoutingSettings`, `GcodeSettings`,
-  `SimulationSettings`) and every packaging settings type now picks from
-  `SheetView` or `MachineSettings`.
+- **Take a view, not a `DesignState`.** A `SheetView` is the stock, the sheet
+  list, and the machine settings of one sheet's profile; build one with
+  `sheetView(design, sheetId)` from `core/design/machine.ts`. Every CAM settings
+  type picks from `SheetView` or `MachineSettings`; every packaging settings type
+  picks from `PackagingView`, which adds the packaging data.
 - **Geometry is answered per sheet.** `allGeometry(document, sheetId)` resolves
   that sheet's profile itself, because a routed sheet does not fold.
 - **Assembly-wide questions use `packagingView`.** Deck height, support
@@ -252,9 +306,12 @@ sheetId)` from `core/design/machine.ts`. Every CAM settings type
   sheet's machine. Validation rejects a document whose packaging sheets
   disagree on fabrication mode, so for any exportable design the choice of
   sheet cannot change the answer.
-- The editor exposes `editor.view` (the active sheet's view) and
-  `editor.machine` (its profile). Components read those rather than resolving
-  profiles themselves.
+- The editor exposes `editor.view` (the active sheet's `SheetView`),
+  `editor.packaging` (its `PackagingView`), and `editor.machine` (its profile).
+  Components read those rather than resolving profiles themselves.
+- **G-code for a packaging sheet goes through `packagingGcode`.** Core
+  `generateGcode` knows nothing about folds; packaging passes its fold-allowance
+  line in `GcodeOptions.headerNotes`, printed where it always was.
 
 ### Vertical Placement Is Relational
 
@@ -420,6 +477,9 @@ Done:
     reads packaging role strings.
 11. Machine profiles: the thirteen machine settings moved into named profiles referenced per
     sheet, on a version-stepped migration pipeline (document version 7).
+12. Workspace namespace: packaging data under `workspaces.packaging`, a workspace tag per
+    sheet, `stock` grouped, selection and snap moved out of the document, drafts written
+    as design files, and a registry seam in `features/workspaces.ts` (document version 8).
 
 Not yet ported from the reference implementation:
 

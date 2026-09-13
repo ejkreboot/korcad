@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import {
-	DEFAULT_MACHINE_PROFILE_ID,
-	createDefaultDesign,
-	createPocket,
-	supportDefaults
-} from '$lib/core/design/defaults.js';
-import type { DesignState, Support } from '$lib/core/design/types.js';
+import { packagingData } from '$lib/features/packaging/view.js';
+import { DEFAULT_MACHINE_PROFILE_ID } from '$lib/core/design/defaults.js';
+import { createPocket, supportDefaults } from '$lib/features/packaging/defaults.js';
+import { createDefaultDesign } from '$lib/features/document.js';
+import type { DesignState } from '$lib/core/design/types.js';
+import type { Support } from '$lib/features/packaging/types.js';
 import { pathOperation } from '$lib/core/cam/gcode.js';
 import { machiningStage, plannedToolpaths } from '$lib/core/cam/routing.js';
 import { allGeometry, trayOpeningPath } from '$lib/features/packaging/model.js';
@@ -17,7 +16,7 @@ import {
 import { exteriorPaths, perimeterExtents } from '$lib/features/packaging/perimeter.js';
 import { riserPaths, trayPaths, trayPullWidthAtMouth } from '$lib/features/packaging/supports.js';
 import { validate } from '$lib/features/packaging/validation.js';
-import { view, withMachine } from '../../support/designs.js';
+import { view, withMachine, patchDesign } from '../../support/designs.js';
 import { annotateCamIntent } from '$lib/features/packaging/cam-intent.js';
 
 const tray = (overrides: Partial<Support> = {}): Support => ({
@@ -42,29 +41,38 @@ const tray = (overrides: Partial<Support> = {}): Support => ({
 	...overrides
 });
 
-const withTray = (overrides: Partial<Support> = {}): DesignState => ({
-	...createDefaultDesign(),
-	sheets: [
-		{ id: 'deck', name: 'Deck', machineProfileId: DEFAULT_MACHINE_PROFILE_ID },
-		{ id: 'parts', name: 'Parts 1', machineProfileId: DEFAULT_MACHINE_PROFILE_ID }
-	],
-	risers: [tray(overrides)]
-});
+const withTray = (overrides: Partial<Support> = {}): DesignState =>
+	patchDesign(createDefaultDesign(), {
+		sheets: [
+			{
+				id: 'deck',
+				name: 'Deck',
+				workspace: 'packaging',
+				machineProfileId: DEFAULT_MACHINE_PROFILE_ID
+			},
+			{
+				id: 'parts',
+				name: 'Parts 1',
+				workspace: 'packaging',
+				machineProfileId: DEFAULT_MACHINE_PROFILE_ID
+			}
+		],
+		supports: [tray(overrides)]
+	});
 
 describe('folds', () => {
 	const design = createDefaultDesign();
 
 	it('defaults perimeter folds down and honors a saved override', () => {
-		expect(assemblyFoldSign('sheet:deck', 'perimeter-deck-fold', design)).toBe(-1);
-		const flipped = {
-			...design,
+		expect(assemblyFoldSign('sheet:deck', 'perimeter-deck-fold', view(design))).toBe(-1);
+		const flipped = patchDesign(design, {
 			foldDirections: { 'sheet:deck:perimeter-deck-fold': 'up' as const }
-		};
-		expect(assemblyFoldSign('sheet:deck', 'perimeter-deck-fold', flipped)).toBe(1);
+		});
+		expect(assemblyFoldSign('sheet:deck', 'perimeter-deck-fold', view(flipped))).toBe(1);
 	});
 
 	it('defaults a tray wall fold up, because the wall rises out of the sheet', () => {
-		expect(assemblyFoldDirection('riser:tray', 'tray-wall-fold', design)).toBe('up');
+		expect(assemblyFoldDirection('riser:tray', 'tray-wall-fold', view(design))).toBe('up');
 	});
 });
 
@@ -92,19 +100,16 @@ describe('recessed tray', () => {
 			pullDiameter: 38.1,
 			pullDepth: 15
 		});
-		const support = pulled.risers[0]!;
+		const support = packagingData(pulled).supports[0]!;
 		expect(trayPullWidthAtMouth(support)).toBeGreaterThan(0);
 
-		const opening = trayOpeningPath(support, pulled);
+		const opening = trayOpeningPath(support, view(pulled));
 		expect(opening.points.length).toBeGreaterThan(4);
 		expect(Math.min(...opening.points.map((p) => p.y))).toBeLessThan(
-			pulled.deckY + support.assemblyY
+			packagingData(pulled).deckY + support.assemblyY
 		);
 
-		const flat = annotateFoldPaths(trayPaths(support, view(pulled)), {
-			...pulled,
-			activeSheetId: 'parts'
-		});
+		const flat = annotateFoldPaths(trayPaths(support, view(pulled)), view(pulled, 'parts'));
 		expect(flat.filter((path) => path.role === 'tray-finger-pull-bottom')).toHaveLength(1);
 		// The pull splits one flange fold in two, so four folds become five.
 		expect(flat.filter((path) => path.role === 'tray-flange-fold')).toHaveLength(5);
@@ -133,32 +138,33 @@ describe('platform', () => {
 	};
 
 	it('keeps its glue flanges as down folds even when overridden', () => {
-		const design: DesignState = {
-			...createDefaultDesign(),
-			risers: [platform],
+		const design: DesignState = patchDesign(createDefaultDesign(), {
+			supports: [platform],
 			foldDirections: { 'riser:step:riser-bottom-flange-fold': 'up' }
-		};
-		const folds = annotateFoldPaths(riserPaths(platform, view(design)), design).filter(
+		});
+		const folds = annotateFoldPaths(riserPaths(platform, view(design)), view(design)).filter(
 			(path) => path.role === 'riser-bottom-flange-fold'
 		);
 		expect(folds).toHaveLength(4);
 		expect(folds.every((path) => path.foldDirection === 'down')).toBe(true);
 		expect(folds.every((path) => pathOperation(path) === 'cut')).toBe(true);
-		expect(assemblyFoldDirection('riser:step', 'riser-bottom-flange-fold', design)).toBe('down');
+		expect(assemblyFoldDirection('riser:step', 'riser-bottom-flange-fold', view(design))).toBe(
+			'down'
+		);
 	});
 });
 
 describe('edge joists', () => {
-	const base = (): DesignState => ({
-		...createDefaultDesign(),
-		perimeterType: 'joist',
-		joistAxis: 'vertical',
-		joistHeight: 12.7,
-		joistDepth: 6.35
-	});
+	const base = (): DesignState =>
+		patchDesign(createDefaultDesign(), {
+			perimeterType: 'joist',
+			joistAxis: 'vertical',
+			joistHeight: 12.7,
+			joistDepth: 6.35
+		});
 
 	it.each([1, 2, 3, 4])('derives %i full folds on two opposing edges', (folds) => {
-		const design = { ...base(), joistFolds: folds };
+		const design = patchDesign(base(), { joistFolds: folds });
 		const geometry = allGeometry(design);
 		const joistFolds = geometry.paths.filter((path) => path.role?.startsWith('joist-fold-'));
 		expect(joistFolds).toHaveLength(folds * 2);
@@ -170,13 +176,12 @@ describe('edge joists', () => {
 	});
 
 	it('adds centered locking returns and derived internal slots at five folds', () => {
-		const design: DesignState = {
-			...base(),
+		const design: DesignState = patchDesign(base(), {
 			joistAxis: 'horizontal',
 			joistFolds: 5,
 			joistLockWidth: 25.4,
 			joistSlotClearance: 0.4
-		};
+		});
 		const geometry = allGeometry(design);
 		expect(geometry.paths.filter((path) => path.role?.startsWith('joist-fold-'))).toHaveLength(10);
 		expect(geometry.paths.filter((path) => path.role === 'joist-lock-slot')).toHaveLength(2);
@@ -199,14 +204,14 @@ describe('edge joists', () => {
 	});
 
 	it('extends the flat blank only on the edge pair the joists run along', () => {
-		const design = { ...base(), joistFolds: 4, joistHeight: 10, joistDepth: 5 };
-		expect(perimeterExtents(view({ ...design, joistAxis: 'vertical' }))).toEqual({
+		const design = patchDesign(base(), { joistFolds: 4, joistHeight: 10, joistDepth: 5 });
+		expect(perimeterExtents(view(patchDesign(design, { joistAxis: 'vertical' })))).toEqual({
 			left: 30,
 			right: 30,
 			bottom: 0,
 			top: 0
 		});
-		expect(perimeterExtents(view({ ...design, joistAxis: 'horizontal' }))).toEqual({
+		expect(perimeterExtents(view(patchDesign(design, { joistAxis: 'horizontal' })))).toEqual({
 			left: 0,
 			right: 0,
 			bottom: 30,
@@ -234,10 +239,10 @@ describe('dependency stages', () => {
 			mount: { anchor: 'box-floor', offset: 0 },
 			netVersion: 2
 		};
-		const design: DesignState = { ...createDefaultDesign(), risers: [riser] };
+		const design: DesignState = patchDesign(createDefaultDesign(), { supports: [riser] });
 		const paths = annotateCamIntent(
 			[...riserPaths(riser, view(design)), ...exteriorPaths(view(design)).paths],
-			design
+			view(design)
 		);
 		const ordered = plannedToolpaths(paths, view(design)).paths;
 
@@ -256,8 +261,7 @@ describe('dependency stages', () => {
 
 describe('pockets', () => {
 	it('emits a folded pocket with relief slots and one fold per wall and flange', () => {
-		const design: DesignState = {
-			...createDefaultDesign(),
+		const design: DesignState = patchDesign(createDefaultDesign(), {
 			pockets: [
 				createPocket({
 					id: 'p',
@@ -270,7 +274,7 @@ describe('pockets', () => {
 					sides: { top: true, right: true, bottom: true, left: true }
 				})
 			]
-		};
+		});
 		const paths = allGeometry(design).paths;
 		expect(paths.filter((path) => path.role === 'central-cutout')).toHaveLength(1);
 		expect(paths.filter((path) => path.role === 'top-fold')).toHaveLength(4);
@@ -280,12 +284,11 @@ describe('pockets', () => {
 	});
 
 	it('emits a single through cut for a non-rectangular cutout', () => {
-		const design: DesignState = {
-			...createDefaultDesign(),
+		const design: DesignState = patchDesign(createDefaultDesign(), {
 			pockets: [
 				createPocket({ id: 'e', name: 'Lens', shape: 'ellipse', x: 200, y: 200, w: 80, h: 60 })
 			]
-		};
+		});
 		const cutouts = allGeometry(design).paths.filter((path) => path.pocketId === 'e');
 		expect(cutouts).toHaveLength(1);
 		expect(cutouts[0]?.closed).toBe(true);
@@ -293,8 +296,7 @@ describe('pockets', () => {
 	});
 
 	it('rejects a pocket whose walls consume the whole opening', () => {
-		const design: DesignState = {
-			...createDefaultDesign(),
+		const design: DesignState = patchDesign(createDefaultDesign(), {
 			pockets: [
 				createPocket({
 					id: 'p',
@@ -306,17 +308,16 @@ describe('pockets', () => {
 					sides: { top: true, right: true, bottom: true, left: true }
 				})
 			]
-		};
+		});
 		expect(validate(design)).toContain('Tiny: walls and flanges consume the entire pocket');
 	});
 
 	it('rejects overlapping pockets', () => {
 		const at = (id: string, name: string, x: number) =>
 			createPocket({ id, name, x, y: 200, w: 100, h: 80 });
-		const design: DesignState = {
-			...createDefaultDesign(),
+		const design: DesignState = patchDesign(createDefaultDesign(), {
 			pockets: [at('a', 'A', 200), at('b', 'B', 250)]
-		};
+		});
 		expect(validate(design)).toContain('A overlaps B');
 	});
 });
@@ -324,10 +325,9 @@ describe('pockets', () => {
 describe('router mode', () => {
 	it('cuts openings and the deck perimeter only, with no folds', () => {
 		const design = withMachine(
-			{
-				...createDefaultDesign(),
+			patchDesign(createDefaultDesign(), {
 				pockets: [createPocket({ id: 'p', name: 'Opening', x: 200, y: 200, w: 100, h: 80 })]
-			},
+			}),
 			{ fabricationMode: 'router' }
 		);
 		const geometry = allGeometry(design);

@@ -192,11 +192,11 @@
 		</button>
 		<button
 			class="button icon"
-			class:active={editor.design.snapEnabled}
-			aria-pressed={editor.design.snapEnabled}
+			class:active={tools.snapEnabled}
+			aria-pressed={tools.snapEnabled}
 			aria-label="Snap"
 			title="Snap to a quarter-inch grid"
-			onclick={() => editor.setSnap(!editor.design.snapEnabled)}
+			onclick={() => tools.setSnap(!tools.snapEnabled)}
 		>
 			<Icon name="grid_4x4" />
 		</button>

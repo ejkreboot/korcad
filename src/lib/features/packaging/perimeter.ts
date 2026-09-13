@@ -1,7 +1,8 @@
 import type { PackagingGeometry, PackagingPath } from './paths.js';
 import { point, type Point } from '$lib/core/geometry/primitives.js';
-import { flatPanel, type FoldSettings } from '$lib/core/design/fold.js';
-import type { HoldingTab, SideFlags, SheetView } from '$lib/core/design/types.js';
+import { flatPanel, type FoldSettings } from './fold.js';
+import type { HoldingTab, SideFlags } from '$lib/core/design/types.js';
+import type { PackagingView } from './view.js';
 import { splitSide } from './geometry.js';
 
 type PathMeta = Omit<PackagingPath, 'points' | 'type' | 'closed'>;
@@ -31,7 +32,7 @@ const closedPath = (
 
 export type PerimeterSettings = FoldSettings &
 	Pick<
-		SheetView,
+		PackagingView,
 		| 'fabricationMode'
 		| 'perimeterType'
 		| 'perimeterWall'

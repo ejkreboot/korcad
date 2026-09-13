@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { generateGcode } from '$lib/core/cam/gcode.js';
+	import { packagingGcode } from '$lib/features/packaging/gcode.js';
 	import { designSvg } from '$lib/core/export/svg.js';
 	import { riserFlatBounds } from '$lib/features/packaging/supports.js';
 	import { createEditorState } from '$lib/editor/state.svelte.js';
@@ -50,8 +50,8 @@
 
 	/** Frames the current selection, or the whole sheet when nothing is selected. */
 	function zoomFit(event: MouseEvent): void {
-		const pocket = editor.design.pockets.find((p) => p.id === editor.design.selectedId);
-		const support = editor.design.risers.find((r) => r.id === editor.design.selectedRiserId);
+		const pocket = editor.packaging.pockets.find((p) => p.id === editor.selectedPocketId);
+		const support = editor.packaging.supports.find((r) => r.id === editor.selectedSupportId);
 		if (event.shiftKey && pocket) {
 			tools.frame({
 				left: pocket.x,
@@ -62,7 +62,7 @@
 			return;
 		}
 		if (event.shiftKey && support && support.sheetId === editor.design.activeSheetId) {
-			tools.frame(netBounds(support, editor.view));
+			tools.frame(netBounds(support, editor.packaging));
 			return;
 		}
 		tools.fit();
@@ -79,17 +79,17 @@
 
 	function exportSvg(): void {
 		const labels = [
-			...(editor.design.activeSheetId === 'deck'
-				? editor.design.pockets.map((p) => ({
+			...(editor.design.activeSheetId === editor.packaging.deckSheetId
+				? editor.packaging.pockets.map((p) => ({
 						name: p.name,
 						x: p.x + 5 + (p.labelOffset?.x ?? 0),
 						y: p.y + p.h - 9 - (p.labelOffset?.y ?? 0)
 					}))
 				: []),
-			...editor.design.risers
+			...editor.packaging.supports
 				.filter((r) => r.sheetId === editor.design.activeSheetId)
 				.map((r) => {
-					const bounds = riserFlatBounds(r, editor.view);
+					const bounds = riserFlatBounds(r, editor.packaging);
 					return {
 						name: r.name,
 						x: bounds.left + 5 + (r.labelOffset?.x ?? 0),
@@ -107,8 +107,12 @@
 			return;
 		}
 		const paths = editor.geometry.paths;
-		download(`${baseName}-01-crease.nc`, generateGcode(paths, editor.view, 'crease'), 'text/plain');
-		download(`${baseName}-02-cut.nc`, generateGcode(paths, editor.view, 'cut'), 'text/plain');
+		download(
+			`${baseName}-01-crease.nc`,
+			packagingGcode(paths, editor.packaging, 'crease'),
+			'text/plain'
+		);
+		download(`${baseName}-02-cut.nc`, packagingGcode(paths, editor.packaging, 'cut'), 'text/plain');
 		error = '';
 		notice = 'Crease and cut programs exported. Run the crease program first, spindle off.';
 	}
@@ -215,12 +219,12 @@
 					{#if tools.viewMode === 'assembly'}
 						Drag to orbit &middot; scroll to zoom
 					{:else if tools.cursor}
-						X {display(tools.cursor.x, editor.design.units).toFixed(
-							editor.design.units === 'in' ? 3 : 1
-						)} &middot; Y {display(tools.cursor.y, editor.design.units).toFixed(
-							editor.design.units === 'in' ? 3 : 1
+						X {display(tools.cursor.x, editor.design.stock.units).toFixed(
+							editor.design.stock.units === 'in' ? 3 : 1
+						)} &middot; Y {display(tools.cursor.y, editor.design.stock.units).toFixed(
+							editor.design.stock.units === 'in' ? 3 : 1
 						)}
-						{editor.design.units}
+						{editor.design.stock.units}
 					{:else}
 						X &mdash; &middot; Y &mdash;
 					{/if}

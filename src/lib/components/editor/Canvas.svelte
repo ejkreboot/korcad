@@ -77,18 +77,25 @@
 	let manipulation: Manipulation | null = null;
 
 	const design = $derived(editor.design);
-	// Perimeter bounds, net bounds, and whether this sheet folds all depend on
-	// the machine it is cut on, so the canvas works from the sheet view.
-	const view = $derived(editor.view);
-	const isDeckSheet = $derived(design.activeSheetId === 'deck');
+	/**
+	 * The active sheet as packaging sees it: deck, perimeter, pockets, supports.
+	 * Perimeter bounds, net bounds, and whether this sheet folds all depend on
+	 * the machine it is cut on, so the canvas works from this sheet view.
+	 */
+	const packaging = $derived(editor.packaging);
+	/** What a drag reads: the sheet view plus the snap toggle. */
+	const dragView = $derived({ ...packaging, snapEnabled: tools.snapEnabled });
+	const isDeckSheet = $derived(design.activeSheetId === packaging.deckSheetId);
 	const screenUnit = $derived(1 / tools.scale);
-	const selectedPocket = $derived(design.pockets.find((p) => p.id === design.selectedId));
-	const selectedSupport = $derived(design.risers.find((r) => r.id === design.selectedRiserId));
-	const sheetSupports = $derived(
-		design.risers.filter((support) => support.sheetId === design.activeSheetId)
+	const selectedPocket = $derived(packaging.pockets.find((p) => p.id === editor.selectedPocketId));
+	const selectedSupport = $derived(
+		packaging.supports.find((r) => r.id === editor.selectedSupportId)
 	);
-	const trays = $derived(design.risers.filter((support) => support.kind === 'tray'));
-	const outer = $derived(perimeterBounds(view));
+	const sheetSupports = $derived(
+		packaging.supports.filter((support) => support.sheetId === design.activeSheetId)
+	);
+	const trays = $derived(packaging.supports.filter((support) => support.kind === 'tray'));
+	const outer = $derived(perimeterBounds(packaging));
 
 	// ---- coordinate mapping ------------------------------------------------
 	// The drawing group is flipped once, so everything inside it is authored in
@@ -100,7 +107,7 @@
 		const ctm = svg.getScreenCTM();
 		if (!ctm) return point(0, 0);
 		const local = new DOMPoint(event.clientX, event.clientY).matrixTransform(ctm.inverse());
-		const snapping = design.snapEnabled;
+		const snapping = tools.snapEnabled;
 		return point(
 			snap(clamp(local.x, 0, SHEET), snapping),
 			snap(clamp(SHEET - local.y, 0, SHEET), snapping)
@@ -111,8 +118,8 @@
 	function pointerToDeck(event: PointerEvent): Point {
 		const local = pointerToStock(event);
 		return point(
-			clamp(local.x, design.deckX, design.deckX + design.deckW),
-			clamp(local.y, design.deckY, design.deckY + design.deckH)
+			clamp(local.x, packaging.deckX, packaging.deckX + packaging.deckW),
+			clamp(local.y, packaging.deckY, packaging.deckY + packaging.deckH)
 		);
 	}
 
@@ -124,20 +131,20 @@
 	// ---- deck handles ------------------------------------------------------
 
 	const deckEdges = $derived.by(() => {
-		const x = design.deckX;
-		const y = design.deckY;
-		const right = x + design.deckW;
-		const top = y + design.deckH;
-		const folded = design.perimeterType === 'folded';
+		const x = packaging.deckX;
+		const y = packaging.deckY;
+		const right = x + packaging.deckW;
+		const top = y + packaging.deckH;
+		const folded = packaging.perimeterType === 'folded';
 		const wall = (side: 'left' | 'right' | 'bottom' | 'top'): DeckAction =>
-			folded && design.perimeterSides[side] ? (`wall-${side}` as DeckAction) : side;
+			folded && packaging.perimeterSides[side] ? (`wall-${side}` as DeckAction) : side;
 		const edges: { action: DeckAction; x1: number; y1: number; x2: number; y2: number }[] = [
 			{ action: 'left', x1: x, y1: y, x2: x, y2: top },
 			{ action: 'right', x1: right, y1: y, x2: right, y2: top },
 			{ action: 'bottom', x1: x, y1: y, x2: right, y2: y },
 			{ action: 'top', x1: x, y1: top, x2: right, y2: top }
 		];
-		if (design.perimeterType !== 'joist') {
+		if (packaging.perimeterType !== 'joist') {
 			edges.push(
 				{ action: wall('left'), x1: outer.left, y1: outer.bottom, x2: outer.left, y2: outer.top },
 				{
@@ -161,19 +168,19 @@
 	});
 
 	const deckGrips = $derived.by(() => {
-		const folded = design.perimeterType === 'folded';
+		const folded = packaging.perimeterType === 'folded';
 		const bounds = folded
 			? outer
 			: {
-					left: design.deckX,
-					right: design.deckX + design.deckW,
-					bottom: design.deckY,
-					top: design.deckY + design.deckH
+					left: packaging.deckX,
+					right: packaging.deckX + packaging.deckW,
+					bottom: packaging.deckY,
+					top: packaging.deckY + packaging.deckH
 				};
 		const long = 22 * screenUnit;
 		const short = 6 * screenUnit;
 		const wall = (side: 'left' | 'right' | 'bottom' | 'top'): DeckAction =>
-			folded && design.perimeterSides[side] ? (`wall-${side}` as DeckAction) : side;
+			folded && packaging.perimeterSides[side] ? (`wall-${side}` as DeckAction) : side;
 		const midX = (bounds.left + bounds.right) / 2;
 		const midY = (bounds.bottom + bounds.top) / 2;
 		return [
@@ -200,22 +207,22 @@
 
 	const supportNetBounds = $derived(
 		selectedSupport && selectedSupport.sheetId === design.activeSheetId
-			? riserFlatBounds(selectedSupport, view)
+			? riserFlatBounds(selectedSupport, packaging)
 			: null
 	);
 
 	const labels = $derived([
 		...(isDeckSheet
-			? design.pockets.map((pocket) => ({
+			? packaging.pockets.map((pocket) => ({
 					key: `pocket-${pocket.id}`,
 					name: pocket.name,
 					x: pocket.x + 5 + (pocket.labelOffset?.x ?? 0),
 					y: pocket.y + pocket.h - 9 - (pocket.labelOffset?.y ?? 0)
 				}))
 			: []),
-		...(view.fabricationMode === 'knife'
+		...(packaging.fabricationMode === 'knife'
 			? sheetSupports.map((support) => {
-					const bounds = riserFlatBounds(support, view);
+					const bounds = riserFlatBounds(support, packaging);
 					return {
 						key: `support-${support.id}`,
 						name: support.name,
@@ -265,7 +272,7 @@
 			event.preventDefault();
 
 			if (placementTarget) {
-				const support = design.risers.find(
+				const support = packaging.supports.find(
 					(r) => r.id === placementTarget.dataset.supportPlacement
 				);
 				if (!support) return;
@@ -275,10 +282,10 @@
 					pointerId: event.pointerId,
 					id: support.id,
 					start: pointerToStock(event),
-					origin: supportAssemblyOrigin(support, design.risers)
+					origin: supportAssemblyOrigin(support, packaging.supports)
 				};
 			} else if (supportTarget) {
-				const support = design.risers.find((r) => r.id === supportTarget.dataset.support);
+				const support = packaging.supports.find((r) => r.id === supportTarget.dataset.support);
 				if (!support) return;
 				editor.selectSupport(support.id);
 				manipulation = {
@@ -301,7 +308,7 @@
 					}
 				};
 			} else if (pocketTarget) {
-				const pocket = design.pockets.find((p) => p.id === pocketTarget.dataset.pocket);
+				const pocket = packaging.pockets.find((p) => p.id === pocketTarget.dataset.pocket);
 				if (!pocket) return;
 				editor.selectPocket(pocket.id);
 				manipulation = {
@@ -321,12 +328,12 @@
 					action: deckTarget.dataset.deckAction as DeckAction,
 					start: pointerToStock(event),
 					original: {
-						x: design.deckX,
-						y: design.deckY,
-						w: design.deckW,
-						h: design.deckH,
-						wall: design.perimeterWall,
-						pockets: design.pockets.map((p) => ({ id: p.id, x: p.x, y: p.y }))
+						x: packaging.deckX,
+						y: packaging.deckY,
+						w: packaging.deckW,
+						h: packaging.deckH,
+						wall: packaging.perimeterWall,
+						pockets: packaging.pockets.map((p) => ({ id: p.id, x: p.x, y: p.y }))
 					}
 				};
 			}
@@ -360,14 +367,20 @@
 		const active = manipulation;
 		if (active && event.pointerId === active.pointerId) {
 			if (active.kind === 'deck') {
-				editor.previewSettings(
-					applyDeckDrag(view, active.action, active.original, active.start, pointerToStock(event))
+				editor.previewPackaging(
+					applyDeckDrag(
+						dragView,
+						active.action,
+						active.original,
+						active.start,
+						pointerToStock(event)
+					)
 				);
 			} else if (active.kind === 'pocket') {
 				editor.previewPocket(
 					active.id,
 					applyPocketDrag(
-						design,
+						dragView,
 						active.type,
 						active.handle,
 						active.original,
@@ -376,13 +389,13 @@
 					)
 				);
 			} else {
-				const support = design.risers.find((r) => r.id === active.id);
+				const support = packaging.supports.find((r) => r.id === active.id);
 				if (!support) return;
 				editor.previewSupport(
 					active.id,
 					active.kind === 'support'
 						? applySupportDrag(
-								view,
+								dragView,
 								support,
 								active.type,
 								active.handle,
@@ -391,7 +404,7 @@
 								pointerToStock(event)
 							)
 						: applySupportPlacement(
-								design,
+								dragView,
 								support,
 								active.origin,
 								active.start,
@@ -432,7 +445,7 @@
 					tools.cutoutPreset,
 					rect,
 					crypto.randomUUID(),
-					design.pockets.length + 1
+					packaging.pockets.length + 1
 				)
 			);
 		} else {
@@ -441,8 +454,8 @@
 					tools.supportPreset,
 					rect,
 					crypto.randomUUID(),
-					design.risers.length + 1,
-					design
+					packaging.supports.length + 1,
+					packaging
 				)
 			);
 		}
@@ -529,10 +542,10 @@
 			{#if isDeckSheet}
 				<rect
 					class="deck-area"
-					x={design.deckX}
-					y={design.deckY}
-					width={design.deckW}
-					height={design.deckH}
+					x={packaging.deckX}
+					y={packaging.deckY}
+					width={packaging.deckW}
+					height={packaging.deckH}
 				/>
 			{/if}
 
@@ -558,18 +571,18 @@
 				<rect
 					class="deck-move"
 					data-deck-action="move"
-					x={design.deckX}
-					y={design.deckY}
-					width={design.deckW}
-					height={design.deckH}
+					x={packaging.deckX}
+					y={packaging.deckY}
+					width={packaging.deckW}
+					height={packaging.deckH}
 				/>
 			{/if}
 
 			{#if isDeckSheet && !drawing}
-				{#each design.pockets as pocket (pocket.id)}
+				{#each packaging.pockets as pocket (pocket.id)}
 					<rect
 						class="pocket-hit"
-						class:selected={pocket.id === design.selectedId}
+						class:selected={pocket.id === editor.selectedPocketId}
 						data-pocket={pocket.id}
 						x={pocket.x}
 						y={pocket.y}
@@ -578,12 +591,12 @@
 					/>
 				{/each}
 				{#each trays as tray (tray.id)}
-					{@const origin = supportAssemblyOrigin(tray, design.risers)}
+					{@const origin = supportAssemblyOrigin(tray, packaging.supports)}
 					<rect
 						class="placement-hit"
 						data-support-placement={tray.id}
-						x={design.deckX + origin.x}
-						y={design.deckY + origin.y}
+						x={packaging.deckX + origin.x}
+						y={packaging.deckY + origin.y}
 						width={tray.w}
 						height={tray.d}
 					/>
@@ -592,10 +605,10 @@
 
 			{#if !isDeckSheet && !drawing}
 				{#each sheetSupports as support (support.id)}
-					{@const bounds = riserFlatBounds(support, view)}
+					{@const bounds = riserFlatBounds(support, packaging)}
 					<rect
 						class="support-hit"
-						class:selected={support.id === design.selectedRiserId}
+						class:selected={support.id === editor.selectedSupportId}
 						data-support={support.id}
 						x={bounds.left}
 						y={bounds.bottom}
@@ -651,7 +664,7 @@
 				{/each}
 			{/if}
 
-			{#if selectedSupport && supportNetBounds && !drawing && view.fabricationMode === 'knife'}
+			{#if selectedSupport && supportNetBounds && !drawing && packaging.fabricationMode === 'knife'}
 				{@const panel = {
 					left: selectedSupport.flatX,
 					right: selectedSupport.flatX + selectedSupport.w,

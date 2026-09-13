@@ -1,8 +1,9 @@
 import { point } from '$lib/core/geometry/primitives.js';
-import type { DesignState, Geometry, Support, SheetView } from '$lib/core/design/types.js';
+import type { DesignState, Geometry } from '$lib/core/design/types.js';
+import type { Support } from './types.js';
+import type { PackagingView } from './view.js';
 import type { PackagingGeometry, PackagingPath } from './paths.js';
-import { sheetView } from '$lib/core/design/machine.js';
-import { DECK_SHEET_ID } from './view.js';
+import { packagingSheetView } from './view.js';
 import { annotateCamIntent } from './cam-intent.js';
 import { annotateFoldPaths } from './folds.js';
 import { cutoutPoints, openingCutPoints, pocketPaths } from './geometry.js';
@@ -17,7 +18,7 @@ const NO_SIDES = { top: false, right: false, bottom: false, left: false } as con
  */
 export function trayOpeningPath(
 	tray: Support,
-	design: Pick<SheetView, 'deckX' | 'deckY'>,
+	design: Pick<PackagingView, 'deckX' | 'deckY'>,
 	role = 'tray-opening'
 ): PackagingPath {
 	const x = design.deckX + tray.assemblyX;
@@ -55,9 +56,9 @@ function trayAsPocketProxy(tray: Support) {
 export function allGeometry(document: DesignState, sheetId = document.activeSheetId): Geometry {
 	// A sheet is cut on its own machine, and a routed sheet does not fold, so
 	// the geometry of one sheet is answered against that sheet's profile.
-	const design = sheetView(document, sheetId);
-	const isDeckSheet = design.activeSheetId === DECK_SHEET_ID;
-	const trayOpenings = design.risers
+	const design = packagingSheetView(document, sheetId);
+	const isDeckSheet = design.activeSheetId === design.deckSheetId;
+	const trayOpenings = design.supports
 		.filter((support) => support.kind === 'tray')
 		.map((tray) => trayOpeningPath(tray, design));
 
@@ -106,7 +107,7 @@ export function allGeometry(document: DesignState, sheetId = document.activeShee
 		? [...design.pockets.flatMap((pocket) => pocketPaths(pocket, design)), ...trayOpenings]
 		: [];
 	const exterior: PackagingGeometry = isDeckSheet ? exteriorPaths(design) : { paths: [], tabs: [] };
-	const supports = design.risers
+	const supports = design.supports
 		.filter((support) => support.sheetId === design.activeSheetId)
 		.flatMap((support) => riserPaths(support, design));
 

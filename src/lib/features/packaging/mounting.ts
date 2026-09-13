@@ -1,5 +1,5 @@
 import { point, type Point } from '$lib/core/geometry/primitives.js';
-import type { Support } from '$lib/core/design/types.js';
+import type { Support } from './types.js';
 
 /** The support this one stands on, or null when it is anchored to the box itself. */
 export function supportParent(support: Support, supports: readonly Support[]): Support | null {

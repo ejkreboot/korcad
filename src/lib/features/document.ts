@@ -1,0 +1,58 @@
+import {
+	createDefaultMachineProfile,
+	createDefaultStock,
+	DEFAULT_MACHINE_PROFILE_ID
+} from '$lib/core/design/defaults.js';
+import { normalizeDocument } from '$lib/core/design/normalize.js';
+import type { DesignState, Sheet } from '$lib/core/design/types.js';
+import { unwrapDesignFile } from '$lib/core/export/design-file.js';
+import { createDefaultPackaging, DEFAULT_DECK_SHEET_ID } from './packaging/defaults.js';
+import { DEFAULT_WORKSPACE, WORKSPACES } from './workspaces.js';
+
+/**
+ * The whole document, assembled from core and every registered workspace.
+ *
+ * `core` reads what every document has; it cannot know which workspaces exist.
+ * This is the one place that knows both, so creating, normalizing, and parsing a
+ * complete design happen here.
+ */
+
+function deckSheet(machineProfileId: string): Sheet {
+	return {
+		id: DEFAULT_DECK_SHEET_ID,
+		name: 'Deck',
+		workspace: DEFAULT_WORKSPACE,
+		machineProfileId
+	};
+}
+
+/** A new design: one packaging deck on the default drag knife. */
+export function createDefaultDesign(): DesignState {
+	return {
+		stock: createDefaultStock(),
+		toolpathOrder: 'optimized',
+		machineProfiles: [createDefaultMachineProfile()],
+		sheets: [deckSheet(DEFAULT_MACHINE_PROFILE_ID)],
+		activeSheetId: DEFAULT_DECK_SHEET_ID,
+		workspaces: { packaging: createDefaultPackaging() }
+	};
+}
+
+/**
+ * Narrows untrusted saved JSON of any supported version into a `DesignState`.
+ * Throws rather than silently repairing a file that is not a design at all.
+ * `recordedVersion` is the version a file envelope claims, when there is one.
+ */
+export function normalizeState(raw: unknown, recordedVersion?: number): DesignState {
+	return normalizeDocument(raw, recordedVersion, {
+		workspaces: WORKSPACES,
+		defaultWorkspace: DEFAULT_WORKSPACE,
+		defaultSheet: deckSheet
+	});
+}
+
+/** Reads a saved design file, or a bare document with no envelope. */
+export function parseDesign(text: string): DesignState {
+	const { document, version } = unwrapDesignFile(text);
+	return normalizeState(document, version);
+}

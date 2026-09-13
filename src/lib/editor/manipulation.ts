@@ -1,6 +1,7 @@
 import { SHEET } from '$lib/core/constants.js';
 import { round, snap, snapWithin } from '$lib/core/units.js';
-import type { DesignState, Pocket, Support, SheetView } from '$lib/core/design/types.js';
+import type { PackagingData, Pocket, Support } from '$lib/features/packaging/types.js';
+import type { PackagingView } from '$lib/features/packaging/view.js';
 import { perimeterExtents } from '$lib/features/packaging/perimeter.js';
 import { riserFlatBounds } from '$lib/features/packaging/supports.js';
 import {
@@ -9,6 +10,13 @@ import {
 	supportPlacementLimits
 } from '$lib/features/packaging/mounting.js';
 import type { Point } from '$lib/core/geometry/primitives.js';
+
+/**
+ * What a drag reads: packaging's view of the sheet being edited, plus the
+ * editor's snap toggle. Snap is a drawing aid rather than part of the design,
+ * so it is handed in beside the view instead of living in the document.
+ */
+export type DragView = PackagingView & { readonly snapEnabled: boolean };
 
 /** Smallest deck a drag may produce, in millimeters. */
 export const MIN_DECK = 25;
@@ -44,12 +52,12 @@ export type DeckOriginal = {
  * limited so the unfolded blank still fits the stock on every enabled side.
  */
 export function applyDeckDrag(
-	design: SheetView,
+	design: DragView,
 	action: DeckAction,
 	original: DeckOriginal,
 	start: Point,
 	current: Point
-): Partial<DesignState> {
+): Partial<PackagingData> {
 	const extents = perimeterExtents(design);
 	const snapping = design.snapEnabled;
 	const dx = current.x - start.x;
@@ -142,7 +150,7 @@ export type RectOriginal = {
  * a cutout crossing the deck edge is not manufacturable.
  */
 export function applyPocketDrag(
-	design: DesignState,
+	design: DragView,
 	type: 'move' | 'resize',
 	handle: Corner | null,
 	original: RectOriginal,
@@ -207,7 +215,7 @@ export type SupportOriginal = {
  * and flanges rather than just its footprint.
  */
 export function applySupportDrag(
-	design: SheetView,
+	design: DragView,
 	support: Support,
 	type: 'move' | 'resize' | 'height',
 	handle: Corner | null,
@@ -272,15 +280,15 @@ export function applySupportDrag(
  * subtracted back out before clamping to that parent's surface.
  */
 export function applySupportPlacement(
-	design: DesignState,
+	design: DragView,
 	support: Support,
 	originalOrigin: Point,
 	start: Point,
 	current: Point
 ): Pick<Support, 'assemblyX' | 'assemblyY'> {
-	const limits = supportPlacementLimits(support, design.risers, design);
-	const parent = supportParent(support, design.risers);
-	const base = parent ? supportAssemblyOrigin(parent, design.risers) : { x: 0, y: 0 };
+	const limits = supportPlacementLimits(support, design.supports, design);
+	const parent = supportParent(support, design.supports);
+	const base = parent ? supportAssemblyOrigin(parent, design.supports) : { x: 0, y: 0 };
 	return {
 		assemblyX: round(
 			snapWithin(

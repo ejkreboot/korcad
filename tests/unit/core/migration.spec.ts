@@ -10,8 +10,8 @@ import {
 	OLDEST_STEPPED_VERSION
 } from '$lib/core/design/migrate.js';
 import { machineProfileFor, MACHINE_SETTING_KEYS } from '$lib/core/design/machine.js';
-import { normalizeState } from '$lib/core/design/normalize.js';
-import { parseDesign } from '$lib/core/export/design-file.js';
+import { normalizeState } from '$lib/features/document.js';
+import { parseDesign } from '$lib/features/document.js';
 
 /**
  * Document migrations.
@@ -69,6 +69,7 @@ describe('the migration pipeline', () => {
 	it('reads a version from the document shape, for drafts that record none', () => {
 		expect(detectVersion(v6())).toBe(6);
 		expect(detectVersion({ ...v6(), machineProfiles: [] })).toBe(7);
+		expect(detectVersion({ sheets: [], workspaces: {} })).toBe(8);
 	});
 
 	it('does not re-run an old step over a document already in the new shape', () => {
@@ -88,8 +89,14 @@ describe('the migration pipeline', () => {
 	});
 });
 
+const step = (from: number) => {
+	const found = MIGRATIONS.find((candidate) => candidate.from === from);
+	if (!found) throw new Error(`No migration from version ${from}`);
+	return found;
+};
+
 describe('version 7: machine settings become a named profile', () => {
-	const migrated = migrateDocument(v6(), 6);
+	const migrated = step(6).apply(v6());
 
 	it('moves every machine setting off the document', () => {
 		for (const key of MACHINE_SETTING_KEYS) {
@@ -108,7 +115,7 @@ describe('version 7: machine settings become a named profile', () => {
 	it('names the profile after the machine it describes', () => {
 		const [knife] = migrated.machineProfiles as { name: string }[];
 		expect(knife?.name).toBe('Drag knife');
-		const routed = migrateDocument({ ...v6(), fabricationMode: 'router' }, 6);
+		const routed = step(6).apply({ ...v6(), fabricationMode: 'router' });
 		expect((routed.machineProfiles as { name: string }[])[0]?.name).toBe('Router');
 	});
 
@@ -179,6 +186,94 @@ describe('normalizing a migrated document', () => {
 		for (const bad of [null, {}, { sheets: [] }, 'nope']) {
 			expect(() => normalizeState(bad)).toThrow('This file does not contain a valid Voisee design');
 		}
+	});
+});
+
+describe('version 8: each workspace gets its own namespace', () => {
+	const v7 = () => step(6).apply(v6());
+	const migrated = step(7).apply({
+		...v7(),
+		snapEnabled: true,
+		selectedId: 'p',
+		selectedRiserId: null
+	});
+	const packaging = (migrated.workspaces as Record<string, Record<string, unknown>>).packaging!;
+
+	it('moves packaging data under workspaces.packaging', () => {
+		expect(packaging.deckW).toBe(457.2);
+		expect(packaging.pockets).toEqual([]);
+		expect(migrated).not.toHaveProperty('deckW');
+		expect(migrated).not.toHaveProperty('pockets');
+	});
+
+	it('renames risers to supports, since it holds trays and platforms too', () => {
+		const withRiser = step(7).apply({ ...v7(), risers: [{ id: 'r' }] });
+		const data = (withRiser.workspaces as Record<string, Record<string, unknown>>).packaging!;
+		expect(data.supports).toEqual([{ id: 'r' }]);
+		expect(data).not.toHaveProperty('risers');
+	});
+
+	it('names the deck sheet rather than relying on a magic id', () => {
+		expect(packaging.deckSheetId).toBe('deck');
+	});
+
+	it('groups the stock settings', () => {
+		expect(migrated.stock).toEqual({ units: 'in' });
+		expect(migrated).not.toHaveProperty('units');
+	});
+
+	it('tags every sheet with the packaging workspace', () => {
+		expect((migrated.sheets as { workspace: string }[]).map((sheet) => sheet.workspace)).toEqual([
+			'packaging',
+			'packaging'
+		]);
+	});
+
+	it('drops selection and snap, which are editor state', () => {
+		for (const key of ['snapEnabled', 'selectedId', 'selectedRiserId']) {
+			expect(migrated, key).not.toHaveProperty(key);
+		}
+	});
+
+	it('keeps the machine profiles and document settings at the top level', () => {
+		expect(migrated.machineProfiles).toEqual(v7().machineProfiles);
+	});
+});
+
+describe('a current document', () => {
+	it('loads without any top-level pockets, which used to be the only proof of a design', () => {
+		const design = normalizeState({
+			sheets: [{ id: 'deck', name: 'Deck', workspace: 'packaging', machineProfileId: 'default' }],
+			workspaces: { packaging: { deckSheetId: 'deck', deckW: 300 } }
+		});
+		expect(design.workspaces.packaging?.deckW).toBe(300);
+		expect(design.sheets).toHaveLength(1);
+	});
+
+	it('gives a packaging sheet its data even when the namespace is missing', () => {
+		const design = normalizeState({
+			sheets: [{ id: 'deck', name: 'Deck', workspace: 'packaging', machineProfileId: 'default' }],
+			workspaces: {}
+		});
+		expect(design.workspaces.packaging?.deckSheetId).toBe('deck');
+	});
+
+	it('re-tags a sheet whose workspace this build does not know', () => {
+		const design = normalizeState({
+			sheets: [{ id: 'deck', name: 'Deck', workspace: 'embroidery' }],
+			workspaces: {}
+		});
+		expect(design.sheets[0]?.workspace).toBe('packaging');
+	});
+
+	it('follows a deck sheet with any id', () => {
+		const design = normalizeState({
+			sheets: [{ id: 'blank-a', name: 'Blank', workspace: 'packaging' }],
+			activeSheetId: 'blank-a',
+			workspaces: { packaging: { deckSheetId: 'blank-a' } }
+		});
+		expect(design.sheets.map((sheet) => sheet.id)).toEqual(['blank-a']);
+		expect(design.activeSheetId).toBe('blank-a');
 	});
 });
 

@@ -27,7 +27,7 @@ const FORBIDDEN: readonly (readonly [RegExp, string])[] = [
 	[/\brole\??\.(startsWith|endsWith|includes)\(/, 'pattern-matches a path role'],
 	[/\b(pocketId|riserId)\b/, 'reads a packaging owner id'],
 	[/\brouteStage\b/, 'reads the removed stage override'],
-	[/\b(pockets|risers)\b/, 'reads a packaging collection'],
+	[/\b(pockets|supports)\b/, 'reads a packaging collection'],
 	[/from '\$lib\/features\//, 'imports a feature module']
 ];
 
@@ -66,5 +66,31 @@ describe('the boundary guard itself', () => {
 		// Reading the stated intent, and printing a role, are both fine.
 		expect(hits('return stageIndex(path.cam.stage);')).toBe(0);
 		expect(hits("`${path.role || ''}${owner}`")).toBe(0);
+	});
+});
+
+/**
+ * The same rule for the whole of `core`: it may not import a feature. The
+ * document names workspace data through `WorkspaceDataMap`, which features
+ * augment, precisely so that this holds.
+ */
+describe('core import boundary', () => {
+	const coreDir = fileURLToPath(new URL('../../../src/lib/core/', import.meta.url));
+	const sources = (readdirSync(coreDir, { recursive: true }) as string[]).filter((name) =>
+		name.endsWith('.ts')
+	);
+
+	it('finds the core sources it is guarding', () => {
+		expect(sources.length).toBeGreaterThan(10);
+	});
+
+	it('imports nothing from features, the editor, components, or the viewer', () => {
+		const layer = /from '\$lib\/(features|editor|components|viewer)\//;
+		const violations = sources.flatMap((name) =>
+			readFileSync(`${coreDir}${name}`, 'utf8')
+				.split('\n')
+				.flatMap((line, index) => (layer.test(line) ? [`${name}:${index + 1} ${line.trim()}`] : []))
+		);
+		expect(violations).toEqual([]);
 	});
 });

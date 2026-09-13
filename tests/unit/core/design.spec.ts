@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MACHINE_PROFILE_ID, createDefaultDesign } from '$lib/core/design/defaults.js';
-import { normalizeState } from '$lib/core/design/normalize.js';
+import { packagingData } from '$lib/features/packaging/view.js';
+import { DEFAULT_MACHINE_PROFILE_ID } from '$lib/core/design/defaults.js';
+import { createDefaultDesign } from '$lib/features/document.js';
+import { normalizeState } from '$lib/features/document.js';
 import {
 	bendDeduction,
 	flatPanel,
 	foldAllowanceLabel,
 	panelClamped
-} from '$lib/core/design/fold.js';
-import { view } from '../../support/designs.js';
-import { parseDesign, serializeDesign } from '$lib/core/export/design-file.js';
+} from '$lib/features/packaging/fold.js';
+import { view, patchDesign, withMachine } from '../../support/designs.js';
+import { serializeDesign } from '$lib/core/export/design-file.js';
+import { parseDesign } from '$lib/features/document.js';
 
 describe('normalization', () => {
 	it('rejects anything that is not a design', () => {
@@ -18,29 +21,30 @@ describe('normalization', () => {
 
 	it('defaults new settings for legacy designs', () => {
 		const design = normalizeState({ pockets: [] });
-		expect(design.boardFinish).toBe('kraft');
-		expect(design.minimumWeb).toBe(6);
-		expect(design.foldCompensation).toBe('none');
+		expect(design.stock.boardFinish).toBe('kraft');
+		expect(design.stock.minimumWeb).toBe(6);
+		expect(packagingData(design).foldCompensation).toBe('none');
 	});
 
 	it('rejects an unknown foldCompensation rather than trusting it', () => {
-		expect(normalizeState({ pockets: [], foldCompensation: 'wishful' }).foldCompensation).toBe(
-			'none'
-		);
+		expect(
+			packagingData(normalizeState({ pockets: [], foldCompensation: 'wishful' })).foldCompensation
+		).toBe('none');
 	});
 
 	it('keeps label offsets across a JSON roundtrip', () => {
-		const design = {
-			...createDefaultDesign(),
-			pockets: normalizeState({
-				pockets: [{ id: 'p', name: 'Tablet', labelOffset: { x: 12, y: -7 } }]
-			}).pockets
-		};
+		const design = patchDesign(createDefaultDesign(), {
+			pockets: packagingData(
+				normalizeState({
+					pockets: [{ id: 'p', name: 'Tablet', labelOffset: { x: 12, y: -7 } }]
+				})
+			).pockets
+		});
 		const roundTripped = parseDesign(serializeDesign(design));
-		expect(roundTripped.pockets[0]?.labelOffset).toEqual({ x: 12, y: -7 });
+		expect(packagingData(roundTripped).pockets[0]?.labelOffset).toEqual({ x: 12, y: -7 });
 	});
 
-	it('migrates legacy risers to floor mounts without changing their height offset', () => {
+	it('migrates legacy supports to floor mounts without changing their height offset', () => {
 		const design = normalizeState({
 			pockets: [],
 			risers: [
@@ -57,9 +61,9 @@ describe('normalization', () => {
 				}
 			]
 		});
-		expect(design.risers[0]?.kind).toBe('riser');
-		expect(design.risers[0]?.mount.anchor).toBe('box-floor');
-		expect(design.risers[0]?.mount.offset).toBe(12);
+		expect(packagingData(design).supports[0]?.kind).toBe('riser');
+		expect(packagingData(design).supports[0]?.mount.anchor).toBe('box-floor');
+		expect(packagingData(design).supports[0]?.mount.offset).toBe(12);
 	});
 
 	it('maps the older target/face mount pair onto the named anchors', () => {
@@ -76,7 +80,7 @@ describe('normalization', () => {
 			mount
 		});
 		const anchorOf = (mount: unknown) =>
-			normalizeState({ pockets: [], risers: [support(mount)] }).risers[0]?.mount;
+			packagingData(normalizeState({ pockets: [], risers: [support(mount)] })).supports[0]?.mount;
 
 		expect(anchorOf({ target: 'deck', face: 'top', offset: 4 })).toEqual({
 			anchor: 'deck-top',
@@ -114,7 +118,7 @@ describe('normalization', () => {
 				}
 			]
 		});
-		expect(design.risers[0]?.mount).toEqual({
+		expect(packagingData(design).supports[0]?.mount).toEqual({
 			anchor: 'support-top',
 			supportId: 'p',
 			offset: 3
@@ -136,15 +140,17 @@ describe('normalization', () => {
 				}
 			]
 		});
-		expect(design.risers[0]?.mount.anchor).toBe('box-floor');
+		expect(packagingData(design).supports[0]?.mount.anchor).toBe('box-floor');
 	});
 
 	it('takes a saved height as fixed unless the file says it spans', () => {
 		const read = (extra: Record<string, unknown>) =>
-			normalizeState({
-				pockets: [],
-				risers: [{ id: 'r', name: 'R', w: 100, d: 80, h: 30, kind: 'riser', ...extra }]
-			}).risers[0];
+			packagingData(
+				normalizeState({
+					pockets: [],
+					risers: [{ id: 'r', name: 'R', w: 100, d: 80, h: 30, kind: 'riser', ...extra }]
+				})
+			).supports[0];
 		// A file predating spanning heights keeps the height it recorded.
 		expect(read({})).toMatchObject({ heightMode: 'fixed', h: 30 });
 		expect(read({ heightMode: 'span' })?.heightMode).toBe('span');
@@ -155,10 +161,11 @@ describe('normalization', () => {
 			pockets: [],
 			risers: [{ id: 'old', name: 'Old', w: 100, d: 80, h: 30, flatX: 100, flatY: 100 }]
 		});
-		expect(legacy.risers[0]?.flatY).toBe(130);
+		expect(packagingData(legacy).supports[0]?.flatY).toBe(130);
 	});
 
 	it('restores a deck sheet and a valid active sheet', () => {
+		// A version 7 document, whose sheets carry no workspace tag yet.
 		const design = normalizeState({
 			pockets: [],
 			sheets: [{ id: 'parts', name: 'Parts', machineProfileId: DEFAULT_MACHINE_PROFILE_ID }],
@@ -186,29 +193,27 @@ describe('fold allowance', () => {
 	});
 
 	it('never deducts for router work, which is cut rather than folded', () => {
-		const design = {
-			...base,
-			fabricationMode: 'router' as const,
+		const design = patchDesign(withMachine(base, { fabricationMode: 'router' }), {
 			foldCompensation: 'manual' as const,
 			foldDeduction: 3
-		};
-		expect(bendDeduction(design)).toBe(0);
+		});
+		expect(bendDeduction(view(design))).toBe(0);
 	});
 
 	it('uses the measured deduction in manual mode', () => {
-		expect(bendDeduction(view({ ...base, foldCompensation: 'manual', foldDeduction: 1.25 }))).toBe(
-			1.25
-		);
+		expect(
+			bendDeduction(view(patchDesign(base, { foldCompensation: 'manual', foldDeduction: 1.25 })))
+		).toBe(1.25);
 	});
 
 	it('computes a positive deduction from radius and K factor', () => {
-		const design = { ...base, foldCompensation: 'computed' as const, material: 3 };
+		const design = patchDesign(base, { foldCompensation: 'computed' as const, material: 3 });
 		expect(bendDeduction(view(design))).toBeGreaterThan(0);
 		expect(foldAllowanceLabel(view(design))).toMatch(/computed/);
 	});
 
 	it('never shrinks a panel below the folding minimum', () => {
-		const design = { ...base, foldCompensation: 'manual' as const, foldDeduction: 1000 };
+		const design = patchDesign(base, { foldCompensation: 'manual' as const, foldDeduction: 1000 });
 		expect(flatPanel(10, view(design))).toBe(0.4);
 		expect(panelClamped(10, view(design))).toBe(true);
 	});

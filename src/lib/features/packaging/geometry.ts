@@ -1,8 +1,9 @@
 import type { PackagingPath } from './paths.js';
 import { arcPoints, point, type Point } from '$lib/core/geometry/primitives.js';
 import { clamp } from '$lib/core/units.js';
-import { flatPanel, bendDeduction, type FoldSettings } from '$lib/core/design/fold.js';
-import type { Pocket, Side } from '$lib/core/design/types.js';
+import { flatPanel, bendDeduction, type FoldSettings } from './fold.js';
+import type { Side } from '$lib/core/design/types.js';
+import type { Pocket } from './types.js';
 
 type Bounds = {
 	readonly left: number;

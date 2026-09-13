@@ -2,11 +2,13 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { parseDesign, serializeDesign } from '$lib/core/export/design-file.js';
+import { packagingData } from '$lib/features/packaging/view.js';
+import { serializeDesign } from '$lib/core/export/design-file.js';
+import { parseDesign } from '$lib/features/document.js';
 import type { DesignState } from '$lib/core/design/types.js';
 import { allGeometry } from '$lib/features/packaging/model.js';
 import { validate } from '$lib/features/packaging/validation.js';
-import { generateGcode } from '$lib/core/cam/gcode.js';
+import { packagingGcode } from '$lib/features/packaging/gcode.js';
 import { designSvg } from '$lib/core/export/svg.js';
 import { FIXTURE_DESIGNS, foldedDesign, view } from '../../support/designs.js';
 
@@ -42,7 +44,7 @@ function programsFor(design: DesignState, slug: string): void {
 		for (const [index, operation] of (['crease', 'cut'] as const).entries()) {
 			golden(
 				`expected-gcode/${slug}${suffix}-0${index + 1}-${operation}.nc`,
-				generateGcode(paths, view(sheetDesign), operation)
+				packagingGcode(paths, view(sheetDesign), operation)
 			);
 		}
 	}
@@ -90,17 +92,17 @@ describe('a saved version 6 design', () => {
 
 	it('still loads', () => {
 		const design = parseDesign(saved);
-		expect(design.pockets).toHaveLength(1);
+		expect(packagingData(design).pockets).toHaveLength(1);
 		expect(validate(design)).toEqual([]);
 	});
 
 	it('still produces the same crease and cut programs', () => {
 		const design = parseDesign(saved);
 		const paths = allGeometry(design).paths;
-		expect(generateGcode(paths, view(design), 'crease')).toBe(
+		expect(packagingGcode(paths, view(design), 'crease')).toBe(
 			readFileSync(fixture('expected-gcode/folded-pocket-01-crease.nc'), 'utf8')
 		);
-		expect(generateGcode(paths, view(design), 'cut')).toBe(
+		expect(packagingGcode(paths, view(design), 'cut')).toBe(
 			readFileSync(fixture('expected-gcode/folded-pocket-02-cut.nc'), 'utf8')
 		);
 	});

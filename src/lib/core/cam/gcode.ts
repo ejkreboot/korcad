@@ -1,17 +1,28 @@
 import { round } from '$lib/core/units.js';
-import { foldAllowanceLabel, type FoldSettings } from '$lib/core/design/fold.js';
-import type { DesignPath, DesignState, MachineSettings } from '$lib/core/design/types.js';
+import type { DesignPath, SheetView } from '$lib/core/design/types.js';
 import type { Operation } from './compensation.js';
 import { plannedToolpaths, type RoutingSettings } from './routing.js';
 
 export type GcodeSettings = RoutingSettings &
-	FoldSettings &
-	Pick<DesignState, 'grainDirection' | 'sheets'> &
-	Pick<MachineSettings, 'spindleSpeed' | 'scoreFeed' | 'cutFeed'>;
+	Pick<
+		SheetView,
+		| 'grainDirection'
+		| 'sheets'
+		| 'material'
+		| 'fabricationMode'
+		| 'spindleSpeed'
+		| 'scoreFeed'
+		| 'cutFeed'
+	>;
 
 export type GcodeOptions = {
 	readonly title?: string;
 	readonly sheetLabel?: string;
+	/**
+	 * Workspace-specific header comments, each a complete `; ...` line, emitted
+	 * after the stock description. Packaging records its fold allowance here.
+	 */
+	readonly headerNotes?: readonly string[];
 };
 
 /** Up-folds are creased from the back; everything else runs in the cut program. */
@@ -65,7 +76,7 @@ export function generateGcode(
 		`; Operation: ${operation}; tool: ${toolDescription}`,
 		'; 24 x 24 inch sheet; origin at lower left; Z zero at material surface',
 		`; Grain / flute direction: ${settings.grainDirection}; board thickness: ${round(settings.material)} mm`,
-		`; Fold allowance: ${foldAllowanceLabel(settings)}`,
+		...(options.headerNotes ?? []),
 		router && !creasing
 			? `; ROUTER operation; ${round(settings.bitWidth)} mm bit with radius compensation`
 			: '; SPINDLE MUST REMAIN OFF',

@@ -1,4 +1,5 @@
-import type { CamIntent, DesignPath, OffsetSide, SheetView } from '$lib/core/design/types.js';
+import type { CamIntent, DesignPath, OffsetSide } from '$lib/core/design/types.js';
+import type { PackagingView } from './view.js';
 import type { MachiningStage } from '$lib/core/cam/stages.js';
 import type { PackagingPath } from './paths.js';
 
@@ -16,8 +17,8 @@ import type { PackagingPath } from './paths.js';
  * now reads only the resulting `CamIntent`.
  */
 
-type IntentSettings = Pick<SheetView, 'activeSheetId'>;
-type OwnerSettings = Pick<SheetView, 'pockets' | 'risers'>;
+type IntentSettings = Pick<PackagingView, 'activeSheetId'>;
+type OwnerSettings = Pick<PackagingView, 'pockets' | 'supports'>;
 
 /**
  * Which stage a path belongs to.
@@ -103,7 +104,7 @@ function packagingOwner(path: PackagingPath, settings: OwnerSettings): DesignPat
 		return { kind: 'pocket', id: path.pocketId, name };
 	}
 	if (path.riserId) {
-		const name = settings.risers.find((support) => support.id === path.riserId)?.name ?? '';
+		const name = settings.supports.find((support) => support.id === path.riserId)?.name ?? '';
 		return { kind: 'support', id: path.riserId, name };
 	}
 	return undefined;
