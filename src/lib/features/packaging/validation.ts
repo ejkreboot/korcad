@@ -10,16 +10,6 @@ import { packagingView } from './view.js';
 const NO_SIDES: SideFlags = { top: false, right: false, bottom: false, left: false };
 const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
 
-const POSITIVE_KEYS = [
-	'material',
-	'safeZ',
-	'cutDepth',
-	'cutFeed',
-	'scoreFeed',
-	'plungeFeed'
-] as const;
-const NONNEGATIVE_KEYS = ['scoreDepth', 'bladeOffset', 'overcut'] as const;
-
 /**
  * How far a support may poke past the deck underside before it is called an
  * interference. Board is compressible and the deck is glued down over it, so a
@@ -62,19 +52,6 @@ export function validate(document: DesignState): string[] {
 		top: design.deckY + design.deckH
 	};
 
-	for (const key of POSITIVE_KEYS) {
-		if (!Number.isFinite(design[key]) || design[key] <= 0) {
-			errors.push(`${key} must be a finite positive number`);
-		}
-	}
-	for (const key of NONNEGATIVE_KEYS) {
-		if (!Number.isFinite(design[key]) || design[key] < 0) {
-			errors.push(`${key} must be a finite nonnegative number`);
-		}
-	}
-	if (!Number.isFinite(design.cornerStep) || design.cornerStep <= 0) {
-		errors.push('Corner step must be positive');
-	}
 	if (design.deckW <= 0 || design.deckH <= 0) errors.push('Top-deck dimensions must be positive');
 	if (bounds.left < 0 || bounds.bottom < 0 || bounds.right > SHEET || bounds.top > SHEET) {
 		errors.push('The unfolded perimeter does not fit the 24-inch stock');
@@ -118,7 +95,6 @@ export function validate(document: DesignState): string[] {
 			}
 		}
 	}
-	if (design.cutDepth <= 0 || design.safeZ < 0) errors.push('Cutting Z values must be positive');
 	if (!router && design.scoreDepth >= design.cutDepth) {
 		errors.push('Score depth must be less than cut depth');
 	}
@@ -131,8 +107,6 @@ export function validate(document: DesignState): string[] {
 	}
 	if (router) {
 		const radius = design.bitWidth / 2;
-		if (design.bitWidth <= 0) errors.push('Router bit diameter must be positive');
-		if (design.spindleSpeed <= 0) errors.push('Router spindle speed must be positive');
 		if (
 			design.deckX - radius < 0 ||
 			design.deckY - radius < 0 ||

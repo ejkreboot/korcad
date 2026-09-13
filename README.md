@@ -97,7 +97,9 @@ Not yet ported:
 
 ## Canvas
 
-The toolbar starts with the workspace switcher; the tools beside it belong to
+New project in the toolbar starts over with one empty sheet in the workspace
+you pick; undo brings the previous design back. The toolbar starts with the
+workspace switcher; the tools beside it belong to
 the active sheet's workspace, and "+" on the sheet tabs adds a sheet in either.
 
 On a packaging sheet, drag the deck body to move it with its openings, its edges
@@ -118,6 +120,9 @@ quarter-inch grid. One drag is one undo step.
 
 Exported programs assume a 24 x 24 inch sheet, origin at the lower left, and Z
 zero at the material surface. The spindle stays off for knife and creasing work.
-Export is blocked while validation reports a problem. A preview is not proof
+A router cuts in equal passes no deeper than the profile's depth per pass. A
+sheet gets a separate crease program only when something on it is creased from
+the back. Export is blocked while validation reports a problem, including an
+unsafe setting on any machine profile a sheet uses. A preview is not proof
 that a program is safe to run; verify tool setup and workholding, and cut a
 calibration coupon before trusting dimensions.

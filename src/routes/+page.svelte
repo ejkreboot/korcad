@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { generateGcode } from '$lib/core/cam/gcode.js';
+	import { generateGcode, programOperations } from '$lib/core/cam/gcode.js';
 	import { designSvg } from '$lib/core/export/svg.js';
 	import { createEditorState } from '$lib/editor/state.svelte.js';
 	import { createToolState } from '$lib/editor/tools.svelte.js';
 	import { display } from '$lib/core/units.js';
+	import type { WorkspaceId } from '$lib/core/design/workspace.js';
+	import { workspaceById } from '$lib/features/workspaces.js';
 	import {
 		designFileText,
 		download,
@@ -97,16 +99,15 @@
 		const options = editor.workspace.gcodeOptions(editor.design, editor.design.activeSheetId);
 		const program = (operation: 'crease' | 'cut') =>
 			generateGcode(paths, editor.view, operation, options);
-		if (!editor.workspace.capabilities.folding) {
-			// Nothing folds, so there is no crease pass: one program cuts the sheet.
+		error = '';
+		if (programOperations(paths).length === 1) {
+			// Nothing is creased from the back, so one program does the whole sheet.
 			download(`${baseName}.nc`, program('cut'), 'text/plain');
-			error = '';
 			notice = 'Cut program exported.';
 			return;
 		}
 		download(`${baseName}-01-crease.nc`, program('crease'), 'text/plain');
 		download(`${baseName}-02-cut.nc`, program('cut'), 'text/plain');
-		error = '';
 		notice = 'Crease and cut programs exported. Run the crease program first, spindle off.';
 	}
 
@@ -121,6 +122,22 @@
 		}
 		error = '';
 		simulating = true;
+	}
+
+	/**
+	 * Starts over in a workspace. The draft is overwritten as soon as the design
+	 * changes, so the operator confirms first; undo still brings the old design back.
+	 */
+	function newProject(workspaceId: WorkspaceId): void {
+		const label = workspaceById(workspaceId).label;
+		const replace = `Start a new ${label} project? This replaces the current design. Undo brings it back, or save a design file first to keep it.`;
+		if (!confirm(replace)) return;
+		editor.newDesign(workspaceId);
+		tools.select();
+		tools.setViewMode('flat');
+		tools.fit();
+		error = '';
+		notice = `New ${label} project started.`;
 	}
 
 	async function importDesign(event: Event): Promise<void> {
@@ -155,6 +172,7 @@
 			<Toolbar
 				{editor}
 				{tools}
+				onNewProject={newProject}
 				onImport={() => importInput?.click()}
 				onSaveDesign={saveDesign}
 				onExportSvg={exportSvg}

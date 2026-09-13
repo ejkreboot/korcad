@@ -1,7 +1,8 @@
 import type { SolidData, SolidEntity, SolidKind, SolidShape } from './types.js';
 
-export function createDefaultSolid(): SolidData {
-	return { sheets: {} };
+/** Solid data for a document whose first Solid sheet is `sheetId`: one empty plate. */
+export function createDefaultSolid(sheetId: string): SolidData {
+	return { sheets: { [sheetId]: { entities: [] } } };
 }
 
 /** Field defaults for a newly drawn entity, and for fields a saved file lacks. */

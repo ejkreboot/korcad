@@ -11,6 +11,7 @@ import { packagingGcode } from '$lib/features/packaging/gcode.js';
 import { simulationMoves } from '$lib/core/cam/simulation.js';
 import { allGeometry } from '$lib/features/packaging/model.js';
 import { validate } from '$lib/features/packaging/validation.js';
+import { validateDocument } from '$lib/features/workspaces.js';
 import { view, withMachine, patchDesign } from '../../support/designs.js';
 import { intent } from '../../support/paths.js';
 
@@ -114,12 +115,14 @@ describe('validation gates export', () => {
 		'blocks a zero %s on the machine profile',
 		(field) => {
 			const broken = withMachine(createDefaultDesign(), { [field]: 0 });
-			expect(validate(broken).length).toBeGreaterThan(0);
+			expect(validateDocument(broken).length).toBeGreaterThan(0);
 		}
 	);
 
 	it('blocks a zero material thickness', () => {
-		expect(validate(patchDesign(createDefaultDesign(), { material: 0 })).length).toBeGreaterThan(0);
+		expect(
+			validateDocument(patchDesign(createDefaultDesign(), { material: 0 })).length
+		).toBeGreaterThan(0);
 	});
 });
 

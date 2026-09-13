@@ -1,6 +1,7 @@
 import type { Assembly } from '$lib/core/assembly/model.js';
 import type { GcodeOptions } from '$lib/core/cam/gcode.js';
 import type { WorkspaceReader } from '$lib/core/design/normalize.js';
+import { validateMachineSettings } from '$lib/core/design/validation.js';
 import type { DesignState, Geometry, MachineSettings, Sheet } from '$lib/core/design/types.js';
 import type { Selection, WorkspaceDataMap, WorkspaceId } from '$lib/core/design/workspace.js';
 import type { SvgLabel } from '$lib/core/export/svg.js';
@@ -60,8 +61,8 @@ export type Workspace<Id extends WorkspaceId = WorkspaceId> = WorkspaceReader & 
 	readonly tools: readonly WorkspaceTool[];
 	/** The name a sheet added in this workspace gets. */
 	newSheetName(design: DesignState): string;
-	/** The data a document gains when it first uses this workspace. */
-	defaults(): WorkspaceDataMap[Id];
+	/** The data a document gains when it first uses this workspace, on the sheet `sheetId`. */
+	defaults(sheetId: string): WorkspaceDataMap[Id];
 	/**
 	 * Re-derives stored values that depend on others, such as a spanning
 	 * support's height. Run on every document change, for every workspace the
@@ -141,10 +142,16 @@ export function reconcileDocument(design: DesignState): DesignState {
 
 /**
  * Manufacturability of the whole document. Export of any sheet is gated on it,
- * so every workspace present is asked, not only the active sheet's.
+ * so every workspace present is asked, not only the active sheet's. The machine
+ * settings of every profile in use are checked first and apart from any
+ * workspace, so no sheet can export on an unsafe machine because its workspace
+ * forgot to ask.
  */
 export function validateDocument(design: DesignState): string[] {
-	return presentWorkspaces(design).flatMap((workspace) => workspace.validate(design));
+	return [
+		...validateMachineSettings(design),
+		...presentWorkspaces(design).flatMap((workspace) => workspace.validate(design))
+	];
 }
 
 /**

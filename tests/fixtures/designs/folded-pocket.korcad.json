@@ -21,6 +21,7 @@
         "fabricationMode": "knife",
         "safeZ": 3,
         "cutDepth": 3.2,
+        "passDepth": 3,
         "scoreDepth": 0.9,
         "scoreTool": "knife",
         "cutFeed": 800,

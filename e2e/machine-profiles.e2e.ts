@@ -4,7 +4,7 @@ import { gotoEditor, readDraft } from './helpers.js';
 /**
  * Machine profiles in the editor.
  *
- * The thirteen machine settings used to live on the document, so changing the
+ * The machine settings used to live on the document, so changing the
  * cut depth changed it for the whole job. They now belong to a named profile
  * that each sheet references, which is what lets one job hold a creased deck
  * and a routed plate. What needs a browser is that the panel edits the profile
@@ -12,7 +12,7 @@ import { gotoEditor, readDraft } from './helpers.js';
  */
 
 type Draft = {
-	machineProfiles?: { id: string; name: string; cutDepth: number }[];
+	machineProfiles?: { id: string; name: string; cutDepth: number; passDepth: number }[];
 	sheets?: { id: string; name: string; machineProfileId: string }[];
 } & Record<string, unknown>;
 
@@ -88,4 +88,22 @@ test('switching fabrication mode still gates the support tools', async ({ page }
 	await page.getByLabel('Fabrication').selectOption('knife');
 	await expect(page.getByRole('button', { name: 'Support', exact: true })).toBeEnabled();
 	await expect(page.getByLabel(/Bit diameter/)).toHaveCount(0);
+});
+
+test('sets a router profile’s depth per pass, and blocks export without one', async ({ page }) => {
+	await gotoEditor(page);
+	await openMachinePanel(page);
+	await expect(page.getByLabel(/Depth per pass/)).toHaveCount(0);
+
+	await page.getByLabel('Fabrication').selectOption('router');
+	await page.getByLabel(/Depth per pass/).fill('0.05');
+	await expect
+		.poll(async () => (await draft(page)).machineProfiles?.[0]?.passDepth)
+		.toBeCloseTo(1.27, 2);
+
+	await page.getByLabel(/Depth per pass/).fill('0');
+	await expect(page.locator('.status.error')).toContainText(
+		'Drag knife: depth per pass must be positive'
+	);
+	await expect(page.getByRole('button', { name: 'G-code' })).toBeDisabled();
 });

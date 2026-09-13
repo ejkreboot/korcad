@@ -1,6 +1,6 @@
 import { clamp, display } from '$lib/core/units.js';
 import type { DesignPath, MachineSettings, SheetView } from '$lib/core/design/types.js';
-import { pathOperation } from './gcode.js';
+import { pathOperation, programOperations } from './gcode.js';
 
 export type SimulationSettings = Pick<MachineSettings, 'safeZ' | 'cutFeed'>;
 
@@ -189,7 +189,7 @@ export function simulationPhases(
 	paths: readonly DesignPath[],
 	settings: PhaseSettings
 ): readonly SimulationPhase[] {
-	const hasCrease = paths.some((path) => pathOperation(path) === 'crease');
+	const hasCrease = programOperations(paths).includes('crease');
 	const hasDownScore = paths.some((path) => path.type === 'score' && pathOperation(path) === 'cut');
 	const phases: SimulationPhase[] = [];
 	if (hasCrease) {

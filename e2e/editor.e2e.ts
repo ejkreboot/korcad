@@ -319,6 +319,17 @@ test('folds the once-per-job settings away, above the selection panel', async ({
 	await expect(page.getByLabel('Board appearance')).toHaveCount(0);
 });
 
+test('exports one program for a deck with nothing to crease from the back', async ({ page }) => {
+	await gotoEditor(page);
+	const downloads: string[] = [];
+	page.on('download', (file) => downloads.push(file.suggestedFilename()));
+	const first = page.waitForEvent('download');
+	await page.getByRole('button', { name: 'G-code' }).click();
+	await first;
+	await expect(page.getByText('Cut program exported.')).toBeAttached();
+	expect(downloads).toEqual(['deck.nc']);
+});
+
 test('drives the toolbar by icon buttons that keep their accessible names', async ({ page }) => {
 	await gotoEditor(page);
 
@@ -333,6 +344,7 @@ test('drives the toolbar by icon buttons that keep their accessible names', asyn
 		'Redo',
 		'Snap',
 		'Simulate',
+		'New project',
 		'Save design',
 		'Open',
 		'SVG',

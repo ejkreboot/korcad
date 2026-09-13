@@ -101,6 +101,11 @@ export type MachineSettings = {
 	readonly fabricationMode: FabricationMode;
 	readonly safeZ: number;
 	readonly cutDepth: number;
+	/**
+	 * The deepest a router cuts in one pass. A deeper cut is split into equal
+	 * passes, none deeper than this; a knife always cuts in one.
+	 */
+	readonly passDepth: number;
 	readonly scoreDepth: number;
 	readonly scoreTool: ScoreTool;
 	readonly cutFeed: number;
@@ -115,7 +120,7 @@ export type MachineSettings = {
 
 /**
  * A named, reusable machine setup. Sheets reference a profile by id rather
- * than restating thirteen settings each, so changing the machine is one edit
+ * than restating every setting each, so changing the machine is one edit
  * however many sheets run on it.
  */
 export type MachineProfile = MachineSettings & {

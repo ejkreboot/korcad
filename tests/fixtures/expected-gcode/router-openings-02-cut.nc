@@ -5,6 +5,7 @@
 ; Grain direction: y; material thickness: 3 mm
 ; Fold allowance: none (panels cut to drawn size)
 ; ROUTER operation; 6.35 mm bit with radius compensation
+; Cut in equal passes of at most 3 mm
 G21 ; millimeters
 G90 ; absolute positioning
 G17 ; XY plane
@@ -14,6 +15,11 @@ G4 P2 ; allow spindle to reach speed
 
 ; 1: cut router-opening (Folded pocket 1)
 G0 X138.775 Y122.175
+G1 Z-1.6 F250
+G1 X387.125 Y122.175 F800
+G1 X387.125 Y265.225 F800
+G1 X138.775 Y265.225 F800
+G1 X138.775 Y122.175 F800
 G1 Z-3.2 F250
 G1 X387.125 Y122.175 F800
 G1 X387.125 Y265.225 F800
@@ -23,6 +29,11 @@ G0 Z3
 
 ; 2: cut router-deck-perimeter
 G0 X73.025 Y73.025
+G1 Z-1.6 F250
+G1 X536.575 Y73.025 F800
+G1 X536.575 Y536.575 F800
+G1 X73.025 Y536.575 F800
+G1 X73.025 Y73.025 F800
 G1 Z-3.2 F250
 G1 X536.575 Y73.025 F800
 G1 X536.575 Y536.575 F800

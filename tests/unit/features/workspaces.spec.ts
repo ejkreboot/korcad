@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { generateGcode } from '$lib/core/cam/gcode.js';
 import { sheetView } from '$lib/core/design/machine.js';
 import { ICON_PATHS } from '$lib/components/icons/paths.js';
-import { createDefaultDesign } from '$lib/features/document.js';
+import { serializeDesign } from '$lib/core/export/design-file.js';
+import { createDefaultDesign, parseDesign } from '$lib/features/document.js';
 import { resolveSupportHeights } from '$lib/features/packaging/levels.js';
 import { buildAssembly } from '$lib/features/packaging/assembly.js';
 import { validate } from '$lib/features/packaging/validation.js';
@@ -70,7 +71,32 @@ describe('the registry', () => {
 	});
 
 	it('creates the data a new document starts with', () => {
-		expect(PACKAGING_WORKSPACE.defaults()).toEqual(createDefaultDesign().workspaces.packaging);
+		expect(PACKAGING_WORKSPACE.defaults('deck')).toEqual(
+			createDefaultDesign().workspaces.packaging
+		);
+		expect(createDefaultDesign('packaging')).toEqual(createDefaultDesign());
+	});
+
+	it('starts a new project in any workspace with one empty sheet and only its data', () => {
+		for (const workspace of WORKSPACES) {
+			const design = createDefaultDesign(workspace.id);
+			expect(design.sheets).toHaveLength(1);
+			expect(design.sheets[0]?.workspace).toBe(workspace.id);
+			expect(design.activeSheetId).toBe(design.sheets[0]?.id);
+			expect(Object.keys(design.workspaces)).toEqual([workspace.id]);
+			expect(validateDocument(design)).toEqual([]);
+			expect(parseDesign(serializeDesign(design))).toEqual(design);
+		}
+		const solid = createDefaultDesign('solid');
+		expect(solid.sheets[0]?.name).toBe('Plate 1');
+		expect(solid.workspaces.solid?.sheets[solid.activeSheetId]).toEqual({ entities: [] });
+	});
+
+	it('makes the first packaging sheet a project gains its deck', () => {
+		const solid = createDefaultDesign('solid');
+		expect(PACKAGING_WORKSPACE.newSheetName(solid)).toBe('Deck');
+		expect(PACKAGING_WORKSPACE.defaults('sheet-2').deckSheetId).toBe('sheet-2');
+		expect(PACKAGING_WORKSPACE.newSheetName(createDefaultDesign())).toBe('Parts 1');
 	});
 });
 

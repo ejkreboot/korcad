@@ -17,6 +17,7 @@ export type GcodeSettings = RoutingSettings &
 		| 'cutFeed'
 		| 'tabWidth'
 		| 'tabHeight'
+		| 'passDepth'
 	>;
 
 export type GcodeOptions = {
@@ -32,6 +33,29 @@ export type GcodeOptions = {
 /** Up-folds are creased from the back; everything else runs in the cut program. */
 export function pathOperation(path: Pick<DesignPath, 'type' | 'foldDirection'>): 'crease' | 'cut' {
 	return path.type === 'score' && path.foldDirection === 'up' ? 'crease' : 'cut';
+}
+
+/**
+ * The programs one sheet exports, in running order. A crease program exists
+ * only when something on the sheet is creased from the back; otherwise it
+ * would be an empty file the operator is told to run first.
+ */
+export function programOperations(paths: readonly DesignPath[]): readonly ('crease' | 'cut')[] {
+	return paths.some((path) => pathOperation(path) === 'crease') ? ['crease', 'cut'] : ['cut'];
+}
+
+/**
+ * The depths of successive passes down to `depth`, both positive. The cut is
+ * split into the fewest equal passes none deeper than `passDepth`, so there is
+ * never a sliver of a last pass. Throws on a pass depth that could not finish.
+ */
+export function passDepths(depth: number, passDepth: number): number[] {
+	if (!(Number.isFinite(passDepth) && passDepth > 0)) {
+		throw new Error('Depth per pass must be positive');
+	}
+	// The tolerance keeps a depth that is an exact multiple from gaining a pass to rounding.
+	const count = Math.max(1, Math.ceil(depth / passDepth - 1e-9));
+	return Array.from({ length: count }, (_, index) => (depth * (index + 1)) / count);
 }
 
 export function pathsForOperation(
@@ -51,9 +75,14 @@ export function pathsForOperation(
  * - The spindle stays off for knife and creasing work and is only started for
  *   router operations, which are the only ones that need it.
  * - Every path plunges from safe Z and retracts to safe Z before travelling.
+ * - A router cuts in equal passes no deeper than `passDepth`. A closed contour
+ *   plunges to its next pass where the last one ended, which is where it
+ *   started; an open path retracts and returns to its start first. A knife and
+ *   a crease cut in one pass.
  * - A routed outline with holding tabs is cut at depth except over each tab,
  *   where the bit rises vertically to leave a bridge `tabHeight` above the
- *   underside of the board, then drops back vertically at plunge feed.
+ *   underside of the board, then drops back vertically at plunge feed. A pass
+ *   that stops above the bridge runs straight over it.
  * - The program ends with the spindle off, a return to X0 Y0 at safe Z, and M2.
  */
 export function generateGcode(
@@ -66,13 +95,14 @@ export function generateGcode(
 	const geometry = plannedToolpaths(sourcePaths, settings, operation).paths;
 	const router = settings.fabricationMode === 'router';
 	const creasing = operation === 'crease';
+	const routing = router && !creasing;
 	const toolDescription = router
 		? `${round(settings.bitWidth)} mm router bit`
 		: creasing && settings.scoreTool === 'crease'
 			? 'creasing wheel'
 			: 'drag knife';
 
-	const bridged = router && !creasing && geometry.some(({ path }) => bridgeTabs(path));
+	const bridged = routing && geometry.some(({ path }) => bridgeTabs(path));
 
 	const sheetName =
 		options.sheetLabel ??
@@ -86,9 +116,12 @@ export function generateGcode(
 		'; 24 x 24 inch sheet; origin at lower left; Z zero at material surface',
 		`; Grain direction: ${settings.grainDirection}; material thickness: ${round(settings.material)} mm`,
 		...(options.headerNotes ?? []),
-		router && !creasing
-			? `; ROUTER operation; ${round(settings.bitWidth)} mm bit with radius compensation`
-			: '; SPINDLE MUST REMAIN OFF',
+		...(routing
+			? [
+					`; ROUTER operation; ${round(settings.bitWidth)} mm bit with radius compensation`,
+					`; Cut in equal passes of at most ${round(settings.passDepth)} mm`
+				]
+			: ['; SPINDLE MUST REMAIN OFF']),
 		...(bridged
 			? [
 					`; Holding tabs: ${round(settings.tabWidth)} mm wide bridges, ${round(settings.tabHeight)} mm thick; break parts free by hand`
@@ -98,10 +131,8 @@ export function generateGcode(
 		'G90 ; absolute positioning',
 		'G17 ; XY plane',
 		`G0 Z${round(settings.safeZ)}`,
-		router && !creasing
-			? `M3 S${Math.round(settings.spindleSpeed)} ; spindle clockwise`
-			: 'M5 ; spindle off',
-		...(router && !creasing ? ['G4 P2 ; allow spindle to reach speed'] : [])
+		routing ? `M3 S${Math.round(settings.spindleSpeed)} ; spindle clockwise` : 'M5 ; spindle off',
+		...(routing ? ['G4 P2 ; allow spindle to reach speed'] : [])
 	];
 
 	geometry.forEach(({ path, pts }, index) => {
@@ -113,16 +144,19 @@ export function generateGcode(
 			'',
 			`; ${index + 1}: ${path.type}${path.foldDirection ? ` [${path.foldDirection}]` : ''}${path.note ? ` ${path.note}` : ''} ${path.role || ''}${owner}`
 		);
-		const tabs = router && !creasing ? bridgeTabs(path) : undefined;
-		if (tabs) {
-			lines.push(...bridgedMoves(pts, tabs, depth, feed, settings));
-		} else {
-			lines.push(`G0 X${round(pts[0]!.x)} Y${round(pts[0]!.y)}`);
-			lines.push(`G1 Z-${round(depth)} F${round(settings.plungeFeed)}`);
-			for (const p of pts.slice(1)) {
-				lines.push(`G1 X${round(p.x)} Y${round(p.y)} F${round(feed)}`);
-			}
-		}
+		const tabs = routing ? bridgeTabs(path) : undefined;
+		const contour: readonly ToolpathPoint[] = tabs
+			? bridgeTabbedContour(pts, {
+					centres: tabs,
+					tabWidth: settings.tabWidth,
+					tabHeight: settings.tabHeight,
+					material: settings.material,
+					bitWidth: settings.bitWidth,
+					cutDepth: depth
+				})
+			: pts.map((p) => ({ x: p.x, y: p.y, z: -depth }));
+		const passes = routing ? passDepths(depth, settings.passDepth) : [depth];
+		lines.push(...passMoves(contour, passes, feed, settings));
 		lines.push(`G0 Z${round(settings.safeZ)}`);
 	});
 
@@ -134,36 +168,41 @@ function bridgeTabs(path: DesignPath): readonly Point[] | undefined {
 	return path.closed && path.holdingTabs?.length ? path.holdingTabs : undefined;
 }
 
-/** The moves of one routed contour that rises over its holding tabs. */
-function bridgedMoves(
-	pts: readonly Point[],
-	centres: readonly Point[],
-	depth: number,
+/**
+ * The moves of one path cut in passes. `contour` is the path at full depth,
+ * with any vertical rises over holding tabs; each pass cuts it no deeper than
+ * that pass's depth, so a tab below the pass floor is not there yet and its
+ * rise and drop are left out.
+ */
+function passMoves(
+	contour: readonly ToolpathPoint[],
+	passes: readonly number[],
 	feed: number,
 	settings: GcodeSettings
 ): string[] {
-	const moves: readonly ToolpathPoint[] = bridgeTabbedContour(pts, {
-		centres,
-		tabWidth: settings.tabWidth,
-		tabHeight: settings.tabHeight,
-		material: settings.material,
-		bitWidth: settings.bitWidth,
-		cutDepth: depth
-	});
-	const lines = [
-		`G0 X${round(moves[0]!.x)} Y${round(moves[0]!.y)}`,
-		`G1 Z-${round(depth)} F${round(settings.plungeFeed)}`
-	];
-	moves.slice(1).forEach((move, index) => {
-		const previous = moves[index]!;
-		if (move.z !== previous.z) {
+	const start = contour[0]!;
+	const end = contour.at(-1)!;
+	const closed = contour.length > 2 && Math.hypot(end.x - start.x, end.y - start.y) <= 1e-6;
+	const lines: string[] = [];
+	passes.forEach((depth, pass) => {
+		if (pass > 0 && !closed) {
+			lines.push(`G0 Z${round(settings.safeZ)}`);
+		}
+		if (pass === 0 || !closed) lines.push(`G0 X${round(start.x)} Y${round(start.y)}`);
+		lines.push(`G1 Z-${round(depth)} F${round(settings.plungeFeed)}`);
+		const floor = (z: number) => Math.max(z, -depth);
+		contour.slice(1).forEach((move, index) => {
+			const previous = contour[index]!;
+			if (move.z === previous.z) {
+				lines.push(`G1 X${round(move.x)} Y${round(move.y)} F${round(feed)}`);
+				return;
+			}
+			if (floor(move.z) === floor(previous.z)) return;
 			const rising = move.z > previous.z;
 			lines.push(
-				`G1 Z${round(move.z)} F${round(settings.plungeFeed)} ; ${rising ? 'holding tab' : 'end of tab'}`
+				`G1 Z${round(floor(move.z))} F${round(settings.plungeFeed)} ; ${rising ? 'holding tab' : 'end of tab'}`
 			);
-		} else {
-			lines.push(`G1 X${round(move.x)} Y${round(move.y)} F${round(feed)}`);
-		}
+		});
 	});
 	return lines;
 }

@@ -55,6 +55,45 @@ test('switching workspace changes the tools, and packaging is untouched', async 
 	]);
 });
 
+test('starts a new project in a chosen workspace, and undo brings the old one back', async ({
+	page
+}) => {
+	await gotoEditor(page);
+	await page.getByLabel(/Deck width/).fill('12');
+	await page.getByLabel(/Deck width/).blur();
+
+	page.once('dialog', (dialog) => dialog.accept());
+	await page.getByRole('button', { name: 'New project' }).click();
+	await page.getByRole('menuitem', { name: /Solid/ }).click();
+
+	await expect(switcher(page)).toHaveAccessibleName('Workspace: Solid');
+	await expect(page.getByRole('tab')).toHaveCount(1);
+	await expect(page.getByRole('tab', { name: 'Plate 1' })).toHaveAttribute('aria-selected', 'true');
+	await expect
+		.poll(async () => (await draft(page)).sheets.map((sheet) => sheet.workspace))
+		.toEqual(['solid']);
+
+	// Packaging added to a Solid project gets a deck of its own.
+	await switchTo(page, /Folded Packaging/);
+	await expect(page.getByRole('tab', { name: 'Deck' })).toHaveAttribute('aria-selected', 'true');
+	await expect(page.getByLabel(/Deck width/)).toHaveValue('18');
+
+	await page.getByRole('button', { name: 'Undo' }).click();
+	await page.getByRole('button', { name: 'Undo' }).click();
+	await expect(page.getByRole('tab')).toHaveCount(1);
+	await expect(page.getByLabel(/Deck width/)).toHaveValue('12');
+});
+
+test('keeps the design when a new project is declined', async ({ page }) => {
+	await gotoEditor(page);
+	await switchTo(page, /Solid/);
+	page.once('dialog', (dialog) => dialog.dismiss());
+	await page.getByRole('button', { name: 'New project' }).click();
+	await page.getByRole('menuitem', { name: /Folded Packaging/ }).click();
+	await expect(page.getByRole('tab')).toHaveCount(2);
+	await expect(switcher(page)).toHaveAccessibleName('Workspace: Solid');
+});
+
 async function openMachinePanel(page: Page): Promise<void> {
 	await page.getByRole('button', { name: 'Machine' }).click();
 	await expect(page.getByLabel('Profile name')).toBeVisible();

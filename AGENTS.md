@@ -143,13 +143,20 @@ Never mutate inputs along the way.
   (`core/cam/tabs.ts`) raises the bit over each tab, for `tabWidth + bitWidth`, to
   `Z = -(material - tabHeight)`. Tabs stay on by default. Any routed part without tabs is
   named in the program header.
+- **Router passes.** A router cuts each path in the fewest equal passes no deeper than the
+  profile's `passDepth` (`passDepths` in `core/cam/gcode.ts`). A closed contour plunges to its
+  next pass where it started; an open path retracts and returns first. A pass above a tab's top
+  runs straight over it. A knife and every crease cut in one pass.
 - **Export requires validation.** Validation returns structured diagnostics, and nothing is
-  silently clamped or dropped. The simulator uses the same gate.
+  silently clamped or dropped. The simulator uses the same gate. `validateDocument` checks
+  every profile a sheet uses (`core/design/validation.ts`) before asking each workspace, so
+  machine settings are never left to a workspace to check.
 - **Programs** use mm, G90, and G17, with the safe-Z moves stated in the header. The spindle
   starts only for router cutting, and the header says `SPINDLE MUST REMAIN OFF` otherwise.
   Each program ends with M5, a return to X0 Y0, safe Z, and M2. A workspace adds header lines
-  through `gcodeOptions().headerNotes`. A workspace with the `folding` capability exports a
-  crease program and a cut program; any other workspace exports a single cut program.
+  through `gcodeOptions().headerNotes`. A sheet exports a crease program and a cut program only
+  when something on it is creased from the back (`programOperations`); otherwise it exports
+  one cut program.
 - **The simulator parses the emitted program**, not the planned paths. The move type comes from
   the `; N: cut` and `; N: score [up|down]` comments, and a bare `G1` counts as travel. Playback
   is the pure function `simulationFrame(moves, seconds)`. It stops at the end of the crease pass
@@ -178,29 +185,20 @@ Never mutate inputs along the way.
 
 ## Priorities
 
-Essential, in order:
-
-1. **Validate machine settings for every sheet.** Positive-value checks (safe Z, feeds, cut
-   depth, bit diameter, spindle speed) exist only in packaging validation, and only for the deck
-   sheet's profile. A Solid sheet on its own profile with a negative safe Z or a zero feed passes
-   validation and exports. Move these checks into a generic per-profile validator in
-   `validateDocument`.
-2. **Router step-down.** A router cuts full depth in a single pass. Add a maximum depth per pass
-   to the profile, cut in multiple passes, and bridge tabs only on the passes below the tab top.
-   Without this, routing anything thicker than thin sheet stock is unsafe.
-3. **Empty crease program on a routed packaging sheet.** Export still writes a crease file,
-   with no moves and a router-bit header. Skip it, or state clearly that it is empty.
+Essential: none known. Machine settings are validated for every sheet, routers cut in passes,
+and the empty crease program is gone.
 
 Next directions:
 
 - Configurable stock size and origin, with the header generated from them instead of the fixed
   24 in text.
-- Ramped or helical plunges for routers, and a choice of climb or conventional milling.
+- Ramped or helical plunges for routers, a choice of climb or conventional milling, and a
+  finishing pass.
 - Postprocessor profiles (GRBL, LinuxCNC, Mach3), including optional G2/G3 arc output.
 - Import SVG and DXF profiles into Solid. Export a multi-sheet job as a zip.
 - Rotate, copy, paste, and keyboard nudge for the selection.
-- Choose between a start picker and Solid as the default workspace. New designs currently open
-  in Packaging.
+- A first-run choice of workspace. New project (toolbar) already starts a project in either
+  workspace, but a fresh browser still opens a packaging deck.
 - Move `stock.boardFinish` into `PackagingData`: only the packaging 3D preview reads it (a
   document shape change).
 - Packaging: port the calibration coupon, edit fold direction by clicking a fold on the canvas,

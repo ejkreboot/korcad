@@ -55,6 +55,7 @@ function machineProfiles(value: unknown): MachineProfile[] {
 				fabricationMode: entry.fabricationMode === 'router' ? 'router' : base.fabricationMode,
 				safeZ: number('safeZ', base.safeZ),
 				cutDepth: number('cutDepth', base.cutDepth),
+				passDepth: number('passDepth', base.passDepth),
 				scoreDepth: number('scoreDepth', base.scoreDepth),
 				scoreTool: entry.scoreTool === 'crease' ? 'crease' : base.scoreTool,
 				cutFeed: number('cutFeed', base.cutFeed),

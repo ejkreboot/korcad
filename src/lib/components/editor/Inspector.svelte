@@ -242,6 +242,15 @@
 						oninput={(e) => setMachine('bitWidth', e.currentTarget.value)}
 					/>
 				</label>
+				<label class="field" title="Deeper cuts are split into equal passes no deeper than this">
+					Depth per pass ({unitLabel})
+					<input
+						type="number"
+						step="0.001"
+						value={mm(machine.passDepth)}
+						oninput={(e) => setMachine('passDepth', e.currentTarget.value)}
+					/>
+				</label>
 			{/if}
 		</div>
 	</CollapsiblePanel>

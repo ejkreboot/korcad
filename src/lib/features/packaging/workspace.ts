@@ -67,9 +67,11 @@ export const PACKAGING_WORKSPACE: Workspace<'packaging'> = {
 	id: 'packaging',
 	label: 'Folded Packaging',
 	icon: 'inventory_2',
-	// The deck is sheet zero, so the first parts sheet is `Parts 1`.
-	newSheetName: (design) =>
-		`Parts ${design.sheets.filter((sheet) => sheet.workspace === 'packaging').length}`,
+	// The first packaging sheet is the deck, so the next is `Parts 1`.
+	newSheetName: (design) => {
+		const count = design.sheets.filter((sheet) => sheet.workspace === 'packaging').length;
+		return count ? `Parts ${count}` : 'Deck';
+	},
 	dataScope: 'document',
 	capabilities: { folding: true, assembly: true },
 	tools: [
@@ -94,7 +96,8 @@ export const PACKAGING_WORKSPACE: Workspace<'packaging'> = {
 		}
 	],
 	normalize: normalizePackaging,
-	defaults: createDefaultPackaging,
+	// A document's first packaging sheet is its deck.
+	defaults: (sheetId) => createDefaultPackaging(sheetId),
 	reconcile: resolveSupportHeights,
 	geometry: allGeometry,
 	validate,

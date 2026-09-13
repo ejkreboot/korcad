@@ -3,10 +3,13 @@
 	import WorkspaceSwitcher from './WorkspaceSwitcher.svelte';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
 	import type { ToolState } from '$lib/editor/tools.svelte.js';
+	import type { WorkspaceId } from '$lib/core/design/workspace.js';
+	import { WORKSPACES } from '$lib/features/workspaces.js';
 
 	let {
 		editor,
 		tools,
+		onNewProject,
 		onImport,
 		onSaveDesign,
 		onExportSvg,
@@ -15,6 +18,7 @@
 	}: {
 		editor: EditorState;
 		tools: ToolState;
+		onNewProject: (workspaceId: WorkspaceId) => void;
 		onImport: () => void;
 		onSaveDesign: () => void;
 		onExportSvg: () => void;
@@ -22,7 +26,8 @@
 		onSimulate: () => void;
 	} = $props();
 
-	/** The drawing tool whose preset menu is open. */
+	const NEW_PROJECT_MENU = 'new-project';
+	/** The toolbar menu that is open: a drawing tool's presets, or the new project menu. */
 	let openMenu = $state<string | null>(null);
 	const blocked = $derived(editor.diagnostics.length > 0);
 	// Drawing happens on the flat sheet, so those tools are unavailable in 3D.
@@ -167,6 +172,38 @@
 	</div>
 
 	<div class="group">
+		<div class="menu-host">
+			<button
+				class="button icon split"
+				aria-haspopup="menu"
+				aria-expanded={openMenu === NEW_PROJECT_MENU}
+				aria-label="New project"
+				title="Start a new project"
+				onclick={() => (openMenu = openMenu === NEW_PROJECT_MENU ? null : NEW_PROJECT_MENU)}
+			>
+				<Icon name="note_add" />
+				<Icon name="expand_more" size={14} />
+			</button>
+			{#if openMenu === NEW_PROJECT_MENU}
+				<div class="menu" role="menu">
+					{#each WORKSPACES as workspace (workspace.id)}
+						<button
+							role="menuitem"
+							onclick={() => {
+								openMenu = null;
+								onNewProject(workspace.id);
+							}}
+						>
+							<Icon name={workspace.icon} />
+							<span>
+								<strong>{workspace.label}</strong>
+								<small>A new project with one empty sheet</small>
+							</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</div>
 		<button
 			class="button icon"
 			aria-label="Save design"

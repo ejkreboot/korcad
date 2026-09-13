@@ -102,7 +102,7 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 		};
 		const workspaces =
 			design.workspaces[workspaceId] === undefined
-				? { ...design.workspaces, [workspaceId]: workspaceById(workspaceId).defaults() }
+				? { ...design.workspaces, [workspaceId]: workspaceById(workspaceId).defaults(sheet.id) }
 				: design.workspaces;
 		apply({
 			...design,
@@ -166,6 +166,14 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 		setDesign(next: DesignState) {
 			selected = null;
 			apply(clone(next));
+		},
+		/**
+		 * Replaces the document with a new, empty one drawn in `workspaceId`. It is
+		 * one undo step, so a project started by mistake can be taken back.
+		 */
+		newDesign(workspaceId: WorkspaceId) {
+			selected = null;
+			apply(createDefaultDesign(workspaceId));
 		},
 		setStock<K extends keyof StockSettings>(key: K, value: StockSettings[K]) {
 			apply({ ...design, stock: { ...design.stock, [key]: value } });
