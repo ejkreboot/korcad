@@ -13,6 +13,13 @@ export type Side = 'top' | 'right' | 'bottom' | 'left';
 
 export type SideFlags = { readonly [K in Side]: boolean };
 
+/**
+ * Entities imported together from one drawing, such as the letters of a logo,
+ * which move, scale, and are deleted as one. Each member names its group; the
+ * group's bounds are always read from its members, so they cannot drift.
+ */
+export type EntityGroup = { readonly id: string; readonly name: string };
+
 export type PathType = 'cut' | 'score';
 
 /** Which side of the drawn line the tool runs on. */

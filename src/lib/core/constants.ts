@@ -18,4 +18,4 @@ export const DESIGN_FORMAT = 'korcad-design';
  * no legacy designs to upgrade: a shape change bumps this and regenerates the
  * serialization fixture.
  */
-export const DESIGN_VERSION = 9;
+export const DESIGN_VERSION = 10;

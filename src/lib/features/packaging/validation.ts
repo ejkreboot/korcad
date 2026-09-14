@@ -6,6 +6,9 @@ import { supportHasAncestor, supportPlacementLimits } from './mounting.js';
 import { deckUndersideZ, resolveSupportHeight, sitsInsideBox, supportTopZ } from './levels.js';
 import { machineProfileFor } from '$lib/core/design/machine.js';
 import { packagingView } from './view.js';
+import { cutoutPoints } from './geometry.js';
+import type { Pocket } from './types.js';
+import { outlineDistance, outlineInside } from '$lib/core/geometry/contour.js';
 
 const NO_SIDES: SideFlags = { top: false, right: false, bottom: false, left: false };
 const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
@@ -175,9 +178,8 @@ export function validate(document: DesignState): string[] {
 		for (let j = i + 1; j < design.pockets.length; j++) {
 			const a = design.pockets[i]!;
 			const b = design.pockets[j]!;
-			if (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y) {
-				errors.push(`${a.name} overlaps ${b.name}`);
-			}
+			const boxesOverlap = a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+			if (boxesOverlap && openingsOverlap(a, b)) errors.push(`${a.name} overlaps ${b.name}`);
 		}
 	}
 
@@ -347,4 +349,21 @@ export function validate(document: DesignState): string[] {
 	}
 
 	return [...new Set(errors)];
+}
+
+/**
+ * Whether two openings whose boxes overlap really do. Imported outlines are
+ * compared as drawn, so the letters of a kerned logo, whose boxes overlap but
+ * whose lines do not, are not reported; any other pair is judged by its box,
+ * as it always has been.
+ */
+function openingsOverlap(a: Pocket, b: Pocket): boolean {
+	if (a.shape !== 'profile' || b.shape !== 'profile') return true;
+	const first = cutoutPoints(a);
+	const second = cutoutPoints(b);
+	return (
+		outlineDistance(first, second) === 0 ||
+		outlineInside(first, second) ||
+		outlineInside(second, first)
+	);
 }

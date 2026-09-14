@@ -2,7 +2,7 @@ import type { DesignState } from '$lib/core/design/types.js';
 import type { Selection } from '$lib/core/design/workspace.js';
 import type { SvgLabel } from '$lib/core/export/svg.js';
 import type { Workspace } from '../workspaces.js';
-import { releaseSheet } from './actions.js';
+import { pocketGroupBox, releaseSheet } from './actions.js';
 import { buildAssembly } from './assembly.js';
 import { createDefaultPackaging } from './defaults.js';
 import { packagingHeaderNotes } from './gcode.js';
@@ -13,17 +13,36 @@ import { normalizePackaging } from './normalize.js';
 import { CUTOUT_PRESETS, SUPPORT_PRESETS } from './presets.js';
 import { riserFlatBounds } from './supports.js';
 import { validate } from './validation.js';
-import { packagingSheetView } from './view.js';
+import { packagingSheetView, packagingView } from './view.js';
+
+/**
+ * Openings are labelled at their top-left corner. An imported group is labelled
+ * once, as a whole, rather than letter by letter.
+ */
+export function pocketLabels(design: DesignState): (SvgLabel & { key: string })[] {
+	const view = packagingView(design);
+	const single = view.pockets
+		.filter((pocket) => !pocket.groupId)
+		.map((pocket) => ({
+			key: `pocket-${pocket.id}`,
+			name: pocket.name,
+			x: pocket.x + 5 + (pocket.labelOffset?.x ?? 0),
+			y: pocket.y + pocket.h - 9 - (pocket.labelOffset?.y ?? 0)
+		}));
+	const groups = view.pocketGroups.flatMap((group) => {
+		const box = pocketGroupBox(design, group.id);
+		return box
+			? [{ key: `group-${group.id}`, name: group.name, x: box.x + 5, y: box.y + box.h - 9 }]
+			: [];
+	});
+	return [...single, ...groups];
+}
 
 function labels(design: DesignState, sheetId: string): SvgLabel[] {
 	const view = packagingSheetView(design, sheetId);
 	return [
 		...(sheetId === view.deckSheetId
-			? view.pockets.map((pocket) => ({
-					name: pocket.name,
-					x: pocket.x + 5 + (pocket.labelOffset?.x ?? 0),
-					y: pocket.y + pocket.h - 9 - (pocket.labelOffset?.y ?? 0)
-				}))
+			? pocketLabels(design).map(({ name, x, y }) => ({ name, x, y }))
 			: []),
 		...view.supports
 			.filter((support) => support.sheetId === sheetId)
@@ -42,6 +61,7 @@ function selectionExists(design: DesignState, selection: Selection): boolean {
 	const data = design.workspaces.packaging;
 	if (!data) return false;
 	if (selection.kind === 'pocket') return data.pockets.some((pocket) => pocket.id === selection.id);
+	if (selection.kind === 'pocket-group') return pocketGroupBox(design, selection.id) !== null;
 	if (selection.kind === 'support') {
 		return data.supports.some((support) => support.id === selection.id);
 	}
@@ -54,6 +74,10 @@ function selectionExists(design: DesignState, selection: Selection): boolean {
  */
 function selectionBounds(design: DesignState, selection: Selection, sheetId: string) {
 	const view = packagingSheetView(design, sheetId);
+	if (selection.kind === 'pocket-group') {
+		const box = sheetId === view.deckSheetId ? pocketGroupBox(design, selection.id) : null;
+		return box ? { left: box.x, right: box.x + box.w, bottom: box.y, top: box.y + box.h } : null;
+	}
 	if (selection.kind === 'pocket') {
 		const pocket = view.pockets.find((candidate) => candidate.id === selection.id);
 		return pocket

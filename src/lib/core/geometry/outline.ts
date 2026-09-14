@@ -1,4 +1,4 @@
-import { clamp } from '$lib/core/units.js';
+import { clamp, round } from '$lib/core/units.js';
 import { arcPoints, point, type Point } from './primitives.js';
 
 /**
@@ -220,4 +220,51 @@ export function splitClosedContour(
 		);
 	});
 	return { runs, tabs };
+}
+
+/**
+ * A box scaled by `factor` about `anchor`: its corner moves away from the
+ * anchor in proportion and its size grows with it, so a shape drawn in the box
+ * keeps its proportions and its place relative to the others scaled with it.
+ */
+export function scaleBox(box: ShapeBox, anchor: Point, factor: number): ShapeBox {
+	return {
+		x: round(anchor.x + (box.x - anchor.x) * factor),
+		y: round(anchor.y + (box.y - anchor.y) * factor),
+		w: round(box.w * factor),
+		h: round(box.h * factor)
+	};
+}
+
+/** The smallest box holding every box given; `null` for none. */
+export function boxAround(boxes: readonly ShapeBox[]): ShapeBox | null {
+	if (!boxes.length) return null;
+	const left = Math.min(...boxes.map((box) => box.x));
+	const bottom = Math.min(...boxes.map((box) => box.y));
+	const right = Math.max(...boxes.map((box) => box.x + box.w));
+	const top = Math.max(...boxes.map((box) => box.y + box.h));
+	return { x: left, y: bottom, w: right - left, h: top - bottom };
+}
+
+export type BoxCorner = 'nw' | 'ne' | 'sw' | 'se';
+
+/**
+ * One scale factor for a box that must keep its proportions, from a free
+ * resize of it: whichever axis changed more, so dragging a corner mostly
+ * sideways still scales by the sideways drag. The anchor is the corner
+ * opposite the dragged one, which stays still.
+ */
+export function proportionalResize(
+	original: ShapeBox,
+	resized: ShapeBox,
+	handle: BoxCorner
+): { factor: number; anchor: Point } {
+	const sx = original.w > 0 ? resized.w / original.w : 1;
+	const sy = original.h > 0 ? resized.h / original.h : 1;
+	const factor = Math.abs(Math.log(sx)) >= Math.abs(Math.log(sy)) ? sx : sy;
+	const anchor = point(
+		handle.includes('w') ? original.x + original.w : original.x,
+		handle.includes('s') ? original.y + original.h : original.y
+	);
+	return { factor, anchor };
 }

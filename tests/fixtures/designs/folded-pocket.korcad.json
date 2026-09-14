@@ -1,6 +1,6 @@
 {
   "format": "korcad-design",
-  "version": 9,
+  "version": 10,
   "savedAt": "2026-01-01T00:00:00.000Z",
   "design": {
     "stock": {
@@ -77,6 +77,7 @@
             "shape": "rectangle",
             "cornerRadius": 6.35,
             "profile": null,
+            "groupId": null,
             "x": 135.6,
             "y": 119,
             "w": 254.7,
@@ -103,6 +104,7 @@
             "name": "Folded pocket 1"
           }
         ],
+        "pocketGroups": [],
         "supports": []
       }
     }

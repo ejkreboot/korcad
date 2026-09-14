@@ -43,6 +43,25 @@
 		const value = parseDisplay(raw, units);
 		if (Number.isFinite(value)) actions.updatePocket(pocket.id, { [key]: value });
 	}
+	const pocketGroup = $derived(actions.selectedPocketGroup);
+
+	function movePocketGroupTo(key: 'x' | 'y', raw: string): void {
+		if (!pocketGroup) return;
+		const value = parseDisplay(raw, units);
+		if (!Number.isFinite(value)) return;
+		const { x, y } = pocketGroup.box;
+		actions.movePocketGroup(pocketGroup.group.id, key === 'x' ? value : x, key === 'y' ? value : y);
+	}
+
+	/** A group always keeps its proportions; applied when the field is committed. */
+	function scalePocketGroupTo(key: 'w' | 'h', raw: string): void {
+		if (!pocketGroup) return;
+		const value = parseDisplay(raw, units);
+		if (Number.isFinite(value) && value > 0) {
+			actions.scalePocketGroup(pocketGroup.group.id, value / pocketGroup.box[key]);
+		}
+	}
+
 	function setSupport(key: keyof Support, raw: string): void {
 		if (!support) return;
 		const value = parseDisplay(raw, units);
@@ -129,7 +148,70 @@
 					: 'Glued riser box';
 </script>
 
-{#if pocket}
+{#if pocketGroup}
+	<section class="panel">
+		<div class="panel-head">
+			<h2>{pocketGroup.group.name}</h2>
+			<button class="link danger" onclick={() => actions.removePocketGroup(pocketGroup.group.id)}>
+				Delete
+			</button>
+		</div>
+		<p class="badge">
+			Imported group · {pocketGroup.members.length}
+			{pocketGroup.members.length === 1 ? 'opening' : 'openings'}
+		</p>
+
+		<div class="form-grid">
+			<label class="field wide">
+				Name
+				<input
+					value={pocketGroup.group.name}
+					oninput={(e) => actions.renamePocketGroup(pocketGroup.group.id, e.currentTarget.value)}
+				/>
+			</label>
+			<label class="field">
+				X from left ({unitLabel})
+				<input
+					type="number"
+					step="0.001"
+					value={mm(pocketGroup.box.x)}
+					onchange={(e) => movePocketGroupTo('x', e.currentTarget.value)}
+				/>
+			</label>
+			<label class="field">
+				Y from bottom ({unitLabel})
+				<input
+					type="number"
+					step="0.001"
+					value={mm(pocketGroup.box.y)}
+					onchange={(e) => movePocketGroupTo('y', e.currentTarget.value)}
+				/>
+			</label>
+			<label class="field">
+				Width ({unitLabel})
+				<input
+					type="number"
+					step="0.001"
+					value={mm(pocketGroup.box.w)}
+					onchange={(e) => scalePocketGroupTo('w', e.currentTarget.value)}
+				/>
+			</label>
+			<label class="field">
+				Height ({unitLabel})
+				<input
+					type="number"
+					step="0.001"
+					value={mm(pocketGroup.box.h)}
+					onchange={(e) => scalePocketGroupTo('h', e.currentTarget.value)}
+				/>
+			</label>
+		</div>
+		<p class="help">
+			An imported drawing moves, scales, and is deleted as one. A new width or height scales every
+			opening in it together, keeping its proportions.
+		</p>
+	</section>
+{:else if pocket}
 	<section class="panel">
 		<div class="panel-head">
 			<h2>{pocket.name}</h2>

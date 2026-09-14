@@ -5,7 +5,7 @@ import type { FlatPartsData, FlatPartsSheet } from './types.js';
 /** One Flat Parts sheet as its geometry and validation read it: the sheet view and its entities. */
 export type FlatPartsView = SheetView & FlatPartsSheet;
 
-const EMPTY: FlatPartsSheet = { entities: [] };
+const EMPTY: FlatPartsSheet = { entities: [], groups: [] };
 
 /** The Flat Parts data of a document; empty when it has none. */
 export function flatPartsData(design: DesignState): FlatPartsData {

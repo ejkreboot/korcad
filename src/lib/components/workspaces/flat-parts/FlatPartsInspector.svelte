@@ -51,6 +51,38 @@
 		}
 	}
 
+	const group = $derived(actions.selectedGroup);
+	const groupParts = $derived(group?.members.filter((item) => item.kind === 'profile') ?? []);
+	/** Every part's tab count when they agree; `null` when they differ. */
+	const groupTabs = $derived(
+		groupParts.every((item) => item.tabCount === groupParts[0]?.tabCount)
+			? (groupParts[0]?.tabCount ?? 0)
+			: null
+	);
+
+	function moveGroupTo(key: 'x' | 'y', raw: string): void {
+		if (!group) return;
+		const value = parseDisplay(raw, units);
+		if (!Number.isFinite(value)) return;
+		const { x, y } = group.box;
+		actions.moveGroup(group.group.id, key === 'x' ? value : x, key === 'y' ? value : y);
+	}
+
+	/** A group always keeps its proportions; applied on commit, like a proportional entity size. */
+	function scaleGroupTo(key: 'w' | 'h', raw: string): void {
+		if (!group) return;
+		const value = parseDisplay(raw, units);
+		if (Number.isFinite(value) && value > 0) {
+			actions.scaleGroup(group.group.id, value / group.box[key]);
+		}
+	}
+
+	function setGroupTabs(raw: string): void {
+		if (!group || raw === '') return;
+		const value = Math.round(Number(raw));
+		if (Number.isFinite(value) && value >= 0) actions.setGroupTabs(group.group.id, value);
+	}
+
 	function setCount(key: 'sides' | 'tabCount', raw: string, minimum: number): void {
 		if (!entity) return;
 		const value = Math.round(Number(raw));
@@ -59,7 +91,81 @@
 	}
 </script>
 
-{#if entity}
+{#if group}
+	<section class="panel">
+		<div class="panel-head">
+			<h2>{group.group.name}</h2>
+			<button class="link danger" onclick={() => actions.removeGroup(group.group.id)}>Delete</button
+			>
+		</div>
+		<p class="badge">
+			Imported group · {groupParts.length}
+			{groupParts.length === 1 ? 'part' : 'parts'}, {group.members.length - groupParts.length}
+			{group.members.length - groupParts.length === 1 ? 'hole' : 'holes'}
+		</p>
+
+		<div class="form-grid">
+			<label class="field wide">
+				Name
+				<input
+					value={group.group.name}
+					oninput={(e) => actions.renameGroup(group.group.id, e.currentTarget.value)}
+				/>
+			</label>
+			<label class="field">
+				X from left ({unitLabel})
+				<input
+					type="number"
+					step="0.001"
+					value={mm(group.box.x)}
+					onchange={(e) => moveGroupTo('x', e.currentTarget.value)}
+				/>
+			</label>
+			<label class="field">
+				Y from bottom ({unitLabel})
+				<input
+					type="number"
+					step="0.001"
+					value={mm(group.box.y)}
+					onchange={(e) => moveGroupTo('y', e.currentTarget.value)}
+				/>
+			</label>
+			<label class="field">
+				Width ({unitLabel})
+				<input
+					type="number"
+					step="0.001"
+					value={mm(group.box.w)}
+					onchange={(e) => scaleGroupTo('w', e.currentTarget.value)}
+				/>
+			</label>
+			<label class="field">
+				Height ({unitLabel})
+				<input
+					type="number"
+					step="0.001"
+					value={mm(group.box.h)}
+					onchange={(e) => scaleGroupTo('h', e.currentTarget.value)}
+				/>
+			</label>
+			<label class="field">
+				Holding tabs
+				<input
+					type="number"
+					min="0"
+					step="1"
+					placeholder="Mixed"
+					value={groupTabs ?? ''}
+					onchange={(e) => setGroupTabs(e.currentTarget.value)}
+				/>
+			</label>
+		</div>
+		<p class="help">
+			An imported drawing moves, scales, and is deleted as one. A new width or height scales every
+			part and hole in it together, keeping its proportions. Holding tabs apply to each part.
+		</p>
+	</section>
+{:else if entity}
 	<section class="panel">
 		<div class="panel-head">
 			<h2>{entity.name}</h2>

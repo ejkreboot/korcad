@@ -1,5 +1,5 @@
 import type { Point } from '$lib/core/geometry/primitives.js';
-import type { FoldDirection, Side, SideFlags } from '$lib/core/design/types.js';
+import type { EntityGroup, FoldDirection, Side, SideFlags } from '$lib/core/design/types.js';
 
 /**
  * The packaging workspace's vocabulary: a folded deck with a perimeter, the
@@ -42,6 +42,8 @@ export type Pocket = {
 	readonly cornerRadius: number;
 	/** Normalized 0..1 outline used when `shape` is `profile`. */
 	readonly profile: readonly Point[] | null;
+	/** The imported drawing this opening belongs to, which it moves and scales with; `null` alone. */
+	readonly groupId: string | null;
 	/** Offset of the drawn name label from its default corner. */
 	readonly labelOffset?: Point;
 };
@@ -150,6 +152,8 @@ export type PackagingData = {
 	readonly foldDeduction: number;
 	readonly foldDirections: Readonly<Record<string, FoldDirection>>;
 	readonly pockets: readonly Pocket[];
+	/** Imported drawings cut as several openings; every one has at least one member. */
+	readonly pocketGroups: readonly EntityGroup[];
 	/** Risers, platforms, and trays. Saved as `risers` before version 8. */
 	readonly supports: readonly Support[];
 };

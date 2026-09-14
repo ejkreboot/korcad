@@ -1,6 +1,6 @@
 import { createDefaultMachineProfile, createDefaultStock } from './defaults.js';
 import type { WorkspaceId } from './workspace.js';
-import type { DesignState, MachineProfile, Sheet, StockSettings } from './types.js';
+import type { DesignState, EntityGroup, MachineProfile, Sheet, StockSettings } from './types.js';
 
 type Record_ = Record<string, unknown>;
 
@@ -189,3 +189,27 @@ export function normalizeDocument(raw: unknown, readers: DocumentReaders): Desig
 	}
 	return document;
 }
+
+/**
+ * Reads a list of entity groups, dropping any without a string id, a repeat of
+ * an id already read (`seen` spans the workspace), or no member among
+ * `memberGroupIds`. Members are read first, so a group never outlives them.
+ */
+export function normalizeGroups(
+	value: unknown,
+	memberGroupIds: ReadonlySet<string>,
+	seen: Set<string>
+): EntityGroup[] {
+	if (!Array.isArray(value)) return [];
+	return value.flatMap((entry, index) => {
+		if (!isRecord(entry) || typeof entry.id !== 'string' || !entry.id) return [];
+		if (seen.has(entry.id) || !memberGroupIds.has(entry.id)) return [];
+		seen.add(entry.id);
+		const name = typeof entry.name === 'string' ? entry.name : `Group ${index + 1}`;
+		return [{ id: entry.id, name }];
+	});
+}
+
+/** A saved group reference: a non-empty string, or `null`. */
+export const groupIdOf = (value: unknown): string | null =>
+	typeof value === 'string' && value ? value : null;

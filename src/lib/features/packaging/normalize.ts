@@ -1,5 +1,5 @@
 import { DEFAULT_MACHINE_PROFILE_ID } from '$lib/core/design/defaults.js';
-import { finite, isRecord } from '$lib/core/design/normalize.js';
+import { finite, groupIdOf, isRecord, normalizeGroups } from '$lib/core/design/normalize.js';
 import type { DesignState, FoldDirection, SideFlags } from '$lib/core/design/types.js';
 import { createDefaultPackaging, pocketDefaults, supportDefaults } from './defaults.js';
 import type { PackagingData, Pocket, PocketPurpose, Support, SupportMount } from './types.js';
@@ -54,6 +54,26 @@ function labelOffset(value: unknown): { labelOffset?: { x: number; y: number } }
 		: {};
 }
 
+/**
+ * Openings and the imported groups they belong to. A group with no member is
+ * dropped, and an opening naming a group the file does not have stands alone.
+ */
+function pocketsAndGroups(
+	savedPockets: unknown,
+	savedGroups: unknown
+): Pick<PackagingData, 'pockets' | 'pocketGroups'> {
+	const pockets = Array.isArray(savedPockets) ? savedPockets.map(normalizePocket) : [];
+	const memberOf = new Set(pockets.flatMap((pocket) => pocket.groupId ?? []));
+	const pocketGroups = normalizeGroups(savedGroups, memberOf, new Set());
+	const kept = new Set(pocketGroups.map((group) => group.id));
+	return {
+		pockets: pockets.map((pocket) =>
+			pocket.groupId && !kept.has(pocket.groupId) ? { ...pocket, groupId: null } : pocket
+		),
+		pocketGroups
+	};
+}
+
 function normalizePocket(value: unknown, index: number): Pocket {
 	const source = isRecord(value) ? value : {};
 	const base = pocketDefaults();
@@ -85,6 +105,7 @@ function normalizePocket(value: unknown, index: number): Pocket {
 		sides: sideFlags(source.sides, { top: false, right: false, bottom: false, left: false }),
 		cornerRadius: finite(source.cornerRadius) ? source.cornerRadius : base.cornerRadius,
 		profile: profile(source.profile),
+		groupId: groupIdOf(source.groupId),
 		...labelOffset(source.labelOffset)
 	};
 }
@@ -211,7 +232,7 @@ export function normalizePackaging(raw: unknown, document: DesignState): DesignS
 		foldKFactor: number('foldKFactor', defaults.foldKFactor),
 		foldDeduction: number('foldDeduction', defaults.foldDeduction),
 		foldDirections: foldDirections(saved.foldDirections),
-		pockets: Array.isArray(saved.pockets) ? saved.pockets.map(normalizePocket) : [],
+		...pocketsAndGroups(saved.pockets, saved.pocketGroups),
 		supports: Array.isArray(saved.supports)
 			? saved.supports.map((support, index) => normalizeSupport(support, index, deckSheetId))
 			: []

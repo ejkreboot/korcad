@@ -1,7 +1,13 @@
 import type { Point } from '$lib/core/geometry/primitives.js';
 import type { EditorState } from '$lib/editor/state.svelte.js';
 import type { ToolState } from '$lib/editor/tools.svelte.js';
-import { findEntity, flatPartsActions } from '$lib/features/flat-parts/actions.js';
+import {
+	findEntity,
+	flatPartsActions,
+	groupBox,
+	groupChanges
+} from '$lib/features/flat-parts/actions.js';
+import { proportionalResize } from '$lib/core/geometry/outline.js';
 import {
 	MIN_FLAT_PARTS_DRAG,
 	moveEntityBox,
@@ -16,17 +22,48 @@ import {
 import type { CanvasController } from '../index.js';
 
 /**
- * Flat Parts on the 2D canvas. Hit targets carry `data-flat-parts-entity`, and a resize
- * handle adds `data-handle`. Moving a part carries every hole inside it, so a
+ * Flat Parts on the 2D canvas. Hit targets carry `data-flat-parts-entity`, a group's
+ * handles `data-flat-parts-group`, and a resize handle adds `data-handle`. Moving a part carries every hole inside it, so a
  * part is repositioned as one piece.
  */
 export function createFlatPartsCanvas(editor: EditorState, tools: ToolState): CanvasController {
 	const actions = flatPartsActions(editor);
 
+	/**
+	 * A press on an imported group, anywhere on it or on one of its handles. The
+	 * group moves as one box, and a handle scales it proportionally about the
+	 * opposite corner: each move is worked out from the entities as they were at
+	 * the press, so the drag never compounds rounding.
+	 */
+	function pressGroup(id: string, handle: Corner | undefined, stock: Point) {
+		const original = groupBox(editor.design, id);
+		if (!original) return null;
+		editor.select({ kind: 'group', id });
+		const carried = actions.groupCarried(id);
+		return {
+			move(current: Point) {
+				if (handle) {
+					const resized = resizeEntityBox(original, handle, current, tools.snapEnabled);
+					const { factor, anchor } = proportionalResize(original, resized, handle);
+					actions.previewEntities(groupChanges(carried, anchor, factor));
+					return;
+				}
+				const moved = moveEntityBox(original, stock, current, tools.snapEnabled);
+				actions.previewEntities(
+					groupChanges(carried, original, 1, { x: moved.x - original.x, y: moved.y - original.y })
+				);
+			}
+		};
+	}
+
 	return {
 		press(target, stock) {
+			const groupHit = target.closest<HTMLElement>('[data-flat-parts-group]');
 			const hit = target.closest<HTMLElement>('[data-flat-parts-entity]');
 			const entity = hit ? findEntity(editor.design, hit.dataset.flatPartsEntity ?? '') : null;
+			const groupId = groupHit?.dataset.flatPartsGroup ?? entity?.groupId ?? null;
+			if (groupId)
+				return pressGroup(groupId, groupHit?.dataset.handle as Corner | undefined, stock);
 			if (!hit || !entity) return null;
 			actions.select(entity);
 			const handle = (hit.dataset.handle as Corner | undefined) ?? null;

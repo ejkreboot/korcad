@@ -1,3 +1,4 @@
+import type { EntityGroup } from '$lib/core/design/types.js';
 import type { Point } from '$lib/core/geometry/primitives.js';
 
 /**
@@ -44,10 +45,14 @@ export type FlatPartsEntity = {
 	 * whose compensated contour cannot yet be interrupted.
 	 */
 	readonly tabCount: number;
+	/** The imported drawing this entity belongs to, which it moves and scales with; `null` alone. */
+	readonly groupId: string | null;
 };
 
 export type FlatPartsSheet = {
 	readonly entities: readonly FlatPartsEntity[];
+	/** Imported drawings on this sheet; every one has at least one member. */
+	readonly groups: readonly EntityGroup[];
 };
 
 export type FlatPartsData = {

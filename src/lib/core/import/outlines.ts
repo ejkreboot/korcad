@@ -155,6 +155,12 @@ export function boxedOutline(points: readonly Point[]): {
 	};
 }
 
+/** A drawing's file name without its folder or extension, to name what it imports after. */
+export function drawingName(fileName: string, fallback: string): string {
+	const base = fileName.split(/[\\/]/).at(-1) ?? fileName;
+	return base.replace(/\.[^.]+$/, '').trim() || fallback;
+}
+
 /** The drawing's overall size, for the import notice, so a wrong scale is obvious. */
 export function drawingSize(outlines: readonly NestedOutline[]): string {
 	const box = outlineBounds(outlines.flatMap((outline) => outline.points));

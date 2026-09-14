@@ -5,7 +5,14 @@ import {
 	pointInOutline,
 	selfIntersects
 } from '$lib/core/geometry/contour.js';
-import { regularPolygon, shapeOutline, splitClosedContour } from '$lib/core/geometry/outline.js';
+import {
+	boxAround,
+	proportionalResize,
+	regularPolygon,
+	scaleBox,
+	shapeOutline,
+	splitClosedContour
+} from '$lib/core/geometry/outline.js';
 import { point, type Point } from '$lib/core/geometry/primitives.js';
 
 const length = (points: readonly Point[]) =>
@@ -105,5 +112,34 @@ describe('contour measurements', () => {
 		expect(selfIntersects(square)).toBe(false);
 		expect(selfIntersects(shapeOutline('ellipse', { x: 0, y: 0, w: 50, h: 20 }))).toBe(false);
 		expect(selfIntersects([point(0, 0), point(10, 10), point(10, 0), point(0, 10)])).toBe(true);
+	});
+});
+
+describe('scaling boxes together', () => {
+	it('scales a box about an anchor, and back again', () => {
+		const box = { x: 30, y: 40, w: 20, h: 10 };
+		const anchor = point(10, 10);
+		expect(scaleBox(box, anchor, 2)).toEqual({ x: 50, y: 70, w: 40, h: 20 });
+		expect(scaleBox(scaleBox(box, anchor, 2), anchor, 0.5)).toEqual(box);
+	});
+
+	it('finds the box around several boxes', () => {
+		expect(
+			boxAround([
+				{ x: 0, y: 10, w: 5, h: 5 },
+				{ x: 20, y: 0, w: 10, h: 4 }
+			])
+		).toEqual({ x: 0, y: 0, w: 30, h: 15 });
+		expect(boxAround([])).toBeNull();
+	});
+
+	it('turns a free corner drag into one factor about the opposite corner', () => {
+		const original = { x: 10, y: 10, w: 100, h: 50 };
+		// Dragged the north-east corner mostly sideways: width doubled, height barely moved.
+		const wide = proportionalResize(original, { x: 10, y: 10, w: 200, h: 55 }, 'ne');
+		expect(wide).toEqual({ factor: 2, anchor: point(10, 10) });
+		// Dragged the south-west corner mostly down: height halved.
+		const low = proportionalResize(original, { x: 15, y: 35, w: 95, h: 25 }, 'sw');
+		expect(low).toEqual({ factor: 0.5, anchor: point(110, 60) });
 	});
 });

@@ -34,6 +34,7 @@ export function createDefaultPackaging(deckSheetId: string = DEFAULT_DECK_SHEET_
 		foldDeduction: 0,
 		foldDirections: {},
 		pockets: [],
+		pocketGroups: [],
 		supports: []
 	};
 }
@@ -61,6 +62,7 @@ export function createPocket(values: Partial<Pocket> & Pick<Pocket, 'id' | 'name
 		shape: 'rectangle',
 		cornerRadius: 6.35,
 		profile: null,
+		groupId: null,
 		x: 0,
 		y: 0,
 		w: 0,

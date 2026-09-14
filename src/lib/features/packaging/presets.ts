@@ -118,6 +118,7 @@ export function createPocketFromPreset(
 		shape: presetShape(preset),
 		cornerRadius: preset === 'rounded' ? 6.35 : Math.min(w, h) / 2,
 		profile: null,
+		groupId: null,
 		x: round(x),
 		y: round(y),
 		w: round(w),

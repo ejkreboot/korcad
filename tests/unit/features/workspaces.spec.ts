@@ -94,7 +94,8 @@ describe('the registry', () => {
 		]);
 		expect(createDefaultDesign().machineProfiles[0]?.fabricationMode).toBe('knife');
 		expect(flatParts.workspaces.flatParts?.sheets[flatParts.activeSheetId]).toEqual({
-			entities: []
+			entities: [],
+			groups: []
 		});
 	});
 

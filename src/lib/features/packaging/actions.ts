@@ -1,4 +1,7 @@
-import type { DesignState } from '$lib/core/design/types.js';
+import { boxAround, scaleBox, type ShapeBox } from '$lib/core/geometry/outline.js';
+import type { Point } from '$lib/core/geometry/primitives.js';
+import { round } from '$lib/core/units.js';
+import type { DesignState, EntityGroup } from '$lib/core/design/types.js';
 import type { DocumentHost } from '../workspaces.js';
 
 export type { DocumentHost };
@@ -13,13 +16,22 @@ import { packagingSheetView, withPackaging, type PackagingView } from './view.js
  */
 
 /** The selection kinds packaging gives its entities. */
-export type PackagingSelectionKind = 'pocket' | 'support';
+export type PackagingSelectionKind = 'pocket' | 'pocket-group' | 'support';
 
+// Group membership is fixed when an opening is made.
 const mapPockets = (design: DesignState, id: string, values: Partial<Pocket>) =>
 	withPackaging(design, (data) => ({
 		...data,
-		pockets: data.pockets.map((pocket) => (pocket.id === id ? { ...pocket, ...values } : pocket))
+		pockets: data.pockets.map((pocket) =>
+			pocket.id === id ? { ...pocket, ...values, groupId: pocket.groupId } : pocket
+		)
 	}));
+
+/** Packaging data without the groups that no longer have a member. */
+const pruneGroups = (data: PackagingData): PackagingData => {
+	const used = new Set(data.pockets.map((pocket) => pocket.groupId));
+	return { ...data, pocketGroups: data.pocketGroups.filter((group) => used.has(group.id)) };
+};
 
 const mapSupports = (design: DesignState, update: (support: Support) => Support) =>
 	withPackaging(design, (data) => ({ ...data, supports: data.supports.map(update) }));
@@ -44,9 +56,105 @@ export function updatePocket(
 }
 
 export function removePocket(design: DesignState, id: string): DesignState {
+	return withPackaging(design, (data) =>
+		pruneGroups({ ...data, pockets: data.pockets.filter((pocket) => pocket.id !== id) })
+	);
+}
+
+// ---- imported groups ------------------------------------------------------
+
+export type PocketChange = { readonly id: string; readonly values: Partial<Pocket> };
+
+export function updatePockets(design: DesignState, changes: readonly PocketChange[]): DesignState {
+	return changes.reduce((next, { id, values }) => mapPockets(next, id, values), design);
+}
+
+export function findPocketGroup(design: DesignState, id: string): EntityGroup | null {
+	return design.workspaces.packaging?.pocketGroups.find((group) => group.id === id) ?? null;
+}
+
+/** The openings imported as a group. */
+export function pocketGroupMembers(design: DesignState, id: string): Pocket[] {
+	return (design.workspaces.packaging?.pockets ?? []).filter((pocket) => pocket.groupId === id);
+}
+
+/** The box around a group's openings, or `null` when it has none. */
+export function pocketGroupBox(design: DesignState, id: string): ShapeBox | null {
+	return boxAround(pocketGroupMembers(design, id));
+}
+
+/**
+ * Where each opening goes when its group is scaled by `factor` about `anchor`
+ * and then moved by `offset`, from the openings as they were when a gesture
+ * began, so a drag never compounds.
+ */
+export function pocketGroupChanges(
+	members: readonly Pocket[],
+	anchor: Point,
+	factor: number,
+	offset: Point = { x: 0, y: 0 }
+): PocketChange[] {
+	return members.map((pocket) => {
+		const box = scaleBox(pocket, anchor, factor);
+		return {
+			id: pocket.id,
+			values: {
+				x: round(box.x + offset.x),
+				y: round(box.y + offset.y),
+				w: box.w,
+				h: box.h,
+				cornerRadius: round(pocket.cornerRadius * factor)
+			}
+		};
+	});
+}
+
+/** Scales a group of openings by `factor` about its lower-left corner. */
+export function scalePocketGroup(design: DesignState, id: string, factor: number): DesignState {
+	const box = pocketGroupBox(design, id);
+	if (!box || !Number.isFinite(factor) || factor <= 0) return design;
+	return updatePockets(design, pocketGroupChanges(pocketGroupMembers(design, id), box, factor));
+}
+
+/** Moves a group of openings so its lower-left corner is at `x`, `y`. */
+export function movePocketGroup(
+	design: DesignState,
+	id: string,
+	x: number,
+	y: number
+): DesignState {
+	const box = pocketGroupBox(design, id);
+	if (!box || !Number.isFinite(x) || !Number.isFinite(y)) return design;
+	return updatePockets(
+		design,
+		pocketGroupChanges(pocketGroupMembers(design, id), box, 1, { x: x - box.x, y: y - box.y })
+	);
+}
+
+export function renamePocketGroup(design: DesignState, id: string, name: string): DesignState {
 	return withPackaging(design, (data) => ({
 		...data,
-		pockets: data.pockets.filter((pocket) => pocket.id !== id)
+		pocketGroups: data.pocketGroups.map((group) => (group.id === id ? { ...group, name } : group))
+	}));
+}
+
+/** Deletes a group of openings with its members. */
+export function removePocketGroup(design: DesignState, id: string): DesignState {
+	return withPackaging(design, (data) =>
+		pruneGroups({ ...data, pockets: data.pockets.filter((pocket) => pocket.groupId !== id) })
+	);
+}
+
+/** Adds an imported group and its openings to the deck. */
+export function addPocketGroup(
+	design: DesignState,
+	group: EntityGroup,
+	members: readonly Pocket[]
+): DesignState {
+	return withPackaging(design, (data) => ({
+		...data,
+		pockets: [...data.pockets, ...members.map((pocket) => ({ ...pocket, groupId: group.id }))],
+		pocketGroups: [...data.pocketGroups, group]
 	}));
 }
 
@@ -123,12 +231,41 @@ export function packagingActions(host: DocumentHost) {
 		get selectedSupportId() {
 			return selectedId(host, 'support');
 		},
+		/** The selected imported group, with its openings and the box around them. */
+		get selectedPocketGroup(): { group: EntityGroup; members: Pocket[]; box: ShapeBox } | null {
+			const id = selectedId(host, 'pocket-group');
+			const group = id ? findPocketGroup(host.design, id) : null;
+			const members = id ? pocketGroupMembers(host.design, id) : [];
+			const box = boxAround(members);
+			return group && box ? { group, members, box } : null;
+		},
 
 		setPackaging<K extends keyof PackagingData>(key: K, value: PackagingData[K]) {
 			host.update((design) => setPackagingValues(design, { [key]: value }));
 		},
+		/** Selects an opening, or the group it was imported with. */
 		selectPocket(id: string | null) {
-			host.select(id === null ? null : { kind: 'pocket', id });
+			const pocket = host.design.workspaces.packaging?.pockets.find((p) => p.id === id);
+			if (pocket?.groupId) host.select({ kind: 'pocket-group', id: pocket.groupId });
+			else host.select(id === null ? null : { kind: 'pocket', id });
+		},
+		selectPocketGroup(id: string) {
+			host.select({ kind: 'pocket-group', id });
+		},
+		scalePocketGroup(id: string, factor: number) {
+			host.update((design) => scalePocketGroup(design, id, factor));
+		},
+		movePocketGroup(id: string, x: number, y: number) {
+			host.update((design) => movePocketGroup(design, id, x, y));
+		},
+		renamePocketGroup(id: string, name: string) {
+			host.update((design) => renamePocketGroup(design, id, name));
+		},
+		removePocketGroup(id: string) {
+			host.update((design) => removePocketGroup(design, id));
+		},
+		previewPockets(changes: readonly PocketChange[]) {
+			host.preview((design) => updatePockets(design, changes));
 		},
 		selectSupport(id: string | null) {
 			host.select(id === null ? null : { kind: 'support', id });

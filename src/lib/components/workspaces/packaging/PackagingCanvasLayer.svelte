@@ -4,6 +4,7 @@
 	import type { Corner, DeckAction } from '$lib/features/packaging/manipulation.js';
 	import { supportAssemblyOrigin } from '$lib/features/packaging/mounting.js';
 	import { perimeterBounds } from '$lib/features/packaging/perimeter.js';
+	import { pocketLabels } from '$lib/features/packaging/workspace.js';
 	import { riserFlatBounds } from '$lib/features/packaging/supports.js';
 	import type { CanvasLayerProps } from '../index.js';
 
@@ -23,6 +24,7 @@
 	const packaging = $derived(actions.view);
 	const isDeckSheet = $derived(design.activeSheetId === packaging.deckSheetId);
 	const selectedPocket = $derived(packaging.pockets.find((p) => p.id === actions.selectedPocketId));
+	const pocketGroup = $derived(actions.selectedPocketGroup);
 	const selectedSupport = $derived(
 		packaging.supports.find((r) => r.id === actions.selectedSupportId)
 	);
@@ -117,14 +119,7 @@
 	);
 
 	const labels = $derived([
-		...(isDeckSheet
-			? packaging.pockets.map((pocket) => ({
-					key: `pocket-${pocket.id}`,
-					name: pocket.name,
-					x: pocket.x + 5 + (pocket.labelOffset?.x ?? 0),
-					y: pocket.y + pocket.h - 9 - (pocket.labelOffset?.y ?? 0)
-				}))
-			: []),
+		...(isDeckSheet ? pocketLabels(design) : []),
 		...(packaging.fabricationMode === 'knife'
 			? sheetSupports.map((support) => {
 					const bounds = riserFlatBounds(support, packaging);
@@ -166,7 +161,8 @@
 		{#each packaging.pockets as pocket (pocket.id)}
 			<rect
 				class="hit-target"
-				class:selected={pocket.id === actions.selectedPocketId}
+				class:selected={pocket.id === actions.selectedPocketId ||
+					(pocketGroup !== null && pocket.groupId === pocketGroup.group.id)}
 				data-pocket={pocket.id}
 				x={pocket.x}
 				y={pocket.y}
@@ -238,6 +234,23 @@
 			<rect
 				class="resize-handle"
 				data-pocket={selectedPocket.id}
+				data-handle={handle.name}
+				x={handle.x - 4 * screenUnit}
+				y={handle.y - 4 * screenUnit}
+				width={8 * screenUnit}
+				height={8 * screenUnit}
+				rx={screenUnit}
+			/>
+		{/each}
+	{/if}
+
+	{#if pocketGroup && isDeckSheet && !drawing}
+		{@const box = pocketGroup.box}
+		<rect class="selection-box" x={box.x} y={box.y} width={box.w} height={box.h} />
+		{#each corners( { left: box.x, right: box.x + box.w, bottom: box.y, top: box.y + box.h } ) as handle (handle.name)}
+			<rect
+				class="resize-handle"
+				data-pocket-group={pocketGroup.group.id}
 				data-handle={handle.name}
 				x={handle.x - 4 * screenUnit}
 				y={handle.y - 4 * screenUnit}

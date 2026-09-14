@@ -132,6 +132,15 @@ type DesignState = {
   whatever it encloses; a part nested in a hole is rejected by validation, since holes are cut
   before parts are released. Packaging: depth 0 becomes an imported `profile` pocket on the
   deck sheet, and anything deeper is skipped.
+- **Imported groups.** An import yielding 2+ parts (Flat Parts) or 2+ openings (packaging) makes
+  an `EntityGroup` (`core/design/types.ts`): `FlatPartsSheet.groups` with `FlatPartsEntity.groupId`,
+  `PackagingData.pocketGroups` with `Pocket.groupId`. Groups are atomic: membership is fixed at
+  import (updates cannot change `groupId`), there is no ungroup, and bounds are always derived
+  from members (`groupBox`, `pocketGroupBox`), never stored. Selection kinds `group` and
+  `pocket-group`; a press on any member starts a group gesture. Group moves and scales go
+  through `groupChanges` / `pocketGroupChanges`, computed from the members at the press, and a
+  corner drag becomes one factor through `proportionalResize` (`core/geometry/outline.ts`).
+  Normalization drops memberless groups and dangling `groupId`s.
 - Selection is one generic `{ kind, id }` slot in `editor/state.svelte.ts`, and snap lives in
   `tools.svelte.ts`. Neither is saved. Drafts are full design files.
 - A support's height is relational: it names an anchor (`box-floor`, `deck-top`,

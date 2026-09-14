@@ -2,7 +2,7 @@ import type { FlatPartsData, FlatPartsEntity, FlatPartsKind, FlatPartsShape } fr
 
 /** Flat Parts data for a document whose first Flat Parts sheet is `sheetId`: one empty sheet. */
 export function createDefaultFlatParts(sheetId: string): FlatPartsData {
-	return { sheets: { [sheetId]: { entities: [] } } };
+	return { sheets: { [sheetId]: { entities: [], groups: [] } } };
 }
 
 /** Field defaults for a newly drawn entity, and for fields a saved file lacks. */
@@ -14,6 +14,7 @@ export function createFlatPartsEntity(
 		cornerRadius: 6.35,
 		sides: 6,
 		outline: [],
+		groupId: null,
 		tabCount: values.kind === 'profile' ? 4 : 0,
 		...values
 	};

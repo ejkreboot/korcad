@@ -5,6 +5,12 @@ import { serializeDesign } from '$lib/core/export/design-file.js';
 import { outlineBounds } from '$lib/core/geometry/contour.js';
 import { createDefaultDesign, parseDesign } from '$lib/features/document.js';
 import { cutoutPoints } from '$lib/features/packaging/geometry.js';
+import {
+	movePocketGroup,
+	pocketGroupBox,
+	removePocketGroup,
+	scalePocketGroup
+} from '$lib/features/packaging/actions.js';
 import { importSvgOpenings } from '$lib/features/packaging/import.js';
 import { packagingView } from '$lib/features/packaging/view.js';
 import { PACKAGING_WORKSPACE, validateDocument } from '$lib/features/workspaces.js';
@@ -69,14 +75,90 @@ describe('importing an SVG as deck openings', () => {
 		expect(program).toContain('hub');
 	});
 
-	it('numbers several outer outlines after the file', () => {
+	it('groups several outer outlines, named after the file', () => {
+		const result = importSvgOpenings(
+			createDefaultDesign(),
+			'deck',
+			svg('<rect width="40" height="40"/><circle cx="100" cy="20" r="20"/>'),
+			'kit.svg'
+		);
+		const { pockets, pocketGroups } = packagingView(result.design);
+		expect(pockets.map((pocket) => pocket.name)).toEqual(['kit 1', 'kit 2']);
+		expect(pocketGroups).toEqual([{ id: expect.any(String), name: 'kit' }]);
+		expect(pockets.every((pocket) => pocket.groupId === pocketGroups[0]!.id)).toBe(true);
+		expect(result.selection).toEqual({ kind: 'pocket-group', id: pocketGroups[0]!.id });
+		expect(result.notice).toBe(
+			'Imported 2 openings from kit.svg (120 × 40 mm) as the group kit, centred on the deck.'
+		);
+		expect(validateDocument(result.design)).toEqual([]);
+		// One label for the whole drawing, not one per opening.
+		expect(PACKAGING_WORKSPACE.labels(result.design, 'deck').map((label) => label.name)).toEqual([
+			'kit'
+		]);
+	});
+
+	it('moves, scales, and deletes a group of openings as one', () => {
+		const { design, selection } = importSvgOpenings(
+			createDefaultDesign(),
+			'deck',
+			svg('<rect width="40" height="40"/><circle cx="100" cy="20" r="20"/>'),
+			'kit.svg'
+		);
+		const id = selection!.id;
+		const box = pocketGroupBox(design, id)!;
+		const moved = movePocketGroup(design, id, box.x + 10, box.y - 5);
+		const before = packagingView(design).pockets;
+		packagingView(moved).pockets.forEach((pocket, index) => {
+			expect(pocket.x).toBeCloseTo(before[index]!.x + 10, 3);
+			expect(pocket.y).toBeCloseTo(before[index]!.y - 5, 3);
+		});
+
+		const halved = scalePocketGroup(design, id, 0.5);
+		expect(pocketGroupBox(halved, id)).toMatchObject({ x: box.x, y: box.y, w: 60, h: 20 });
+		expect(packagingView(scalePocketGroup(halved, id, 2)).pockets).toEqual(before);
+
+		expect(PACKAGING_WORKSPACE.selectionBounds(design, selection!, 'deck')).toEqual({
+			left: box.x,
+			right: box.x + box.w,
+			bottom: box.y,
+			top: box.y + box.h
+		});
+		const gone = removePocketGroup(design, id);
+		expect(packagingView(gone).pockets).toEqual([]);
+		expect(packagingView(gone).pocketGroups).toEqual([]);
+		expect(PACKAGING_WORKSPACE.selectionExists(gone, selection!)).toBe(false);
+	});
+
+	it('judges imported openings by their outlines, so a kerned pair does not overlap', () => {
+		// Two slanted triangles, like "AV": their boxes overlap by 5 mm, their facing
+		// sides run parallel 5 mm apart.
+		const kerned = svg(
+			'<polygon points="0,100 40,0 50,100"/><polygon points="45,0 100,0 55,100"/>'
+		);
+		const pair = importSvgOpenings(createDefaultDesign(), 'deck', kerned, 'av.svg').design;
+		expect(validateDocument(pair).filter((message) => message.includes('overlaps'))).toEqual([]);
+
+		const crossing = svg(
+			'<rect width="60" height="60"/><rect x="40" y="40" width="60" height="60"/>'
+		);
+		const crossed = importSvgOpenings(createDefaultDesign(), 'deck', crossing, 'x.svg').design;
+		expect(validateDocument(crossed)).toContain('x 1 overlaps x 2');
+	});
+
+	it('reads groups back, dropping one with no openings and a dangling reference', () => {
 		const { design } = importSvgOpenings(
 			createDefaultDesign(),
 			'deck',
 			svg('<rect width="40" height="40"/><circle cx="100" cy="20" r="20"/>'),
 			'kit.svg'
 		);
-		expect(packagingView(design).pockets.map((pocket) => pocket.name)).toEqual(['kit 1', 'kit 2']);
+		expect(parseDesign(serializeDesign(design))).toEqual(design);
+		const raw = JSON.parse(serializeDesign(design));
+		raw.design.workspaces.packaging.pocketGroups.push({ id: 'empty', name: 'Empty' });
+		raw.design.workspaces.packaging.pockets[0].groupId = 'missing';
+		const read = packagingView(parseDesign(JSON.stringify(raw)));
+		expect(read.pocketGroups.map((group) => group.name)).toEqual(['kit']);
+		expect(read.pockets.map((pocket) => pocket.groupId === null)).toEqual([true, false]);
 	});
 
 	it('imports only onto the deck sheet', () => {

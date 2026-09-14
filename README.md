@@ -123,6 +123,16 @@ and what was left out.
   with its slug, so they are skipped. The opening is cut inside its line at the
   drawn size, so draw or scale in any clearance the product needs.
 
+A drawing that yields two or more parts or openings, such as a logo, arrives as one
+**imported group**. Clicking any letter selects the whole group, which moves as one
+box, and its corner handles and Width and Height fields scale it proportionally.
+Its members are named after the file (`logo part 3`), so a validation message says
+where to look. Groups are imported as they are: there is no ungrouping or editing
+of one member, so fix the drawing and import it again. Holding tabs on a Flat Parts
+group apply to every part; Delete removes the whole group. On the deck, openings in
+a group are checked for overlap by their outlines rather than their boxes, so kerned
+letters are allowed.
+
 Scroll to zoom, middle-drag or hold space to pan, and Snap constrains to a
 quarter-inch grid. One drag is one undo step.
 

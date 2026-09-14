@@ -5,7 +5,17 @@ import type { DesignState } from '$lib/core/design/types.js';
 import { serializeDesign } from '$lib/core/export/design-file.js';
 import { outlineBounds } from '$lib/core/geometry/contour.js';
 import { parseDesign } from '$lib/features/document.js';
-import { scaleEntity, updateEntity } from '$lib/features/flat-parts/actions.js';
+import {
+	addEntity,
+	groupBox,
+	moveGroup,
+	removeGroup,
+	scaleEntity,
+	scaleGroup,
+	setGroupTabs,
+	updateEntity
+} from '$lib/features/flat-parts/actions.js';
+import { createFlatPartsEntity } from '$lib/features/flat-parts/defaults.js';
 import { entityOutline, flatPartsGeometry } from '$lib/features/flat-parts/geometry.js';
 import { importSvg } from '$lib/features/flat-parts/import.js';
 import { validateFlatParts } from '$lib/features/flat-parts/validation.js';
@@ -14,7 +24,7 @@ import { FLAT_PARTS_WORKSPACE } from '$lib/features/workspaces.js';
 import { flatPartsDesign } from '../../support/designs.js';
 
 const empty = (mode: 'router' | 'knife' = 'router'): DesignState =>
-	withFlatPartsSheet(flatPartsDesign(mode), 'sheet', () => ({ entities: [] }));
+	withFlatPartsSheet(flatPartsDesign(mode), 'sheet', () => ({ entities: [], groups: [] }));
 
 const svg = (body: string) =>
 	`<svg xmlns="http://www.w3.org/2000/svg" width="300mm" height="300mm" viewBox="0 0 300 300">${body}</svg>`;
@@ -140,11 +150,12 @@ describe('importing an SVG into Flat Parts', () => {
 			'sheet',
 			svg(
 				'<rect width="200" height="200"/><rect x="20" y="20" width="160" height="160"/><rect x="60" y="60" width="80" height="80"/>'
-			)
+			),
+			'nest.svg'
 		);
 		expect(entities(design).map((entity) => entity.kind)).toEqual(['profile', 'hole', 'profile']);
 		expect(validateFlatParts(design)).toContain(
-			'Part 2: is inside Part 1; a part nested inside another cannot be cut yet'
+			'nest part 2: is inside nest part 1; a part nested inside another cannot be cut yet'
 		);
 	});
 
@@ -155,5 +166,125 @@ describe('importing an SVG into Flat Parts', () => {
 		const raw = JSON.parse(serializeDesign(design));
 		raw.design.workspaces.flatParts.sheets.sheet.entities[0].outline = [{ x: 0, y: 0 }];
 		expect(entities(parseDesign(JSON.stringify(raw)))).toHaveLength(2);
+	});
+});
+
+/** Three letters side by side, the middle one with a counter, spaced for a router: a logo, in effect. */
+const LOGO = svg(`
+	<rect x="0" y="0" width="30" height="50"/>
+	<rect x="50" y="0" width="30" height="50"/>
+	<rect x="57" y="10" width="16" height="20"/>
+	<rect x="100" y="0" width="30" height="50"/>
+`);
+
+describe('importing a drawing of several parts as a group', () => {
+	const imported = () => importSvg(empty(), 'sheet', LOGO, 'acme.svg');
+
+	it('keeps the letters together, named after the file', () => {
+		const result = imported();
+		const view = flatPartsSheetView(result.design, 'sheet');
+		expect(view.groups).toEqual([{ id: expect.any(String), name: 'acme' }]);
+		const id = view.groups[0]!.id;
+		expect(view.entities.map((entity) => [entity.name, entity.groupId])).toEqual([
+			['acme part 1', id],
+			['acme part 2', id],
+			['acme hole 1', id],
+			['acme part 3', id]
+		]);
+		expect(result.selection).toEqual({ kind: 'group', id });
+		expect(result.notice).toBe(
+			'Imported 3 parts and 1 hole from acme.svg (130 × 50 mm) as the group acme.'
+		);
+		expect(validateFlatParts(result.design)).toEqual([]);
+		expect(FLAT_PARTS_WORKSPACE.labels(result.design, 'sheet').map((label) => label.name)).toEqual([
+			'acme'
+		]);
+		expect(FLAT_PARTS_WORKSPACE.selectionExists(result.design, result.selection!)).toBe(true);
+		expect(FLAT_PARTS_WORKSPACE.selectionBounds(result.design, result.selection!, 'sheet')).toEqual(
+			{ left: 12.7, right: 142.7, bottom: 12.7, top: 62.7 }
+		);
+	});
+
+	it('leaves a single part with holes ungrouped', () => {
+		const { design } = importSvg(empty(), 'sheet', PLATE, 'plate.svg');
+		expect(flatPartsSheetView(design, 'sheet').groups).toEqual([]);
+		expect(entities(design).every((entity) => entity.groupId === null)).toBe(true);
+	});
+
+	it('moves and scales every member together, and scaling back restores them', () => {
+		const { design, selection } = imported();
+		const id = selection!.id;
+		const before = entities(design);
+
+		const moved = entities(moveGroup(design, id, 50, 60));
+		moved.forEach((entity, index) => {
+			expect(entity.x).toBeCloseTo(before[index]!.x + 50 - 12.7, 3);
+			expect(entity.y).toBeCloseTo(before[index]!.y + 60 - 12.7, 3);
+		});
+
+		const doubled = scaleGroup(design, id, 2);
+		expect(groupBox(doubled, id)).toEqual({ x: 12.7, y: 12.7, w: 260, h: 100 });
+		expect(validateFlatParts(doubled)).toEqual([]);
+		expect(entities(scaleGroup(doubled, id, 0.5))).toEqual(before);
+		expect(scaleGroup(design, id, 0)).toBe(design);
+	});
+
+	it('carries a hole drawn later through one of its parts, and deletes it with the group', () => {
+		const { design, selection } = imported();
+		const id = selection!.id;
+		const drilled = addEntity(
+			design,
+			'sheet',
+			createFlatPartsEntity({
+				id: 'drill',
+				name: 'Drill',
+				kind: 'hole',
+				shape: 'ellipse',
+				x: 20,
+				y: 40,
+				w: 10,
+				h: 10
+			})
+		);
+		const scaled = scaleGroup(drilled, id, 2);
+		expect(entities(scaled).find((entity) => entity.id === 'drill')).toMatchObject({
+			x: 27.3,
+			y: 67.3,
+			w: 20,
+			h: 20,
+			groupId: null
+		});
+		const gone = removeGroup(drilled, id);
+		expect(entities(gone)).toEqual([]);
+		expect(flatPartsSheetView(gone, 'sheet').groups).toEqual([]);
+		expect(FLAT_PARTS_WORKSPACE.selectionExists(gone, selection!)).toBe(false);
+	});
+
+	it('gives every part the same tabs, and never moves an entity out of its group', () => {
+		const { design, selection } = imported();
+		const id = selection!.id;
+		const tabbed = setGroupTabs(design, id, 2);
+		expect(
+			entities(tabbed).map((entity) => (entity.kind === 'profile' ? entity.tabCount : null))
+		).toEqual([2, 2, null, 2]);
+		const member = entities(design)[0]!;
+		expect(entities(updateEntity(design, member.id, { groupId: null }))[0]!.groupId).toBe(id);
+	});
+
+	it('reads groups back, dropping one with no members and a dangling reference', () => {
+		const { design } = imported();
+		expect(parseDesign(serializeDesign(design))).toEqual(design);
+		const raw = JSON.parse(serializeDesign(design));
+		const sheet = raw.design.workspaces.flatParts.sheets.sheet;
+		sheet.groups.push({ id: 'empty', name: 'Empty' });
+		sheet.entities[0].groupId = 'missing';
+		const read = flatPartsSheetView(parseDesign(JSON.stringify(raw)), 'sheet');
+		expect(read.groups.map((group) => group.name)).toEqual(['acme']);
+		expect(read.entities.map((entity) => entity.groupId === null)).toEqual([
+			true,
+			false,
+			false,
+			false
+		]);
 	});
 });

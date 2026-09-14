@@ -1,8 +1,14 @@
 import { outlineBounds } from '$lib/core/geometry/contour.js';
 import type { DesignState } from '$lib/core/design/types.js';
 import type { Selection } from '$lib/core/design/workspace.js';
-import { boxedOutline, drawingSize, importSvgOutlines, plural } from '$lib/core/import/outlines.js';
-import { addPocket } from './actions.js';
+import {
+	boxedOutline,
+	drawingName,
+	drawingSize,
+	importSvgOutlines,
+	plural
+} from '$lib/core/import/outlines.js';
+import { addPocket, addPocketGroup } from './actions.js';
 import { createPocket } from './defaults.js';
 import type { Pocket } from './types.js';
 import { packagingData, packagingView } from './view.js';
@@ -17,18 +23,15 @@ import { packagingData, packagingView } from './view.js';
  * from. Those are skipped and named in the notice rather than cut as loose
  * scraps.
  *
+ * A drawing of several openings, such as a logo, arrives as one group that
+ * moves and scales as a unit.
+ *
  * An opening is cut inside its line, so it keeps the drawn size. A product
  * that needs clearance should be drawn, or scaled, with it.
  */
 
 /** Smallest opening, in mm, taken from a drawing; anything smaller is a speck. */
 const MIN_IMPORTED_OPENING = 1;
-
-/** The file name without its folder or extension, to name the openings after. */
-function stem(fileName: string): string {
-	const base = fileName.split(/[\\/]/).at(-1) ?? fileName;
-	return base.replace(/\.[^.]+$/, '').trim() || 'Imported opening';
-}
 
 /**
  * The deck with a drawing's outermost outlines added as imported openings,
@@ -61,7 +64,7 @@ export function importSvgOpenings(
 	const extent = outlineBounds(outer.flatMap((outline) => outline.points));
 	const dx = view.deckX + view.deckW / 2 - (extent.left + extent.right) / 2;
 	const dy = view.deckY + view.deckH / 2 - (extent.bottom + extent.top) / 2;
-	const name = stem(fileName);
+	const name = drawingName(fileName, 'Imported opening');
 
 	const pockets = outer.map(({ points }, index): Pocket => {
 		const { fractions, ...box } = boxedOutline(
@@ -77,11 +80,19 @@ export function importSvgOpenings(
 		});
 	});
 
-	const next = pockets.reduce(addPocket, design);
 	const skippedNote = notes.length ? ` Skipped ${notes.join(', ')}.` : '';
+	const summary = `${plural(pockets.length, 'opening')} from ${fileName} (${drawingSize(outer)})`;
+	if (pockets.length > 1) {
+		const group = { id: crypto.randomUUID(), name };
+		return {
+			design: addPocketGroup(design, group, pockets),
+			selection: { kind: 'pocket-group', id: group.id },
+			notice: `Imported ${summary} as the group ${name}, centred on the deck.${skippedNote}`
+		};
+	}
 	return {
-		design: next,
+		design: addPocket(design, pockets[0]!),
 		selection: { kind: 'pocket', id: pockets[0]!.id },
-		notice: `Imported ${plural(pockets.length, 'opening')} from ${fileName} (${drawingSize(outer)}), centred on the deck.${skippedNote}`
+		notice: `Imported ${summary}, centred on the deck.${skippedNote}`
 	};
 }

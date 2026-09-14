@@ -5,12 +5,13 @@ import type { DesignState } from '$lib/core/design/types.js';
 import type { Selection } from '$lib/core/design/workspace.js';
 import {
 	boxedOutline,
+	drawingName,
 	drawingSize,
 	importSvgOutlines,
 	perimeter,
 	plural
 } from '$lib/core/import/outlines.js';
-import { addEntity } from './actions.js';
+import { addEntity, addGroup } from './actions.js';
 import { createFlatPartsEntity } from './defaults.js';
 import type { FlatPartsEntity } from './types.js';
 import { MIN_FLAT_PARTS_ENTITY } from './validation.js';
@@ -25,6 +26,11 @@ import { flatPartsSheetView, type FlatPartsView } from './view.js';
  * the even-odd fill rule, read as a cutting plan rather than a picture. A part
  * nested in another part's hole imports, and validation rejects it, since the
  * stage order cannot yet cut it.
+ *
+ * A drawing of two or more parts, such as a logo, arrives as one group that
+ * moves and scales as a unit; its members are named after the file, so a
+ * validation message or program comment still says where to look. A single
+ * part with its holes stays an ordinary part, whose holes already follow it.
  */
 
 /** Where the drawing's lower-left corner lands on the sheet, clear of the edge for a router bit. */
@@ -77,6 +83,19 @@ export function importSvg(
 		hole: view.entities.filter((entity) => entity.kind === 'hole').length
 	};
 
+	const grouped = outlines.filter((outline) => outline.depth % 2 === 0).length > 1;
+	const name = drawingName(fileName, 'Imported drawing');
+	const noun = (kind: 'profile' | 'hole') =>
+		grouped
+			? `${name} ${kind === 'profile' ? 'part' : 'hole'}`
+			: kind === 'profile'
+				? 'Part'
+				: 'Hole';
+	if (grouped) {
+		counts.profile = 0;
+		counts.hole = 0;
+	}
+
 	const entities = outlines.map(({ points, depth }): FlatPartsEntity => {
 		const kind = depth % 2 === 0 ? 'profile' : 'hole';
 		const placed = points.map((vertex) => ({ x: vertex.x + dx, y: vertex.y + dy }));
@@ -84,7 +103,7 @@ export function importSvg(
 		counts[kind]++;
 		return createFlatPartsEntity({
 			id: crypto.randomUUID(),
-			name: `${kind === 'profile' ? 'Part' : 'Hole'} ${counts[kind]}`,
+			name: `${noun(kind)} ${counts[kind]}`,
 			kind,
 			shape: 'path',
 			...box,
@@ -93,14 +112,23 @@ export function importSvg(
 		});
 	});
 
-	const next = entities.reduce((sheet, entity) => addEntity(sheet, sheetId, entity), design);
 	const parts = entities.filter((entity) => entity.kind === 'profile');
 	const holes = entities.length - parts.length;
 	const skippedNote = skipped.length ? ` Skipped ${skipped.join(', ')}.` : '';
+	const summary = `${plural(parts.length, 'part')} and ${plural(holes, 'hole')} from ${fileName} (${drawingSize(outlines)})`;
+	if (grouped) {
+		const group = { id: crypto.randomUUID(), name };
+		return {
+			design: addGroup(design, sheetId, group, entities),
+			selection: { kind: 'group', id: group.id },
+			notice: `Imported ${summary} as the group ${name}.${skippedNote}`
+		};
+	}
+	const next = entities.reduce((sheet, entity) => addEntity(sheet, sheetId, entity), design);
 	const first = parts[0] ?? entities[0]!;
 	return {
 		design: next,
 		selection: { kind: first.kind, id: first.id },
-		notice: `Imported ${plural(parts.length, 'part')} and ${plural(holes, 'hole')} from ${fileName} (${drawingSize(outlines)}).${skippedNote}`
+		notice: `Imported ${summary}.${skippedNote}`
 	};
 }

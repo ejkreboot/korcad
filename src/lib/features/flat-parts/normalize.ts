@@ -1,4 +1,4 @@
-import { finite, isRecord } from '$lib/core/design/normalize.js';
+import { finite, groupIdOf, isRecord, normalizeGroups } from '$lib/core/design/normalize.js';
 import type { DesignState } from '$lib/core/design/types.js';
 import type { Point } from '$lib/core/geometry/primitives.js';
 import { createFlatPartsEntity, FLAT_PARTS_KINDS, FLAT_PARTS_SHAPES } from './defaults.js';
@@ -39,6 +39,7 @@ function normalizeEntity(value: unknown, index: number): FlatPartsEntity | null 
 	return {
 		...base,
 		outline,
+		groupId: groupIdOf(value.groupId),
 		cornerRadius: number('cornerRadius', base.cornerRadius),
 		sides: Math.max(3, Math.round(number('sides', base.sides))),
 		tabCount: Math.max(0, Math.round(number('tabCount', base.tabCount)))
@@ -55,18 +56,28 @@ function normalizeEntity(value: unknown, index: number): FlatPartsEntity | null 
 export function normalizeFlatParts(raw: unknown, document: DesignState): DesignState {
 	const savedSheets = isRecord(raw) && isRecord(raw.sheets) ? raw.sheets : {};
 	const seen = new Set<string>();
+	const seenGroups = new Set<string>();
 	const sheets: Record<string, FlatPartsSheet> = {};
 	for (const sheet of document.sheets) {
 		if (sheet.workspace !== 'flatParts') continue;
 		const saved = savedSheets[sheet.id];
 		const entries = isRecord(saved) && Array.isArray(saved.entities) ? saved.entities : [];
+		const entities = entries.flatMap((entry, index) => {
+			const entity = normalizeEntity(entry, index);
+			if (!entity || seen.has(entity.id)) return [];
+			seen.add(entity.id);
+			return [entity];
+		});
+		// A group with no member is dropped, and a member of a group that is not
+		// on its sheet stands alone.
+		const memberOf = new Set(entities.flatMap((entity) => entity.groupId ?? []));
+		const groups = normalizeGroups(isRecord(saved) ? saved.groups : [], memberOf, seenGroups);
+		const kept = new Set(groups.map((group) => group.id));
 		sheets[sheet.id] = {
-			entities: entries.flatMap((entry, index) => {
-				const entity = normalizeEntity(entry, index);
-				if (!entity || seen.has(entity.id)) return [];
-				seen.add(entity.id);
-				return [entity];
-			})
+			entities: entities.map((entity) =>
+				entity.groupId && !kept.has(entity.groupId) ? { ...entity, groupId: null } : entity
+			),
+			groups
 		};
 	}
 	return { ...document, workspaces: { ...document.workspaces, flatParts: { sheets } } };

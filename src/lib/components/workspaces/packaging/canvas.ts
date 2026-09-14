@@ -2,7 +2,13 @@ import { point, type Point } from '$lib/core/geometry/primitives.js';
 import { clamp } from '$lib/core/units.js';
 import type { EditorState } from '$lib/editor/state.svelte.js';
 import type { ToolState } from '$lib/editor/tools.svelte.js';
-import { packagingActions } from '$lib/features/packaging/actions.js';
+import {
+	packagingActions,
+	pocketGroupBox,
+	pocketGroupChanges,
+	pocketGroupMembers
+} from '$lib/features/packaging/actions.js';
+import { proportionalResize } from '$lib/core/geometry/outline.js';
 import {
 	applyDeckDrag,
 	applyPocketDrag,
@@ -44,6 +50,39 @@ export function createPackagingCanvas(editor: EditorState, tools: ToolState): Ca
 			clamp(stock.x, view.deckX, view.deckX + view.deckW),
 			clamp(stock.y, view.deckY, view.deckY + view.deckH)
 		);
+	}
+
+	/**
+	 * A press on a group of imported openings, or one of its handles. The group
+	 * moves as one box kept on the deck, and a handle scales it proportionally
+	 * about the opposite corner, worked out from the openings as they were at
+	 * the press.
+	 */
+	function pressPocketGroup(id: string, handle: Corner | undefined, stock: Point) {
+		const original = pocketGroupBox(editor.design, id);
+		if (!original) return null;
+		actions.selectPocketGroup(id);
+		const members = pocketGroupMembers(editor.design, id);
+		const start = toDeck(stock);
+		return {
+			move(current: Point) {
+				const dragged = applyPocketDrag(
+					dragView(),
+					handle ? 'resize' : 'move',
+					handle ?? null,
+					original,
+					start,
+					toDeck(current)
+				);
+				if (handle) {
+					const { factor, anchor } = proportionalResize(original, dragged, handle);
+					actions.previewPockets(pocketGroupChanges(members, anchor, factor));
+				} else {
+					const offset = { x: dragged.x - original.x, y: dragged.y - original.y };
+					actions.previewPockets(pocketGroupChanges(members, original, 1, offset));
+				}
+			}
+		};
 	}
 
 	/** An opening, and a tray's deck opening, are drawn on the deck; other supports on the sheet. */
@@ -101,8 +140,16 @@ export function createPackagingCanvas(editor: EditorState, tools: ToolState): Ca
 				}
 			};
 		}
+		const groupTarget = target.closest<HTMLElement>('[data-pocket-group]');
+		const pressedPocket = pocketTarget
+			? actions.view.pockets.find((p) => p.id === pocketTarget.dataset.pocket)
+			: undefined;
+		const groupId = groupTarget?.dataset.pocketGroup ?? pressedPocket?.groupId ?? null;
+		if (groupId) {
+			return pressPocketGroup(groupId, groupTarget?.dataset.handle as Corner | undefined, stock);
+		}
 		if (pocketTarget) {
-			const pocket = actions.view.pockets.find((p) => p.id === pocketTarget.dataset.pocket);
+			const pocket = pressedPocket;
 			if (!pocket) return null;
 			actions.selectPocket(pocket.id);
 			const type = pocketTarget.dataset.handle ? 'resize' : 'move';

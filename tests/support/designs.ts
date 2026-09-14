@@ -305,6 +305,7 @@ export function flatPartsDesign(
 			flatParts: {
 				sheets: {
 					sheet: {
+						groups: [],
 						entities: [
 							createFlatPartsEntity({
 								id: 'bracket',

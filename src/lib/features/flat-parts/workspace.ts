@@ -1,6 +1,12 @@
 import type { DesignState } from '$lib/core/design/types.js';
 import type { Workspace } from '../workspaces.js';
-import { findEntity, entitySheetId, releaseFlatPartsSheet } from './actions.js';
+import {
+	entitySheetId,
+	findEntity,
+	findGroup,
+	groupBox,
+	releaseFlatPartsSheet
+} from './actions.js';
 import { createDefaultFlatParts } from './defaults.js';
 import { flatPartsGeometry } from './geometry.js';
 import { importSvg } from './import.js';
@@ -9,11 +15,20 @@ import { HOLE_PRESETS, PROFILE_PRESETS } from './presets.js';
 import { validateFlatParts } from './validation.js';
 import { flatPartsSheetView } from './view.js';
 
-/** Parts are labelled at their top-left corner; holes are too small to carry a name. */
-function labels(design: DesignState, sheetId: string) {
-	return flatPartsSheetView(design, sheetId)
-		.entities.filter((entity) => entity.kind === 'profile')
+/**
+ * Parts are labelled at their top-left corner; holes are too small to carry a
+ * name. An imported group is labelled once, as a whole, rather than letter by letter.
+ */
+export function flatPartsLabels(design: DesignState, sheetId: string) {
+	const view = flatPartsSheetView(design, sheetId);
+	const parts = view.entities
+		.filter((entity) => entity.kind === 'profile' && !entity.groupId)
 		.map((entity) => ({ name: entity.name, x: entity.x + 5, y: entity.y + entity.h - 9 }));
+	const groups = view.groups.flatMap((group) => {
+		const box = groupBox(design, group.id);
+		return box ? [{ name: group.name, x: box.x + 5, y: box.y + box.h - 9 }] : [];
+	});
+	return [...parts, ...groups];
 }
 
 /**
@@ -79,9 +94,17 @@ export const FLAT_PARTS_WORKSPACE: Workspace<'flatParts'> = {
 	geometry: flatPartsGeometry,
 	validate: validateFlatParts,
 	gcodeOptions: untabbedPartNotes,
-	labels,
-	selectionExists: (design, selection) => findEntity(design, selection.id)?.kind === selection.kind,
+	labels: flatPartsLabels,
+	selectionExists: (design, selection) =>
+		selection.kind === 'group'
+			? groupBox(design, selection.id) !== null
+			: findEntity(design, selection.id)?.kind === selection.kind,
 	selectionBounds: (design, selection, sheetId) => {
+		if (selection.kind === 'group') {
+			const box =
+				findGroup(design, selection.id)?.sheetId === sheetId && groupBox(design, selection.id);
+			return box ? { left: box.x, right: box.x + box.w, bottom: box.y, top: box.y + box.h } : null;
+		}
 		const entity = findEntity(design, selection.id);
 		if (!entity || entitySheetId(design, entity.id) !== sheetId) return null;
 		return {

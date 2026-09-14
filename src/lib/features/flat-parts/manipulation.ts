@@ -1,4 +1,5 @@
 import { SHEET } from '$lib/core/constants.js';
+import { scaleBox } from '$lib/core/geometry/outline.js';
 import type { Point } from '$lib/core/geometry/primitives.js';
 import { round, snapWithin } from '$lib/core/units.js';
 import type { FlatPartsEntity } from './types.js';
@@ -68,11 +69,5 @@ export function scaleEntityBox(
 	anchor: Point,
 	factor: number
 ): Pick<FlatPartsEntity, 'x' | 'y' | 'w' | 'h' | 'cornerRadius'> {
-	return {
-		x: round(anchor.x + (entity.x - anchor.x) * factor),
-		y: round(anchor.y + (entity.y - anchor.y) * factor),
-		w: round(entity.w * factor),
-		h: round(entity.h * factor),
-		cornerRadius: round(entity.cornerRadius * factor)
-	};
+	return { ...scaleBox(entity, anchor, factor), cornerRadius: round(entity.cornerRadius * factor) };
 }
