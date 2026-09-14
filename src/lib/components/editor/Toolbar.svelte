@@ -12,6 +12,7 @@
 		tools,
 		onNewProject,
 		onImport,
+		onWorkspaceImport,
 		onSaveDesign,
 		onExportSvg,
 		onExportGcode,
@@ -21,6 +22,7 @@
 		tools: ToolState;
 		onNewProject: (workspaceId: WorkspaceId) => void;
 		onImport: () => void;
+		onWorkspaceImport: (importId: string) => void;
 		onSaveDesign: () => void;
 		onExportSvg: () => void;
 		onExportGcode: () => void;
@@ -99,6 +101,18 @@
 					</div>
 				{/if}
 			</div>
+		{/each}
+
+		{#each editor.workspace.imports as entry (entry.id)}
+			<button
+				class="button icon"
+				aria-label={entry.label}
+				title={entry.title}
+				disabled={assembling}
+				onclick={() => onWorkspaceImport(entry.id)}
+			>
+				<Icon name={entry.icon} />
+			</button>
 		{/each}
 	</div>
 

@@ -44,6 +44,27 @@ export type WorkspaceTool = {
 	unavailable(machine: MachineSettings): string | null;
 };
 
+/** A kind of file a workspace can bring onto one of its sheets, offered on the toolbar. */
+export type WorkspaceImport = {
+	readonly id: string;
+	readonly label: string;
+	readonly title: string;
+	readonly icon: IconName;
+	/** File types offered by the file picker, as an `accept` attribute lists them. */
+	readonly accept: string;
+	/**
+	 * The document with the file's contents added to a sheet, what to select,
+	 * and a sentence saying what came in. Throws with a message for the
+	 * operator when the file holds nothing the workspace can use.
+	 */
+	read(
+		design: DesignState,
+		sheetId: string,
+		text: string,
+		fileName: string
+	): { design: DesignState; selection: Selection | null; notice: string };
+};
+
 /** Behaviour a workspace has or lacks outright; absent features are hidden, not disabled. */
 export type WorkspaceCapabilities = {
 	/** Board is creased and folded, so there is a crease program and fold UI. */
@@ -67,6 +88,7 @@ export type Workspace<Id extends WorkspaceId = WorkspaceId> = WorkspaceReader & 
 	/** The kind of machine a new project in this workspace starts on. */
 	readonly fabricationMode: FabricationMode;
 	readonly tools: readonly WorkspaceTool[];
+	readonly imports: readonly WorkspaceImport[];
 	/** The name a sheet added in this workspace gets. */
 	newSheetName(design: DesignState): string;
 	/** The data a document gains when it first uses this workspace, on the sheet `sheetId`. */

@@ -13,6 +13,7 @@ export function createFlatPartsEntity(
 	return {
 		cornerRadius: 6.35,
 		sides: 6,
+		outline: [],
 		tabCount: values.kind === 'profile' ? 4 : 0,
 		...values
 	};
@@ -23,7 +24,8 @@ export const FLAT_PARTS_SHAPES: readonly FlatPartsShape[] = [
 	'rounded',
 	'ellipse',
 	'polygon',
-	'slot'
+	'slot',
+	'path'
 ];
 
 export const FLAT_PARTS_KINDS: readonly FlatPartsKind[] = ['profile', 'hole'];

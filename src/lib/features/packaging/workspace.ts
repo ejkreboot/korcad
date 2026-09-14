@@ -76,6 +76,7 @@ export const PACKAGING_WORKSPACE: Workspace<'packaging'> = {
 	capabilities: { folding: true, assembly: true },
 	// Board is creased and cut with a drag knife; supports cannot be routed.
 	fabricationMode: 'knife',
+	imports: [],
 	tools: [
 		{
 			id: 'cutout',

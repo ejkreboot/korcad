@@ -9,7 +9,7 @@ import type { DesignPath, DesignState, Geometry, HoldingTab } from '$lib/core/de
 import type { FlatPartsEntity } from './types.js';
 import { flatPartsSheetView, type FlatPartsView } from './view.js';
 
-/** The drawn outline of an entity, counter-clockwise. */
+/** The drawn outline of an entity, counter-clockwise; an imported path is stored that way. */
 export function entityOutline(entity: FlatPartsEntity): Point[] {
 	switch (entity.shape) {
 		case 'polygon':
@@ -17,6 +17,11 @@ export function entityOutline(entity: FlatPartsEntity): Point[] {
 		case 'slot':
 			// A radius of zero is fully rounded: a slot's ends are half-circles.
 			return shapeOutline('rounded', entity, 0);
+		case 'path':
+			return entity.outline.map((vertex) => ({
+				x: entity.x + vertex.x * entity.w,
+				y: entity.y + vertex.y * entity.h
+			}));
 		default:
 			return shapeOutline(entity.shape, entity, entity.cornerRadius);
 	}

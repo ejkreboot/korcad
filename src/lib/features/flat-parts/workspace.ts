@@ -3,6 +3,7 @@ import type { Workspace } from '../workspaces.js';
 import { findEntity, entitySheetId, releaseFlatPartsSheet } from './actions.js';
 import { createDefaultFlatParts } from './defaults.js';
 import { flatPartsGeometry } from './geometry.js';
+import { importSvg } from './import.js';
 import { normalizeFlatParts } from './normalize.js';
 import { HOLE_PRESETS, PROFILE_PRESETS } from './presets.js';
 import { validateFlatParts } from './validation.js';
@@ -59,6 +60,16 @@ export const FLAT_PARTS_WORKSPACE: Workspace<'flatParts'> = {
 			icon: 'radio_button_unchecked',
 			presets: HOLE_PRESETS,
 			unavailable: () => null
+		}
+	],
+	imports: [
+		{
+			id: 'svg',
+			label: 'Import SVG',
+			title: 'Import closed outlines from an SVG as parts and holes',
+			icon: 'upload_file',
+			accept: '.svg,image/svg+xml',
+			read: importSvg
 		}
 	],
 	normalize: normalizeFlatParts,

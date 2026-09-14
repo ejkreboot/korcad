@@ -61,7 +61,8 @@ UPDATE_GOLDEN=1 npm run test:unit
 - Folded Packaging: fold allowance and bend deduction; pocket, perimeter (plain,
   folded, joist), tray, riser, and platform geometry; supports anchored to real
   surfaces; a Three.js assembly preview
-- Flat Parts: parts, holes, and slots on independent sheets, with holding tabs
+- Flat Parts: parts, holes, and slots on independent sheets, with holding tabs;
+  SVG import that turns closed outlines into parts and holes by how they nest
 - manufacturability validation, including every tool a sheet uses
 - drag-knife and router compensation, machining stages, route planning, router
   passes, and bridge tabs
@@ -79,7 +80,7 @@ UPDATE_GOLDEN=1 npm run test:unit
 - copy and paste
 - keyboard nudge
 - calibration coupon generator
-- SVG import
+- DXF import; parts nested inside another part's hole
 - multi-sheet job export
 
 ## Canvas
@@ -99,6 +100,17 @@ with the Hole menu. Moving a part carries its holes. Each part keeps holding tab
 (four by default): gaps in a knife cut, or on a router bridges the bit rises
 over, leaving the tab thickness set in the Material panel. A routed part with no
 tabs is named in the program header, because its last cut frees it.
+
+Import SVG (toolbar, Flat Parts only) reads every path and basic shape in the file,
+with transforms and real units, and flattens curves to within 0.05 mm. Fill and
+stroke are ignored: a cut follows the geometry. Each closed outline's nesting depth
+decides what cutting it frees: outlines inside an even number of others are parts,
+cut outside the line and given up to four tabs; those inside an odd number are
+holes. Open paths, text, images, specks under 1 mm, and duplicate outlines are
+skipped, and the footer says what came in, at what size, and what was left out.
+The drawing lands with its lower-left corner half an inch in from the sheet's.
+Outlines that cross, and parts nested inside another part's hole, import but fail
+validation.
 
 Scroll to zoom, middle-drag or hold space to pan, and Snap constrains to a
 quarter-inch grid. One drag is one undo step.

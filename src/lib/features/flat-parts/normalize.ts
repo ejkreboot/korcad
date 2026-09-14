@@ -1,7 +1,14 @@
 import { finite, isRecord } from '$lib/core/design/normalize.js';
 import type { DesignState } from '$lib/core/design/types.js';
+import type { Point } from '$lib/core/geometry/primitives.js';
 import { createFlatPartsEntity, FLAT_PARTS_KINDS, FLAT_PARTS_SHAPES } from './defaults.js';
 import type { FlatPartsEntity, FlatPartsKind, FlatPartsShape, FlatPartsSheet } from './types.js';
+
+function normalizeOutline(values: readonly unknown[]): Point[] {
+	return values.flatMap((vertex) =>
+		isRecord(vertex) && finite(vertex.x) && finite(vertex.y) ? [{ x: vertex.x, y: vertex.y }] : []
+	);
+}
 
 function normalizeEntity(value: unknown, index: number): FlatPartsEntity | null {
 	if (!isRecord(value)) return null;
@@ -25,8 +32,13 @@ function normalizeEntity(value: unknown, index: number): FlatPartsEntity | null 
 		w: number('w', 0),
 		h: number('h', 0)
 	});
+	// A path is nothing without its outline, and the outline means nothing to any other shape.
+	const outline =
+		base.shape === 'path' && Array.isArray(value.outline) ? normalizeOutline(value.outline) : [];
+	if (base.shape === 'path' && outline.length < 3) return null;
 	return {
 		...base,
+		outline,
 		cornerRadius: number('cornerRadius', base.cornerRadius),
 		sides: Math.max(3, Math.round(number('sides', base.sides))),
 		tabCount: Math.max(0, Math.round(number('tabCount', base.tabCount)))

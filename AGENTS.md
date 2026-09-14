@@ -63,13 +63,15 @@ src/lib/
                  normalize, validation (tool settings)
     cam/         stages, compensation, routing, tabs (router bridges), gcode, simulation
     export/      svg, design-file (envelope)
+    import/      svg: a DOM-free SVG reader, closed and open outlines in mm, Y up
     assembly/    model.ts: generic plates, walls, and draggable groups
   features/
     workspaces.ts  registry, plus reconcileDocument and validateDocument
     document.ts    createDefaultDesign, normalizeState, parseDesign
     packaging/     types, view, actions, geometry/perimeter/supports, folds, levels, mounting,
                    anchoring, placement, paths (CAM intent), assembly, validation, gcode
-    flat-parts/    types, view, actions, geometry, validation, manipulation, presets
+    flat-parts/    types, view, actions, geometry, validation, manipulation, presets,
+                   import (SVG outlines to parts and holes by nesting depth)
   editor/        state.svelte.ts (sole owner of the document), tools, history, viewport, persistence
   viewer/        assembly-scene.ts: the only module that imports Three.js
   components/
@@ -116,7 +118,14 @@ type DesignState = {
   it is `'deck'`). Read it through `packagingView` or `packagingSheetView`, and write it with
   `withPackaging`. Every packaging sheet must use the same fabrication mode.
 - **Flat Parts data belongs to one sheet**, at `workspaces.flatParts.sheets[sheetId].entities`: parts
-  (`profile`, cut outside) and holes (`hole`, cut inside).
+  (`profile`, cut outside) and holes (`hole`, cut inside). A `path` entity stores its `outline` as
+  fractions of its box, so moving and resizing work as for any shape.
+- **Workspace imports.** A `Workspace` lists `imports` (Flat Parts: SVG); the toolbar offers each
+  as a button and the page hands the file text to `read`, which returns the new document, a
+  selection, and a notice. An imported outline's kind is its nesting depth's parity (even: part,
+  odd: hole), because a closed through-cut frees whatever it encloses. A part nested in a hole
+  is rejected by validation: holes are cut before parts are released, so it would come loose
+  with the slug.
 - Selection is one generic `{ kind, id }` slot in `editor/state.svelte.ts`, and snap lives in
   `tools.svelte.ts`. Neither is saved. Drafts are full design files.
 - A support's height is relational: it names an anchor (`box-floor`, `deck-top`,
@@ -206,7 +215,8 @@ Next directions:
 - Ramped or helical plunges for routers, a choice of climb or conventional milling, and a
   finishing pass.
 - Postprocessor profiles (GRBL, LinuxCNC, Mach3), including optional G2/G3 arc output.
-- Import SVG and DXF profiles into Flat Parts. Export a multi-sheet job as a zip.
+- Import DXF profiles into Flat Parts (SVG import is in). Parts nested in another part's hole,
+  which needs release ordering by depth. Export a multi-sheet job as a zip.
 - Rotate, copy, paste, and keyboard nudge for the selection.
 - A first-run choice of workspace. New project (toolbar) already starts a project in either
   workspace, but a fresh browser still opens a packaging deck.

@@ -1,3 +1,5 @@
+import type { Point } from '$lib/core/geometry/primitives.js';
+
 /**
  * The Flat Parts workspace's vocabulary: flat parts cut from a sheet, and the holes
  * and slots cut through them. Nothing folds.
@@ -11,9 +13,10 @@ export type FlatPartsKind = 'profile' | 'hole';
 
 /**
  * The outline an entity is drawn with, inside its box. `slot` is a rectangle
- * rounded fully at both ends; `polygon` is regular, inscribed in the box.
+ * rounded fully at both ends; `polygon` is regular, inscribed in the box;
+ * `path` is an arbitrary outline, usually imported from a drawing.
  */
-export type FlatPartsShape = 'rectangle' | 'rounded' | 'ellipse' | 'polygon' | 'slot';
+export type FlatPartsShape = 'rectangle' | 'rounded' | 'ellipse' | 'polygon' | 'slot' | 'path';
 
 export type FlatPartsEntity = {
 	readonly id: string;
@@ -29,6 +32,12 @@ export type FlatPartsEntity = {
 	readonly cornerRadius: number;
 	/** For `polygon`. */
 	readonly sides: number;
+	/**
+	 * For `path`: the outline's vertices as fractions of the box, (0, 0) at its
+	 * lower-left corner and (1, 1) at its upper right, so moving or resizing the
+	 * box moves or stretches the outline with it. Empty for every other shape.
+	 */
+	readonly outline: readonly Point[];
 	/**
 	 * Holding tabs left in a profile's release cut, spaced evenly around it and
 	 * as wide as the stock's tab width. Ignored on a hole, and on a router,

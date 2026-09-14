@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { generateGcode, programOperations } from '$lib/core/cam/gcode.js';
 	import { designSvg } from '$lib/core/export/svg.js';
 	import { createEditorState } from '$lib/editor/state.svelte.js';
@@ -27,6 +27,14 @@
 	const editor = createEditorState();
 	const tools = createToolState();
 	let importInput = $state<HTMLInputElement>();
+	let workspaceImportInput = $state<HTMLInputElement>();
+	/** The workspace import the file picker was opened for. */
+	let pendingImport = $state<string | null>(null);
+	/** What the last workspace import brought in, shown until the document next changes. */
+	let importSummary = $state.raw<{ text: string; design: unknown } | null>(null);
+	const pendingImportEntry = $derived(
+		editor.workspace.imports.find((entry) => entry.id === pendingImport) ?? null
+	);
 	let simulating = $state(false);
 	let notice = $state('Local-first. Nothing leaves this browser.');
 	let error = $state('');
@@ -140,6 +148,37 @@
 		notice = `New ${label} project started.`;
 	}
 
+	function chooseWorkspaceImport(importId: string): void {
+		pendingImport = importId;
+		// The accept list is bound to the pending import, so let it render first.
+		void tick().then(() => workspaceImportInput?.click());
+	}
+
+	async function importIntoSheet(event: Event): Promise<void> {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		const entry = pendingImportEntry;
+		if (!file || !entry) return;
+		try {
+			const result = entry.read(
+				editor.design,
+				editor.design.activeSheetId,
+				await file.text(),
+				file.name
+			);
+			editor.update(() => result.design);
+			editor.select(result.selection);
+			tools.select();
+			notice = result.notice;
+			importSummary = { text: result.notice, design: editor.design };
+			error = '';
+		} catch (reason) {
+			error = reason instanceof Error ? reason.message : 'The file could not be imported.';
+		} finally {
+			input.value = '';
+		}
+	}
+
 	async function importDesign(event: Event): Promise<void> {
 		const input = event.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
@@ -174,6 +213,7 @@
 				{tools}
 				onNewProject={newProject}
 				onImport={() => importInput?.click()}
+				onWorkspaceImport={chooseWorkspaceImport}
 				onSaveDesign={saveDesign}
 				onExportSvg={exportSvg}
 				onExportGcode={exportGcode}
@@ -250,6 +290,8 @@
 							? ` (+${editor.diagnostics.length - 1} more)`
 							: ''}
 					</p>
+				{:else if importSummary && importSummary.design === editor.design}
+					<p class="status ok">{importSummary.text}</p>
 				{:else}
 					<p class="status ok">geometry valid</p>
 				{/if}
@@ -270,6 +312,13 @@
 		type="file"
 		accept=".json,.korcad.json"
 		onchange={importDesign}
+	/>
+	<input
+		bind:this={workspaceImportInput}
+		hidden
+		type="file"
+		accept={pendingImportEntry?.accept ?? ''}
+		onchange={importIntoSheet}
 	/>
 	<p aria-live="polite" class="sr-only">{notice}</p>
 </main>

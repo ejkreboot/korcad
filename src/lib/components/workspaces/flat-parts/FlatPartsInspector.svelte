@@ -20,7 +20,9 @@
 	const shapes = (item: FlatPartsEntity) =>
 		item.kind === 'profile' ? PROFILE_PRESETS : HOLE_PRESETS;
 	const shapeLabel = (item: FlatPartsEntity) =>
-		shapes(item).find((preset) => preset.id === item.shape)?.label ?? item.shape;
+		item.shape === 'path'
+			? 'Imported outline'
+			: (shapes(item).find((preset) => preset.id === item.shape)?.label ?? item.shape);
 
 	function setLength(key: 'x' | 'y' | 'w' | 'h' | 'cornerRadius', raw: string): void {
 		if (!entity) return;
@@ -52,18 +54,21 @@
 					oninput={(e) => actions.updateEntity(entity.id, { name: e.currentTarget.value })}
 				/>
 			</label>
-			<label class="field wide">
-				Shape
-				<select
-					value={entity.shape}
-					onchange={(e) =>
-						actions.updateEntity(entity.id, { shape: e.currentTarget.value as FlatPartsShape })}
-				>
-					{#each shapes(entity) as preset (preset.id)}
-						<option value={preset.id}>{preset.label}</option>
-					{/each}
-				</select>
-			</label>
+			<!-- An imported outline has no parameters to redraw it from, so it keeps its shape. -->
+			{#if entity.shape !== 'path'}
+				<label class="field wide">
+					Shape
+					<select
+						value={entity.shape}
+						onchange={(e) =>
+							actions.updateEntity(entity.id, { shape: e.currentTarget.value as FlatPartsShape })}
+					>
+						{#each shapes(entity) as preset (preset.id)}
+							<option value={preset.id}>{preset.label}</option>
+						{/each}
+					</select>
+				</label>
+			{/if}
 			<label class="field">
 				X from left ({unitLabel})
 				<input
@@ -161,8 +166,8 @@
 		<p class="help">
 			{parts}
 			{parts === 1 ? 'part' : 'parts'} and {holes}
-			{holes === 1 ? 'hole' : 'holes'} on this sheet. Draw a part, then holes inside it; select one to
-			edit it.
+			{holes === 1 ? 'hole' : 'holes'} on this sheet. Draw a part, then holes inside it, or import an
+			SVG, whose outlines become parts and holes by how they nest; select one to edit it.
 		</p>
 	</section>
 {/if}

@@ -139,3 +139,41 @@ test('a routed part keeps bridge holding tabs unless they are turned off', async
 	expect(untabbed).not.toContain('; holding tab');
 	expect(untabbed).toContain('; No holding tabs on: Part 1');
 });
+
+test('an imported SVG becomes a tabbed part with its holes', async ({ page }) => {
+	await gotoEditor(page);
+	await addFlatPartsSheet(page);
+
+	const drawing = `<svg xmlns="http://www.w3.org/2000/svg" width="200mm" height="100mm" viewBox="0 0 200 100">
+		<path d="M0 0 H200 V100 H0 Z"/>
+		<circle cx="50" cy="50" r="20"/>
+		<rect x="120" y="30" width="40" height="40"/>
+		<line x1="0" y1="0" x2="10" y2="10"/>
+	</svg>`;
+	const chooser = page.waitForEvent('filechooser');
+	await page.getByRole('button', { name: 'Import SVG' }).click();
+	await (
+		await chooser
+	).setFiles({ name: 'plate.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(drawing) });
+
+	await expect(page.getByRole('heading', { name: 'Part 1' })).toBeVisible();
+	await expect(page.getByText('Part · Imported outline')).toBeVisible();
+	await expect(page.getByLabel('Shape')).toHaveCount(0);
+	await expect(page.getByLabel('Holding tabs')).toHaveValue('4');
+	await expect(page.locator('.status.ok')).toContainText(
+		'Imported 1 part and 2 holes from plate.svg (200 × 100 mm). Skipped 1 open path.'
+	);
+
+	const design = (await readDraft(page))!;
+	const flatParts = (
+		design.workspaces as {
+			flatParts: { sheets: Record<string, { entities: { kind: string; shape: string }[] }> };
+		}
+	).flatParts;
+	const saved = Object.values(flatParts.sheets)[0]!.entities;
+	expect(saved.map((entity) => [entity.kind, entity.shape])).toEqual([
+		['profile', 'path'],
+		['hole', 'path'],
+		['hole', 'path']
+	]);
+});

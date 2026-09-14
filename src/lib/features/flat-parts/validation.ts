@@ -47,16 +47,32 @@ function validateSheet(design: DesignState, sheetId: string): string[] {
 	const profiles = sized.filter((entity) => entity.kind === 'profile');
 	const holes = sized.filter((entity) => entity.kind === 'hole');
 	const outline = (entity: FlatPartsEntity) => outlines.get(entity)!;
+	const bounds = new Map([...outlines].map(([entity, points]) => [entity, outlineBounds(points)]));
+	// Outlines cannot come closer than their bounds do, and one inside another
+	// lies inside its bounds, so most pairs of a many-part sheet are settled
+	// without measuring every edge against every other.
+	const boundsGap = (a: FlatPartsEntity, b: FlatPartsEntity) => {
+		const first = bounds.get(a)!;
+		const second = bounds.get(b)!;
+		const x = Math.max(0, first.left - second.right, second.left - first.right);
+		const y = Math.max(0, first.bottom - second.top, second.bottom - first.top);
+		return Math.hypot(x, y);
+	};
+	const boundsWithin = (inner: FlatPartsEntity, outer: FlatPartsEntity) => {
+		const a = bounds.get(inner)!;
+		const b = bounds.get(outer)!;
+		return a.left >= b.left && a.right <= b.right && a.bottom >= b.bottom && a.top <= b.top;
+	};
 
 	for (const profile of profiles) {
 		// A router cuts outside the line, so the bit's far edge must stay on the stock.
 		const margin = router ? view.bitWidth / 2 : 0;
-		const bounds = outlineBounds(outline(profile));
+		const box = bounds.get(profile)!;
 		if (
-			bounds.left - margin < 0 ||
-			bounds.bottom - margin < 0 ||
-			bounds.right + margin > SHEET ||
-			bounds.top + margin > SHEET
+			box.left - margin < 0 ||
+			box.bottom - margin < 0 ||
+			box.right + margin > SHEET ||
+			box.top + margin > SHEET
 		) {
 			errors.push(`${profile.name}: does not fit the sheet`);
 		}
@@ -68,10 +84,19 @@ function validateSheet(design: DesignState, sheetId: string): string[] {
 			// Both release cuts run outside their lines, so on a router the strip
 			// between them loses a full bit width.
 			const needed = web + (router ? view.bitWidth : 0);
-			const nested =
-				outlineInside(outline(profile), outline(other)) ||
-				outlineInside(outline(other), outline(profile));
-			if (nested || outlineDistance(outline(profile), outline(other)) + WEB_TOLERANCE < needed) {
+			if (boundsGap(profile, other) > needed) continue;
+			// Holes are cut before any part is released, so a part inside another
+			// part's hole would come loose with the slug before its own cut.
+			const [inner, outer] = outlineInside(outline(profile), outline(other))
+				? [profile, other]
+				: outlineInside(outline(other), outline(profile))
+					? [other, profile]
+					: [null, null];
+			if (inner && outer) {
+				errors.push(
+					`${inner.name}: is inside ${outer.name}; a part nested inside another cannot be cut yet`
+				);
+			} else if (outlineDistance(outline(profile), outline(other)) + WEB_TOLERANCE < needed) {
 				errors.push(
 					`${profile.name} and ${other.name}: leave less than the ${round(web, 2)} mm minimum web between them`
 				);
@@ -81,7 +106,9 @@ function validateSheet(design: DesignState, sheetId: string): string[] {
 
 	const parents = new Map<FlatPartsEntity, FlatPartsEntity>();
 	for (const hole of holes) {
-		const parent = profiles.find((profile) => outlineInside(outline(hole), outline(profile)));
+		const parent = profiles.find(
+			(profile) => boundsWithin(hole, profile) && outlineInside(outline(hole), outline(profile))
+		);
 		if (!parent) {
 			errors.push(`${hole.name}: is not inside a part`);
 			continue;
@@ -95,6 +122,7 @@ function validateSheet(design: DesignState, sheetId: string): string[] {
 	holes.forEach((hole, index) => {
 		for (const other of holes.slice(index + 1)) {
 			if (!parents.has(hole) || parents.get(hole) !== parents.get(other)) continue;
+			if (boundsGap(hole, other) > web) continue;
 			const nested =
 				outlineInside(outline(hole), outline(other)) ||
 				outlineInside(outline(other), outline(hole));
