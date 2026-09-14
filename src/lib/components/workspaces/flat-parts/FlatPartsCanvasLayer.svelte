@@ -1,17 +1,17 @@
 <script lang="ts">
 	import { SHEET } from '$lib/core/constants.js';
-	import { solidActions } from '$lib/features/solid/actions.js';
-	import { entityOutline } from '$lib/features/solid/geometry.js';
+	import { flatPartsActions } from '$lib/features/flat-parts/actions.js';
+	import { entityOutline } from '$lib/features/flat-parts/geometry.js';
 	import type { CanvasLayerProps } from '../index.js';
 
 	/**
-	 * Solid on the 2D canvas: a hit target on every part and hole, handles on
+	 * Flat Parts on the 2D canvas: a hit target on every part and hole, handles on
 	 * the selected one, and part names. Holes are drawn over parts so a hole
 	 * inside a part can still be grabbed.
 	 */
 	let { editor, plane, drawing, screenUnit }: CanvasLayerProps = $props();
 
-	const actions = $derived(solidActions(editor));
+	const actions = $derived(flatPartsActions(editor));
 	const entities = $derived([
 		...actions.view.entities.filter((entity) => entity.kind === 'profile'),
 		...actions.view.entities.filter((entity) => entity.kind === 'hole')
@@ -38,7 +38,7 @@
 		<polygon
 			class="hit-target"
 			class:selected={entity.id === selected?.id}
-			data-solid-entity={entity.id}
+			data-flat-parts-entity={entity.id}
 			points={pointsAttr(entityOutline(entity))}
 		/>
 	{/each}
@@ -53,7 +53,7 @@
 		{#each corners as handle (handle.name)}
 			<rect
 				class="resize-handle"
-				data-solid-entity={selected.id}
+				data-flat-parts-entity={selected.id}
 				data-handle={handle.name}
 				x={handle.x - 4 * screenUnit}
 				y={handle.y - 4 * screenUnit}

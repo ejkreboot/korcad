@@ -5,11 +5,11 @@ import { sheetView } from '$lib/core/design/machine.js';
 import { point } from '$lib/core/geometry/primitives.js';
 import type { DesignPath, DesignState } from '$lib/core/design/types.js';
 import { allGeometry } from '$lib/features/packaging/model.js';
-import { solidGeometry } from '$lib/features/solid/geometry.js';
+import { flatPartsGeometry } from '$lib/features/flat-parts/geometry.js';
 import {
 	foldedDesign,
 	routerDesign,
-	solidDesign,
+	flatPartsDesign,
 	supportDesign,
 	withMachine
 } from '../../support/designs.js';
@@ -32,8 +32,8 @@ const plunges = (lines: readonly string[]) =>
 const tabRises = (lines: readonly string[]) =>
 	lines.filter((line) => line.endsWith('; holding tab'));
 
-function plateProgram(design: DesignState): string {
-	return generateGcode(solidGeometry(design, 'plate').paths, sheetView(design, 'plate'), 'cut');
+function sheetProgram(design: DesignState): string {
+	return generateGcode(flatPartsGeometry(design, 'sheet').paths, sheetView(design, 'sheet'), 'cut');
 }
 
 describe('depth per pass', () => {
@@ -46,8 +46,8 @@ describe('depth per pass', () => {
 	});
 
 	it('routes a closed contour in passes, plunging where the last pass ended', () => {
-		const design = withMachine(solidDesign('router'), { cutDepth: 3.2, passDepth: 1.1 });
-		const program = plateProgram(design);
+		const design = withMachine(flatPartsDesign('router'), { cutDepth: 3.2, passDepth: 1.1 });
+		const program = sheetProgram(design);
 		expect(program).toContain('; Cut in equal passes of at most 1.1 mm');
 		for (const section of sections(program)) {
 			expect(plunges(section).map((line) => line.split(' ')[1])).toEqual([
@@ -62,8 +62,8 @@ describe('depth per pass', () => {
 
 	it('bridges holding tabs only on the passes that reach them', () => {
 		// Tabs stand 1 mm above the underside of 3 mm board, so their tops are at Z-2.
-		const single = plateProgram(withMachine(solidDesign('router'), { passDepth: 5 }));
-		const passes = plateProgram(withMachine(solidDesign('router'), { passDepth: 1.1 }));
+		const single = sheetProgram(withMachine(flatPartsDesign('router'), { passDepth: 5 }));
+		const passes = sheetProgram(withMachine(flatPartsDesign('router'), { passDepth: 1.1 }));
 		const bracket = (program: string) =>
 			sections(program).find((section) => section[0]!.includes('(Bracket)'))!;
 		const once = tabRises(bracket(single)).length;
@@ -80,12 +80,12 @@ describe('depth per pass', () => {
 			closed: false,
 			cam: intent('cut', { offsetSide: 'on' })
 		};
-		const design = withMachine(solidDesign('router'), { passDepth: 2 });
-		const program = generateGcode([path], sheetView(design, 'plate'), 'cut');
+		const design = withMachine(flatPartsDesign('router'), { passDepth: 2 });
+		const program = generateGcode([path], sheetView(design, 'sheet'), 'cut');
 		const [section] = sections(program);
 		expect(plunges(section!)).toHaveLength(2);
 		expect(section!.filter((line) => line.startsWith('G0 X'))).toHaveLength(2);
-		const moves = simulationMoves(program, sheetView(design, 'plate'));
+		const moves = simulationMoves(program, sheetView(design, 'sheet'));
 		expect(moves.filter((move) => move.type === 'cut' && move.b.z === -1.6)).not.toHaveLength(0);
 	});
 
@@ -105,6 +105,8 @@ describe('exported programs', () => {
 		// The deck folds only downward, so it is scored in the cut program.
 		expect(programOperations(allGeometry(trays, 'deck').paths)).toEqual(['cut']);
 		expect(programOperations(allGeometry(routerDesign()).paths)).toEqual(['cut']);
-		expect(programOperations(solidGeometry(solidDesign('knife'), 'plate').paths)).toEqual(['cut']);
+		expect(programOperations(flatPartsGeometry(flatPartsDesign('knife'), 'sheet').paths)).toEqual([
+			'cut'
+		]);
 	});
 });

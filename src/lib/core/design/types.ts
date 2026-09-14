@@ -130,7 +130,7 @@ export type MachineProfile = MachineSettings & {
 
 /**
  * The stock every sheet is cut from, and how the operator measures it. Shared
- * by every workspace: a Solid plate and a packaging deck are both sheets of
+ * by every workspace: a Flat Parts sheet and a packaging deck are both sheets of
  * this board.
  */
 export type StockSettings = {

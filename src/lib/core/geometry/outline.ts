@@ -3,7 +3,7 @@ import { arcPoints, point, type Point } from './primitives.js';
 
 /**
  * Closed outlines of the basic drawn shapes, and holding tabs along an edge.
- * Shared by every workspace: a packaging cutout and a Solid plate are drawn
+ * Shared by every workspace: a packaging cutout and a Flat Parts sheet are drawn
  * from the same outlines, so they cut identically.
  */
 

@@ -1,4 +1,4 @@
-import type { MachineProfile, StockSettings } from './types.js';
+import type { FabricationMode, MachineProfile, StockSettings } from './types.js';
 
 /**
  * Generic document defaults. A workspace's own defaults live with the
@@ -37,6 +37,22 @@ export function createDefaultMachineProfile(
 		bitWidth: 6.35,
 		spindleSpeed: 18000
 	};
+}
+
+/**
+ * The stock profile for a kind of machine, named for its tool: the settings
+ * above, with only the fabrication mode changed.
+ */
+export function createStockMachineProfile(
+	fabricationMode: FabricationMode,
+	id: string = DEFAULT_MACHINE_PROFILE_ID
+): MachineProfile {
+	return { ...createDefaultMachineProfile(id, stockProfileName(fabricationMode)), fabricationMode };
+}
+
+/** The name a stock profile of a kind of machine gets. */
+export function stockProfileName(fabricationMode: FabricationMode): string {
+	return fabricationMode === 'router' ? 'Router' : 'Drag knife';
 }
 
 /**

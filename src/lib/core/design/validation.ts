@@ -31,7 +31,7 @@ const ROUTER_POSITIVE: readonly (readonly [NumericSetting, string])[] = [
 /**
  * Machine settings that make any program unsafe, whichever workspace drew the
  * sheet. Every profile a sheet is cut on is checked, and each message names
- * the profile, because the operator fixes it in the Machine panel rather than
+ * the profile, because the operator fixes it in the Tool panel rather than
  * on the drawing. Profiles no sheet uses cannot emit a program, so they are not
  * held against the design.
  */

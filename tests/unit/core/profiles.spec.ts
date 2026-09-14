@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { machineProfileFor } from '$lib/core/design/machine.js';
 import {
 	addProfile,
+	addStockProfile,
 	assignProfile,
 	deleteProfile,
 	duplicateProfile,
 	profileDeletion,
+	setFabricationMode,
 	uniqueProfileName
 } from '$lib/core/design/profiles.js';
+import { createDefaultDesign } from '$lib/features/document.js';
 import { parseDesign } from '$lib/features/document.js';
 import { serializeDesign } from '$lib/core/export/design-file.js';
 import { supportDesign } from '../../support/designs.js';
@@ -21,7 +24,48 @@ describe('machine profiles', () => {
 	it('never reuse a name', () => {
 		const design = addProfile(supportDesign(), 'deck', 'a');
 		expect(uniqueProfileName(design, 'Router')).toBe('Router');
-		expect(uniqueProfileName(design, 'New profile')).toBe('New profile 2');
+		expect(uniqueProfileName(design, 'New tool')).toBe('New tool 2');
+	});
+
+	it('add a stock profile of either kind, named for its tool, to a project without one', () => {
+		const design = addStockProfile(createDefaultDesign('packaging'), 'deck', 'r', 'router');
+		expect(machineProfileFor(design, 'deck')).toMatchObject({
+			id: 'r',
+			name: 'Router',
+			fabricationMode: 'router'
+		});
+		const knives = addStockProfile(design, 'deck', 'k', 'knife');
+		expect(machineProfileFor(knives, 'deck')).toMatchObject({
+			name: 'Drag knife 2',
+			fabricationMode: 'knife'
+		});
+	});
+
+	it('rename a stock-named profile when its kind of machine changes, and keep a chosen name', () => {
+		const flatParts = createDefaultDesign('flatParts');
+		const knife = setFabricationMode(flatParts, 'default', 'knife');
+		expect(knife.machineProfiles[0]).toMatchObject({
+			name: 'Drag knife',
+			fabricationMode: 'knife'
+		});
+		expect(setFabricationMode(knife, 'default', 'router').machineProfiles[0]?.name).toBe('Router');
+
+		const numbered = {
+			...flatParts,
+			machineProfiles: [{ ...flatParts.machineProfiles[0]!, name: 'Router 3' }]
+		};
+		expect(setFabricationMode(numbered, 'default', 'knife').machineProfiles[0]?.name).toBe(
+			'Drag knife'
+		);
+		const chosen = {
+			...flatParts,
+			machineProfiles: [{ ...flatParts.machineProfiles[0]!, name: 'Shapeoko' }]
+		};
+		expect(setFabricationMode(chosen, 'default', 'knife').machineProfiles[0]).toMatchObject({
+			name: 'Shapeoko',
+			fabricationMode: 'knife'
+		});
+		expect(setFabricationMode(flatParts, 'default', 'router')).toBe(flatParts);
 	});
 
 	it('add a stock profile cut on by the active sheet only', () => {

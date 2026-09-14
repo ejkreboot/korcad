@@ -7,7 +7,7 @@ KorCad is a local-first, browser-based 2D CAD/CAM app for small CNC jobs, and it
 Each sheet is drawn in a **workspace** and cut on a named **machine profile** (drag knife or
 router). Those two ideas are independent.
 
-- **Solid**: flat parts with holes and slots cut from a plate.
+- **Flat Parts**: flat parts with holes and slots cut from sheet stock, usually on a router.
 - **Packaging**: KorCad's origin. Inserts from cardstock and cardboard: folded pockets, perimeter
   walls, joists, trays and risers, fold allowance, and a 3D assembly preview. It stays a
   first-class workspace.
@@ -28,6 +28,10 @@ toolpath simulation. Stock is a fixed 24 in square sheet with its origin at the 
   `components/workspaces/<workspace>`, code and UI text stay generic: no packaging vocabulary
   (deck, pocket, flute, board, insert) and no knife-only framing. A drag knife is one machine mode
   among others.
+- **Words in the UI.** A `MachineProfile` is a **tool** to the operator (Tool panel, "Cut with",
+  "New tool", "Tool name"): the cutter and how it is driven. "Machine" means the whole CNC,
+  gantry and spindle included, so the UI does not use it for a profile. The code keeps
+  `MachineProfile` and `machine` for now.
 - **No legacy designs.** No saved files have shipped. When the document shape changes, update the
   types and regenerate the fixture. Do not add migrations or compatibility readers. A file whose
   `format` is not `korcad-design`, or whose version is not `DESIGN_VERSION`, is rejected.
@@ -61,16 +65,16 @@ src/lib/
     document.ts    createDefaultDesign, normalizeState, parseDesign
     packaging/     types, view, actions, geometry/perimeter/supports, folds, levels, mounting,
                    anchoring, placement, paths (CAM intent), assembly, validation, gcode
-    solid/         types, view, actions, geometry, validation, manipulation, presets
+    flat-parts/    types, view, actions, geometry, validation, manipulation, presets
   editor/        state.svelte.ts (sole owner of the document), tools, history, viewport, persistence
   viewer/        assembly-scene.ts: the only module that imports Three.js
   components/
     editor/      the shell: Canvas, Inspector, Toolbar, SheetTabs, WorkspaceSwitcher,
                  AssemblyViewer, SimulationDialog, CollapsiblePanel
-    workspaces/  index.ts (UI registry), packaging/, solid/: inspectors, canvas layers, controllers
+    workspaces/  index.ts (UI registry), packaging/, flat-parts/: inspectors, canvas layers, controllers
     icons/       vendored Material Symbols path data and Icon.svelte
 routes/+page.svelte  the editor page
-tests/unit/{core,features,packaging,solid,editor}   tests/fixtures/   e2e/
+tests/unit/{core,features,packaging,flat-parts,editor}   tests/fixtures/   e2e/
 ```
 
 Tests enforce these boundaries:
@@ -80,6 +84,8 @@ Tests enforce these boundaries:
 - The shell (`editor/`, `components/editor/`, `routes/`) reaches a workspace only through
   `features/workspaces.ts` and `components/workspaces/index.ts` (`workspace-boundary.spec.ts`).
   The one exception is a type-only import of `IconName` from the icons in `features`.
+- Workspace ids are camelCase, because they key the saved document (`packaging`, `flatParts`);
+  their folders are kebab-case (`features/flat-parts`).
 - A new workspace augments `WorkspaceDataMap`, registers a `Workspace` in
   `features/workspaces.ts`, and registers a `WorkspaceUi` in `components/workspaces/index.ts`.
 
@@ -92,7 +98,7 @@ type DesignState = {
 	machineProfiles: MachineProfile[];
 	sheets: Sheet[]; // { id, name, workspace, machineProfileId }
 	activeSheetId: string;
-	workspaces: WorkspaceData; // { packaging?: PackagingData, solid?: SolidData }
+	workspaces: WorkspaceData; // { packaging?: PackagingData, flatParts?: FlatPartsData }
 };
 ```
 
@@ -105,7 +111,7 @@ type DesignState = {
 - **Packaging data covers the whole document.** The deck sheet is `deckSheetId` (never assume
   it is `'deck'`). Read it through `packagingView` or `packagingSheetView`, and write it with
   `withPackaging`. Every packaging sheet must use the same fabrication mode.
-- **Solid data belongs to one sheet**, at `workspaces.solid.sheets[sheetId].entities`: parts
+- **Flat Parts data belongs to one sheet**, at `workspaces.flatParts.sheets[sheetId].entities`: parts
   (`profile`, cut outside) and holes (`hole`, cut inside).
 - Selection is one generic `{ kind, id }` slot in `editor/state.svelte.ts`, and snap lives in
   `tools.svelte.ts`. Neither is saved. Drafts are full design files.
@@ -171,11 +177,15 @@ Never mutate inputs along the way.
   view. Three.js loads client-side only, through a dynamic import.
 - **e2e:** navigate with `gotoEditor` (it waits for hydration through the draft key), not
   `page.goto('/')`. Drag with `dragOnCanvas`, and derive coordinates from measured boxes.
-  Collapse any sidebar panel you open before drawing. On a router, draw Solid parts well
+  Collapse any sidebar panel you open before drawing. On a router, draw flat parts well
   inside the sheet. A WebGL blank-render check compares screenshot PNG sizes.
-- **Chrome:** icons are vendored Material Symbols Rounded paths (no icon font or CDN). An
+- **Chrome:** icons are vendored Material Symbols Rounded paths (no icon font or CDN). Custom
+  glyphs (the SVG and G-code export buttons) are black-on-transparent SVGs in `static/`, drawn
+  by `MaskIcon.svelte` as a mask over `currentColor`, so stroke and fill alike follow button
+  states like any other icon. Keep their text converted to paths: a mask image can only use
+  fonts installed on the viewer's machine. An
   icon-only control gets `aria-label` and `title`, and toggles use `aria-pressed`. Group toolbar
-  items by spacing, not dividers. Material and Machine panels are `CollapsiblePanel`s,
+  items by spacing, not dividers. Material and Tool panels are `CollapsiblePanel`s,
   collapsed by default.
 - **The reference prototype:** `insert-generator.html` is a local, gitignored, read-only
   reference for packaging behaviour. Search it; never read it whole, edit it, or import it.
@@ -195,7 +205,7 @@ Next directions:
 - Ramped or helical plunges for routers, a choice of climb or conventional milling, and a
   finishing pass.
 - Postprocessor profiles (GRBL, LinuxCNC, Mach3), including optional G2/G3 arc output.
-- Import SVG and DXF profiles into Solid. Export a multi-sheet job as a zip.
+- Import SVG and DXF profiles into Flat Parts. Export a multi-sheet job as a zip.
 - Rotate, copy, paste, and keyboard nudge for the selection.
 - A first-run choice of workspace. New project (toolbar) already starts a project in either
   workspace, but a fresh browser still opens a packaging deck.
@@ -220,8 +230,8 @@ npm run test:e2e     # playwright; builds and previews on port 4173
 ```
 
 To work efficiently, run only the specs that cover a change while iterating. Any change to CAM,
-geometry, packaging, or Solid also runs `tests/unit/core/golden.spec.ts` and
-`tests/unit/solid`. Filter noisy output (`| grep -E "×|Tests |Error"`). In large files
+geometry, packaging, or Flat Parts also runs `tests/unit/core/golden.spec.ts` and
+`tests/unit/flat-parts`. Filter noisy output (`| grep -E "×|Tests |Error"`). In large files
 (`Inspector.svelte`, `Canvas.svelte`, `AssemblyViewer.svelte`, `PackagingInspector.svelte`,
 `SimulationDialog.svelte`, `packaging/assembly.ts`, `routing.ts`), `grep -n` first and read only
 the range you need.

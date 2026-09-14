@@ -1,16 +1,16 @@
 import type { DesignState } from '$lib/core/design/types.js';
 import type { Workspace } from '../workspaces.js';
-import { findEntity, entitySheetId, releaseSolidSheet } from './actions.js';
-import { createDefaultSolid } from './defaults.js';
-import { solidGeometry } from './geometry.js';
-import { normalizeSolid } from './normalize.js';
+import { findEntity, entitySheetId, releaseFlatPartsSheet } from './actions.js';
+import { createDefaultFlatParts } from './defaults.js';
+import { flatPartsGeometry } from './geometry.js';
+import { normalizeFlatParts } from './normalize.js';
 import { HOLE_PRESETS, PROFILE_PRESETS } from './presets.js';
-import { validateSolid } from './validation.js';
-import { solidSheetView } from './view.js';
+import { validateFlatParts } from './validation.js';
+import { flatPartsSheetView } from './view.js';
 
 /** Parts are labelled at their top-left corner; holes are too small to carry a name. */
 function labels(design: DesignState, sheetId: string) {
-	return solidSheetView(design, sheetId)
+	return flatPartsSheetView(design, sheetId)
 		.entities.filter((entity) => entity.kind === 'profile')
 		.map((entity) => ({ name: entity.name, x: entity.x + 5, y: entity.y + entity.h - 9 }));
 }
@@ -21,7 +21,7 @@ function labels(design: DesignState, sheetId: string) {
  * way. A knife leaves nothing spinning to catch them.
  */
 function untabbedPartNotes(design: DesignState, sheetId: string) {
-	const view = solidSheetView(design, sheetId);
+	const view = flatPartsSheetView(design, sheetId);
 	if (view.fabricationMode !== 'router') return {};
 	const untabbed = view.entities.filter(
 		(entity) => entity.kind === 'profile' && entity.tabCount === 0
@@ -33,14 +33,16 @@ function untabbedPartNotes(design: DesignState, sheetId: string) {
 	};
 }
 
-export const SOLID_WORKSPACE: Workspace<'solid'> = {
-	id: 'solid',
-	label: 'Solid',
+export const FLAT_PARTS_WORKSPACE: Workspace<'flatParts'> = {
+	id: 'flatParts',
+	label: 'Flat Parts',
 	icon: 'category',
 	newSheetName: (design) =>
-		`Plate ${design.sheets.filter((sheet) => sheet.workspace === 'solid').length + 1}`,
+		`Sheet ${design.sheets.filter((sheet) => sheet.workspace === 'flatParts').length + 1}`,
 	dataScope: 'sheet',
 	capabilities: { folding: false, assembly: false },
+	// Flat parts start on a router; a knife is still available from the Tool panel.
+	fabricationMode: 'router',
 	tools: [
 		{
 			id: 'profile',
@@ -59,11 +61,11 @@ export const SOLID_WORKSPACE: Workspace<'solid'> = {
 			unavailable: () => null
 		}
 	],
-	normalize: normalizeSolid,
-	defaults: createDefaultSolid,
+	normalize: normalizeFlatParts,
+	defaults: createDefaultFlatParts,
 	reconcile: (design) => design,
-	geometry: solidGeometry,
-	validate: validateSolid,
+	geometry: flatPartsGeometry,
+	validate: validateFlatParts,
 	gcodeOptions: untabbedPartNotes,
 	labels,
 	selectionExists: (design, selection) => findEntity(design, selection.id)?.kind === selection.kind,
@@ -78,5 +80,5 @@ export const SOLID_WORKSPACE: Workspace<'solid'> = {
 		};
 	},
 	protectsSheet: () => false,
-	releaseSheet: releaseSolidSheet
+	releaseSheet: releaseFlatPartsSheet
 };

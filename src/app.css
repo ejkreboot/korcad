@@ -99,28 +99,24 @@ button {
 	border-bottom: 1px solid var(--line);
 }
 
-.brand-mark {
-	flex-shrink: 0;
+/* The graphic and the wordmark share a height, so their edges line up. */
+.brand-mark,
+.brand-wordmark {
 	display: block;
-}
-
-.brand-eyebrow {
-	margin: 0;
-	font: 700 13px/1 var(--font);
-	letter-spacing: 0.02em;
-	color: var(--brand-ink);
+	flex-shrink: 0;
+	width: auto;
+	height: 52px;
 }
 
 .brand h1 {
-	margin: 6px 0 0;
-	font-size: 19px;
-	font-weight: 700;
+	margin: 0;
+	min-width: 0;
 }
 
-.brand h1 span {
-	font: 400 11px var(--mono);
-	color: var(--ink-faint);
-	margin-left: 6px;
+/* The wordmark gives way before the sidebar overflows. */
+.brand-wordmark {
+	max-width: 100%;
+	object-fit: contain;
 }
 
 /* ---- panels and fields ---- */
@@ -695,18 +691,6 @@ input[type='number'] {
 	background: color-mix(in srgb, var(--accent) 12%, transparent);
 	border-color: color-mix(in srgb, var(--accent) 32%, transparent);
 	color: var(--accent);
-}
-
-/* The export action stays solid: it is the one button that ends the workflow. */
-.button.icon.primary {
-	border-color: var(--accent);
-	background: var(--accent);
-	color: var(--accent-ink);
-}
-
-.button.icon.primary:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--accent) 88%, #000);
-	color: var(--accent-ink);
 }
 
 /* A menu button's caret sits tight against its glyph. */

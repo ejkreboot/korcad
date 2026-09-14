@@ -11,7 +11,7 @@
 	const design = $derived(editor.design);
 	/** The active sheet's workspace supplies its own panels. */
 	const ui = $derived(workspaceUi(editor.workspace.id));
-	/** The profile the active sheet is cut on; the Machine panel edits it. */
+	/** The profile the active sheet is cut with; the Tool panel edits it. */
 	const machine = $derived(editor.machine);
 	const sheetName = $derived(
 		design.sheets.find((sheet) => sheet.id === design.activeSheetId)?.name ?? 'sheet'
@@ -38,11 +38,27 @@
 		const sheets = deletion.movedSheets.join(', ');
 		if (
 			confirm(
-				`Delete the ${machine.name} profile? ${sheets} will be cut on ${deletion.replacement.name} instead.`
+				`Delete the ${machine.name} tool? ${sheets} will be cut with ${deletion.replacement.name} instead.`
 			)
 		) {
 			editor.deleteMachineProfile();
 		}
+	}
+	// Option values that cannot collide with a profile id, which is a UUID or `default`.
+	const NEW_KNIFE = 'new-profile:knife';
+	const NEW_ROUTER = 'new-profile:router';
+
+	/**
+	 * Cuts the active sheet on the chosen profile, or on a new stock profile when
+	 * one of the "Add a tool" entries is picked, so a project can gain a kind
+	 * of machine it has no profile for yet.
+	 */
+	function chooseMachine(select: HTMLSelectElement): void {
+		if (select.value === NEW_KNIFE) editor.addStockMachineProfile('knife');
+		else if (select.value === NEW_ROUTER) editor.addStockMachineProfile('router');
+		else editor.assignMachineProfile(select.value);
+		// If nothing changed, put the select back on the profile actually in use.
+		select.value = machine.id;
 	}
 	/** Writes a machine setting onto the profile the active sheet is cut on. */
 	function setMachine(key: keyof MachineSettings, raw: string): void {
@@ -53,11 +69,16 @@
 
 <aside class="sidebar">
 	<header class="brand">
-		<img class="brand-mark" src="/logo_graphic_only.png" alt="" width="28" height="30" />
-		<div class="brand-text">
-			<p class="brand-eyebrow">KorCad</p>
-			<h1>CAD/CAM <span>for makers</span></h1>
-		</div>
+		<img class="brand-mark" src="/logo_graphic_only.png" alt="" width="48" height="52" />
+		<h1>
+			<img
+				class="brand-wordmark"
+				src="/logo_text_only.png"
+				alt="KorCad: CAD/CAM for makers"
+				width="166"
+				height="52"
+			/>
+		</h1>
 	</header>
 
 	<CollapsiblePanel title="Material">
@@ -125,37 +146,40 @@
 		</p>
 	</CollapsiblePanel>
 
-	<CollapsiblePanel title="Machine">
+	<CollapsiblePanel title="Tool">
 		<p class="help">
-			These settings belong to the <strong>{machine.name}</strong> profile, which
-			{sheetName} is cut on. Sheets sharing this profile change with it.
+			These settings belong to the <strong>{machine.name}</strong> tool, which
+			{sheetName} is cut with. Sheets sharing this tool change with it.
 		</p>
 		<div class="form-grid">
 			<label class="field wide">
-				Cut on
-				<select
-					value={machine.id}
-					onchange={(e) => editor.assignMachineProfile(e.currentTarget.value)}
-				>
-					{#each design.machineProfiles as profile (profile.id)}
-						<option value={profile.id}>{profile.name}</option>
-					{/each}
+				Cut with
+				<select value={machine.id} onchange={(e) => chooseMachine(e.currentTarget)}>
+					<optgroup label="In this project">
+						{#each design.machineProfiles as profile (profile.id)}
+							<option value={profile.id}>{profile.name}</option>
+						{/each}
+					</optgroup>
+					<optgroup label="Add a tool">
+						<option value={NEW_KNIFE}>New drag knife</option>
+						<option value={NEW_ROUTER}>New router</option>
+					</optgroup>
 				</select>
 			</label>
-			<div class="field wide profile-actions" role="group" aria-label="Machine profiles">
-				<button class="button" onclick={() => editor.addMachineProfile()}>New</button>
+			<div class="field wide profile-actions" role="group" aria-label="Tools">
+				<button class="button" onclick={() => editor.addMachineProfile()}>New tool</button>
 				<button class="button" onclick={() => editor.duplicateMachineProfile()}>Duplicate</button>
 				<button
 					class="button"
 					disabled={design.machineProfiles.length < 2}
 					title={design.machineProfiles.length < 2
-						? 'A design always keeps one profile'
+						? 'A design always keeps one tool'
 						: `Delete ${machine.name}`}
 					onclick={deleteProfile}>Delete</button
 				>
 			</div>
 			<label class="field wide">
-				Profile name
+				Tool name
 				<input
 					type="text"
 					value={machine.name}
@@ -178,10 +202,7 @@
 				<select
 					value={machine.fabricationMode}
 					onchange={(e) =>
-						editor.setMachineSetting(
-							'fabricationMode',
-							e.currentTarget.value as MachineSettings['fabricationMode']
-						)}
+						editor.setFabricationMode(e.currentTarget.value as MachineSettings['fabricationMode'])}
 				>
 					<option value="knife">Drag knife</option>
 					<option value="router">Router</option>

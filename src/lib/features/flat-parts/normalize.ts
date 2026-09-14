@@ -1,22 +1,24 @@
 import { finite, isRecord } from '$lib/core/design/normalize.js';
 import type { DesignState } from '$lib/core/design/types.js';
-import { createSolidEntity, SOLID_KINDS, SOLID_SHAPES } from './defaults.js';
-import type { SolidEntity, SolidKind, SolidShape, SolidSheet } from './types.js';
+import { createFlatPartsEntity, FLAT_PARTS_KINDS, FLAT_PARTS_SHAPES } from './defaults.js';
+import type { FlatPartsEntity, FlatPartsKind, FlatPartsShape, FlatPartsSheet } from './types.js';
 
-function normalizeEntity(value: unknown, index: number): SolidEntity | null {
+function normalizeEntity(value: unknown, index: number): FlatPartsEntity | null {
 	if (!isRecord(value)) return null;
-	const kind = SOLID_KINDS.includes(value.kind as SolidKind) ? (value.kind as SolidKind) : null;
+	const kind = FLAT_PARTS_KINDS.includes(value.kind as FlatPartsKind)
+		? (value.kind as FlatPartsKind)
+		: null;
 	if (!kind) return null;
 	const number = (key: string, fallback: number) => {
 		const entry = value[key];
 		return finite(entry) ? entry : fallback;
 	};
-	const base = createSolidEntity({
+	const base = createFlatPartsEntity({
 		id: typeof value.id === 'string' && value.id ? value.id : `${kind}-${index + 1}`,
 		name: typeof value.name === 'string' ? value.name : `${kind} ${index + 1}`,
 		kind,
-		shape: SOLID_SHAPES.includes(value.shape as SolidShape)
-			? (value.shape as SolidShape)
+		shape: FLAT_PARTS_SHAPES.includes(value.shape as FlatPartsShape)
+			? (value.shape as FlatPartsShape)
 			: 'rectangle',
 		x: number('x', 0),
 		y: number('y', 0),
@@ -32,18 +34,18 @@ function normalizeEntity(value: unknown, index: number): SolidEntity | null {
 }
 
 /**
- * Reads the Solid workspace. Every sheet tagged `solid` gets an entry, and
+ * Reads the Flat Parts workspace. Every sheet tagged `flatParts` gets an entry, and
  * data for a sheet the document no longer has, or that is drawn in another
- * workspace, is dropped rather than left to be cut from the wrong plate.
+ * workspace, is dropped rather than left to be cut from the wrong sheet.
  * Entity ids are unique within the whole workspace, so a selection is never
  * ambiguous.
  */
-export function normalizeSolid(raw: unknown, document: DesignState): DesignState {
+export function normalizeFlatParts(raw: unknown, document: DesignState): DesignState {
 	const savedSheets = isRecord(raw) && isRecord(raw.sheets) ? raw.sheets : {};
 	const seen = new Set<string>();
-	const sheets: Record<string, SolidSheet> = {};
+	const sheets: Record<string, FlatPartsSheet> = {};
 	for (const sheet of document.sheets) {
-		if (sheet.workspace !== 'solid') continue;
+		if (sheet.workspace !== 'flatParts') continue;
 		const saved = savedSheets[sheet.id];
 		const entries = isRecord(saved) && Array.isArray(saved.entities) ? saved.entities : [];
 		sheets[sheet.id] = {
@@ -55,5 +57,5 @@ export function normalizeSolid(raw: unknown, document: DesignState): DesignState
 			})
 		};
 	}
-	return { ...document, workspaces: { ...document.workspaces, solid: { sheets } } };
+	return { ...document, workspaces: { ...document.workspaces, flatParts: { sheets } } };
 }

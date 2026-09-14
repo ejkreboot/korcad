@@ -1,25 +1,25 @@
 /**
- * The Solid workspace's vocabulary: flat parts cut from a plate, and the holes
+ * The Flat Parts workspace's vocabulary: flat parts cut from a sheet, and the holes
  * and slots cut through them. Nothing folds.
  *
- * Data is sheet-scoped. Each plate is independent, so a Solid sheet's parts
+ * Data is sheet-scoped. Each sheet is independent, so a Flat Parts sheet's parts
  * live under its own id, and removing the sheet removes exactly them.
  */
 
 /** A cut that frees a part (`profile`, cut outside the line) or goes through one (`hole`, inside). */
-export type SolidKind = 'profile' | 'hole';
+export type FlatPartsKind = 'profile' | 'hole';
 
 /**
  * The outline an entity is drawn with, inside its box. `slot` is a rectangle
  * rounded fully at both ends; `polygon` is regular, inscribed in the box.
  */
-export type SolidShape = 'rectangle' | 'rounded' | 'ellipse' | 'polygon' | 'slot';
+export type FlatPartsShape = 'rectangle' | 'rounded' | 'ellipse' | 'polygon' | 'slot';
 
-export type SolidEntity = {
+export type FlatPartsEntity = {
 	readonly id: string;
 	readonly name: string;
-	readonly kind: SolidKind;
-	readonly shape: SolidShape;
+	readonly kind: FlatPartsKind;
+	readonly shape: FlatPartsShape;
 	/** Lower-left corner of the box, in sheet millimeters. */
 	readonly x: number;
 	readonly y: number;
@@ -37,17 +37,17 @@ export type SolidEntity = {
 	readonly tabCount: number;
 };
 
-export type SolidSheet = {
-	readonly entities: readonly SolidEntity[];
+export type FlatPartsSheet = {
+	readonly entities: readonly FlatPartsEntity[];
 };
 
-export type SolidData = {
-	/** Keyed by sheet id; every sheet tagged `solid` has an entry. */
-	readonly sheets: { readonly [sheetId: string]: SolidSheet };
+export type FlatPartsData = {
+	/** Keyed by sheet id; every sheet tagged `flatParts` has an entry. */
+	readonly sheets: { readonly [sheetId: string]: FlatPartsSheet };
 };
 
 declare module '$lib/core/design/workspace.js' {
 	interface WorkspaceDataMap {
-		solid: SolidData;
+		flatParts: FlatPartsData;
 	}
 }

@@ -4,7 +4,7 @@ import type { WorkspaceId } from '$lib/core/design/workspace.js';
 import type { EditorState } from '$lib/editor/state.svelte.js';
 import type { ToolState } from '$lib/editor/tools.svelte.js';
 import { PACKAGING_UI } from './packaging/index.js';
-import { SOLID_UI } from './solid/index.js';
+import { FLAT_PARTS_UI } from './flat-parts/index.js';
 
 /**
  * The UI half of the workspace registry: which panels, canvas layer, and 3D
@@ -78,7 +78,7 @@ export type AssemblyUi = {
 };
 
 export type WorkspaceUi = {
-	/** The selection panels, below the Material and Machine panels. */
+	/** The selection panels, below the Material and Tool panels. */
 	readonly Inspector: Component<EditorProps>;
 	/** Extra fields inside the Material panel. */
 	readonly MaterialFields?: Component<EditorProps>;
@@ -92,7 +92,7 @@ export type WorkspaceUi = {
 
 export const WORKSPACE_UI: { readonly [K in WorkspaceId]: WorkspaceUi } = {
 	packaging: PACKAGING_UI,
-	solid: SOLID_UI
+	flatParts: FLAT_PARTS_UI
 };
 
 export function workspaceUi(id: WorkspaceId): WorkspaceUi {

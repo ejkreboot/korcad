@@ -1,16 +1,16 @@
 import type { IconName } from '$lib/components/icons/paths.js';
 import { round } from '$lib/core/units.js';
-import { createSolidEntity } from './defaults.js';
-import type { SolidEntity, SolidKind, SolidShape } from './types.js';
+import { createFlatPartsEntity } from './defaults.js';
+import type { FlatPartsEntity, FlatPartsKind, FlatPartsShape } from './types.js';
 
-export type SolidPresetInfo = {
-	readonly id: SolidShape;
+export type FlatPartsPresetInfo = {
+	readonly id: FlatPartsShape;
 	readonly label: string;
 	readonly description: string;
 	readonly icon: IconName;
 };
 
-export const PROFILE_PRESETS: readonly SolidPresetInfo[] = [
+export const PROFILE_PRESETS: readonly FlatPartsPresetInfo[] = [
 	{ id: 'rectangle', label: 'Rectangle', description: 'Square-cornered part', icon: 'rectangle' },
 	{
 		id: 'rounded',
@@ -32,7 +32,7 @@ export const PROFILE_PRESETS: readonly SolidPresetInfo[] = [
 	}
 ];
 
-export const HOLE_PRESETS: readonly SolidPresetInfo[] = [
+export const HOLE_PRESETS: readonly FlatPartsPresetInfo[] = [
 	{
 		id: 'ellipse',
 		label: 'Hole',
@@ -48,27 +48,27 @@ export const HOLE_PRESETS: readonly SolidPresetInfo[] = [
 ];
 
 /** Which kind of entity each drawing tool makes. */
-export const TOOL_KINDS: { readonly [tool: string]: SolidKind } = {
+export const TOOL_KINDS: { readonly [tool: string]: FlatPartsKind } = {
 	profile: 'profile',
 	hole: 'hole'
 };
 
-const presetsFor = (kind: SolidKind) => (kind === 'profile' ? PROFILE_PRESETS : HOLE_PRESETS);
+const presetsFor = (kind: FlatPartsKind) => (kind === 'profile' ? PROFILE_PRESETS : HOLE_PRESETS);
 
-export function solidPreset(kind: SolidKind, id: string): SolidPresetInfo | null {
+export function flatPartsPreset(kind: FlatPartsKind, id: string): FlatPartsPresetInfo | null {
 	return presetsFor(kind).find((preset) => preset.id === id) ?? null;
 }
 
 /** Builds an entity from a rectangle drawn with a preset. */
 export function createEntityFromPreset(
-	kind: SolidKind,
-	shape: SolidShape,
+	kind: FlatPartsKind,
+	shape: FlatPartsShape,
 	rect: { x: number; y: number; w: number; h: number },
 	id: string,
 	index: number
-): SolidEntity {
+): FlatPartsEntity {
 	const noun = kind === 'profile' ? 'Part' : shape === 'slot' ? 'Slot' : 'Hole';
-	return createSolidEntity({
+	return createFlatPartsEntity({
 		id,
 		name: `${noun} ${index}`,
 		kind,

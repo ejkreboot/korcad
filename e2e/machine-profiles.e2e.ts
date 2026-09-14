@@ -7,7 +7,7 @@ import { gotoEditor, readDraft } from './helpers.js';
  * The machine settings used to live on the document, so changing the
  * cut depth changed it for the whole job. They now belong to a named profile
  * that each sheet references, which is what lets one job hold a creased deck
- * and a routed plate. What needs a browser is that the panel edits the profile
+ * and a routed sheet. What needs a browser is that the panel edits the profile
  * rather than the document, and that a saved draft carries the new shape.
  */
 
@@ -19,18 +19,18 @@ type Draft = {
 const draft = async (page: Page) => (await readDraft(page)) as Draft;
 
 async function openMachinePanel(page: Page): Promise<void> {
-	await page.getByRole('button', { name: 'Machine' }).click();
-	await expect(page.getByLabel('Profile name')).toBeVisible();
+	await page.getByRole('button', { name: 'Tool', exact: true }).click();
+	await expect(page.getByLabel('Tool name')).toBeVisible();
 }
 
 test('names the profile the active sheet is cut on', async ({ page }) => {
 	await gotoEditor(page);
 	await openMachinePanel(page);
 
-	await expect(page.getByLabel('Profile name')).toHaveValue('Drag knife');
+	await expect(page.getByLabel('Tool name')).toHaveValue('Drag knife');
 	// The panel says whose settings these are, so a shared edit is not a surprise.
-	await expect(page.locator('.panel', { hasText: 'Profile name' })).toContainText('Drag knife');
-	await expect(page.locator('.panel', { hasText: 'Profile name' })).toContainText('Deck');
+	await expect(page.locator('.panel', { hasText: 'Tool name' })).toContainText('Drag knife');
+	await expect(page.locator('.panel', { hasText: 'Tool name' })).toContainText('Deck');
 
 	const saved = await draft(page);
 	expect(saved.machineProfiles).toHaveLength(1);
@@ -56,12 +56,12 @@ test('renames a profile without disturbing the sheets that use it', async ({ pag
 	await gotoEditor(page);
 	await openMachinePanel(page);
 
-	await page.getByLabel('Profile name').fill('Shop knife');
+	await page.getByLabel('Tool name').fill('Shop knife');
 	await expect.poll(async () => (await draft(page)).machineProfiles?.[0]?.name).toBe('Shop knife');
 	const saved = await draft(page);
 	// The id is the reference, so a rename cannot orphan a sheet.
 	expect(saved.sheets?.[0]?.machineProfileId).toBe(saved.machineProfiles?.[0]?.id);
-	await expect(page.locator('.panel', { hasText: 'Profile name' })).toContainText('Shop knife');
+	await expect(page.locator('.panel', { hasText: 'Tool name' })).toContainText('Shop knife');
 });
 
 test('cuts a new sheet on the machine already in use', async ({ page }) => {
@@ -90,6 +90,26 @@ test('switching fabrication mode still gates the support tools', async ({ page }
 	await expect(page.getByLabel(/Bit diameter/)).toHaveCount(0);
 });
 
+test('adds a router to a packaging project, and renames a stock profile when its mode changes', async ({
+	page
+}) => {
+	await gotoEditor(page);
+	await openMachinePanel(page);
+
+	await page.getByLabel('Cut with').selectOption({ label: 'New router' });
+	await expect(page.getByLabel('Cut with')).toHaveValue(/.+/);
+	await expect(page.getByLabel('Tool name')).toHaveValue('Router');
+	await expect(page.getByLabel('Fabrication')).toHaveValue('router');
+	await expect
+		.poll(async () => (await draft(page)).machineProfiles?.map((profile) => profile.name))
+		.toEqual(['Drag knife', 'Router']);
+
+	// Back on the knife, switching its mode renames the stock name to match.
+	await page.getByLabel('Cut with').selectOption({ label: 'Drag knife' });
+	await page.getByLabel('Fabrication').selectOption('router');
+	await expect(page.getByLabel('Tool name')).toHaveValue('Router 2');
+});
+
 test('sets a router profile’s depth per pass, and blocks export without one', async ({ page }) => {
 	await gotoEditor(page);
 	await openMachinePanel(page);
@@ -103,7 +123,7 @@ test('sets a router profile’s depth per pass, and blocks export without one', 
 
 	await page.getByLabel(/Depth per pass/).fill('0');
 	await expect(page.locator('.status.error')).toContainText(
-		'Drag knife: depth per pass must be positive'
+		'Router: depth per pass must be positive'
 	);
 	await expect(page.getByRole('button', { name: 'G-code' })).toBeDisabled();
 });

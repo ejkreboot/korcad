@@ -9,7 +9,7 @@ import {
 	type PackagingView
 } from '$lib/features/packaging/view.js';
 import type { DragView } from '$lib/features/packaging/manipulation.js';
-import { createSolidEntity } from '$lib/features/solid/defaults.js';
+import { createFlatPartsEntity } from '$lib/features/flat-parts/defaults.js';
 
 /**
  * Any field of the document, written flat the way tests think about it:
@@ -282,31 +282,31 @@ export function dragView(design: DesignState, snapEnabled = false): DragView {
 }
 
 /**
- * A Solid plate beside the default packaging deck, active: a rounded part
+ * A Flat Parts sheet beside the default packaging deck, active: a rounded part
  * 200 x 120 mm with a round hole and a slot, and a hexagonal part beside it.
  * Everything is clear of the sheet edge and of the minimum web.
  */
-export function solidDesign(
+export function flatPartsDesign(
 	fabricationMode: MachineSettings['fabricationMode'] = 'router'
 ): DesignState {
 	const base = withMachine(createDefaultDesign(), { fabricationMode });
-	const plate: Sheet = {
-		id: 'plate',
-		name: 'Plate 1',
-		workspace: 'solid',
+	const partsSheet: Sheet = {
+		id: 'sheet',
+		name: 'Sheet 1',
+		workspace: 'flatParts',
 		machineProfileId: DEFAULT_MACHINE_PROFILE_ID
 	};
 	return {
 		...base,
-		sheets: [...base.sheets, plate],
-		activeSheetId: 'plate',
+		sheets: [...base.sheets, partsSheet],
+		activeSheetId: 'sheet',
 		workspaces: {
 			...base.workspaces,
-			solid: {
+			flatParts: {
 				sheets: {
-					plate: {
+					sheet: {
 						entities: [
-							createSolidEntity({
+							createFlatPartsEntity({
 								id: 'bracket',
 								name: 'Bracket',
 								kind: 'profile',
@@ -318,7 +318,7 @@ export function solidDesign(
 								cornerRadius: 10,
 								tabCount: 4
 							}),
-							createSolidEntity({
+							createFlatPartsEntity({
 								id: 'bore',
 								name: 'Bore',
 								kind: 'hole',
@@ -328,7 +328,7 @@ export function solidDesign(
 								w: 40,
 								h: 40
 							}),
-							createSolidEntity({
+							createFlatPartsEntity({
 								id: 'adjust',
 								name: 'Adjust slot',
 								kind: 'hole',
@@ -338,7 +338,7 @@ export function solidDesign(
 								w: 70,
 								h: 20
 							}),
-							createSolidEntity({
+							createFlatPartsEntity({
 								id: 'nut',
 								name: 'Nut plate',
 								kind: 'profile',

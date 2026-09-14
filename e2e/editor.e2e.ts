@@ -289,13 +289,13 @@ test('folds the once-per-job settings away, above the selection panel', async ({
 	await gotoEditor(page);
 
 	const material = page.getByRole('button', { name: 'Material' });
-	const machine = page.getByRole('button', { name: 'Machine' });
+	const machine = page.getByRole('button', { name: 'Tool', exact: true });
 
 	// Both sit at the top of the sidebar, ahead of the contextual panel.
 	const order = await page
 		.locator('.sidebar h2')
 		.evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim()));
-	expect(order.slice(0, 3)).toEqual(['Material', 'Machine', 'Stock and top deck']);
+	expect(order.slice(0, 3)).toEqual(['Material', 'Tool', 'Stock and top deck']);
 
 	// Collapsed by default: the headers are there, the fields are not.
 	await expect(material).toHaveAttribute('aria-expanded', 'false');
@@ -354,8 +354,8 @@ test('drives the toolbar by icon buttons that keep their accessible names', asyn
 		await expect(button).toHaveCount(1);
 		await expect(button).toHaveAttribute('title', /.+/);
 		// The glyph is decorative: the button carries the name.
-		expect(await button.locator('svg.icon').count()).toBeGreaterThan(0);
-		await expect(button.locator('svg.icon').first()).toHaveAttribute('aria-hidden', 'true');
+		expect(await button.locator('.icon').count()).toBeGreaterThan(0);
+		await expect(button.locator('.icon').first()).toHaveAttribute('aria-hidden', 'true');
 	}
 
 	// Toggles report their state rather than relying on colour alone.

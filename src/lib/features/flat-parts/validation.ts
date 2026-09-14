@@ -10,32 +10,32 @@ import type { Point } from '$lib/core/geometry/primitives.js';
 import { bridgeTabZ } from '$lib/core/cam/tabs.js';
 import { round } from '$lib/core/units.js';
 import { entityOutline } from './geometry.js';
-import type { SolidEntity } from './types.js';
-import { solidSheetView, type SolidView } from './view.js';
+import type { FlatPartsEntity } from './types.js';
+import { flatPartsSheetView, type FlatPartsView } from './view.js';
 
 /** Smallest box an entity may be drawn in, in millimeters. */
-export const MIN_SOLID_ENTITY = 1;
+export const MIN_FLAT_PARTS_ENTITY = 1;
 
 const WEB_TOLERANCE = 1e-6;
 
 /**
- * Manufacturability of every Solid sheet, each against its own machine.
+ * Manufacturability of every Flat Parts sheet, each against its own machine.
  * Messages name the entity, so the operator can find it.
  */
-export function validateSolid(design: DesignState): string[] {
+export function validateFlatParts(design: DesignState): string[] {
 	return design.sheets
-		.filter((sheet) => sheet.workspace === 'solid')
+		.filter((sheet) => sheet.workspace === 'flatParts')
 		.flatMap((sheet) => validateSheet(design, sheet.id));
 }
 
 function validateSheet(design: DesignState, sheetId: string): string[] {
-	const view = solidSheetView(design, sheetId);
+	const view = flatPartsSheetView(design, sheetId);
 	const errors: string[] = [];
 	const router = view.fabricationMode === 'router';
 	const web = view.minimumWeb;
-	const outlines = new Map<SolidEntity, ReturnType<typeof entityOutline>>();
+	const outlines = new Map<FlatPartsEntity, ReturnType<typeof entityOutline>>();
 	const sized = view.entities.filter((entity) => {
-		if (entity.w < MIN_SOLID_ENTITY || entity.h < MIN_SOLID_ENTITY) {
+		if (entity.w < MIN_FLAT_PARTS_ENTITY || entity.h < MIN_FLAT_PARTS_ENTITY) {
 			errors.push(`${entity.name}: is too small to cut`);
 			return false;
 		}
@@ -46,7 +46,7 @@ function validateSheet(design: DesignState, sheetId: string): string[] {
 	});
 	const profiles = sized.filter((entity) => entity.kind === 'profile');
 	const holes = sized.filter((entity) => entity.kind === 'hole');
-	const outline = (entity: SolidEntity) => outlines.get(entity)!;
+	const outline = (entity: FlatPartsEntity) => outlines.get(entity)!;
 
 	for (const profile of profiles) {
 		// A router cuts outside the line, so the bit's far edge must stay on the stock.
@@ -79,7 +79,7 @@ function validateSheet(design: DesignState, sheetId: string): string[] {
 		}
 	});
 
-	const parents = new Map<SolidEntity, SolidEntity>();
+	const parents = new Map<FlatPartsEntity, FlatPartsEntity>();
 	for (const hole of holes) {
 		const parent = profiles.find((profile) => outlineInside(outline(hole), outline(profile)));
 		if (!parent) {
@@ -113,7 +113,11 @@ function validateSheet(design: DesignState, sheetId: string): string[] {
  * floor of the cut and below the top of the board, or the program would cut
  * straight through it or lift out of the work.
  */
-function tabErrors(profile: SolidEntity, outline: readonly Point[], view: SolidView): string[] {
+function tabErrors(
+	profile: FlatPartsEntity,
+	outline: readonly Point[],
+	view: FlatPartsView
+): string[] {
 	if (view.tabWidth <= 0) return [`${profile.name}: holding tabs need a tab width`];
 	const router = view.fabricationMode === 'router';
 	const errors: string[] = [];

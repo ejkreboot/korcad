@@ -1,5 +1,5 @@
 ; KorCad v0.1
-; Sheet: Plate 1
+; Sheet: Sheet 1
 ; Operation: cut; tool: drag knife
 ; 24 x 24 inch sheet; origin at lower left; Z zero at material surface
 ; Grain direction: y; material thickness: 3 mm

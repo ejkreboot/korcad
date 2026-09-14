@@ -6,11 +6,11 @@ import {
 } from '$lib/core/geometry/outline.js';
 import type { Point } from '$lib/core/geometry/primitives.js';
 import type { DesignPath, DesignState, Geometry, HoldingTab } from '$lib/core/design/types.js';
-import type { SolidEntity } from './types.js';
-import { solidSheetView, type SolidView } from './view.js';
+import type { FlatPartsEntity } from './types.js';
+import { flatPartsSheetView, type FlatPartsView } from './view.js';
 
 /** The drawn outline of an entity, counter-clockwise. */
-export function entityOutline(entity: SolidEntity): Point[] {
+export function entityOutline(entity: FlatPartsEntity): Point[] {
 	switch (entity.shape) {
 		case 'polygon':
 			return regularPolygon(entity, entity.sides);
@@ -22,14 +22,18 @@ export function entityOutline(entity: SolidEntity): Point[] {
 	}
 }
 
-const owner = (entity: SolidEntity) => ({ kind: entity.kind, id: entity.id, name: entity.name });
+const owner = (entity: FlatPartsEntity) => ({
+	kind: entity.kind,
+	id: entity.id,
+	name: entity.name
+});
 
 /**
  * A hole goes through a part, so it is cut inside its line — the hole keeps its
  * size — and before the profile that frees the part, while the part is still
  * held by the sheet.
  */
-function holePath(entity: SolidEntity): DesignPath {
+function holePath(entity: FlatPartsEntity): DesignPath {
 	return {
 		points: entityOutline(entity),
 		type: 'cut',
@@ -51,7 +55,7 @@ function holePath(entity: SolidEntity): DesignPath {
  * centres so CAM can rise over each after it has offset and routed the cut.
  * Either way the tabs drawn on the canvas are the same stretches of outline.
  */
-function profileGeometry(entity: SolidEntity, view: SolidView): Geometry {
+function profileGeometry(entity: FlatPartsEntity, view: FlatPartsView): Geometry {
 	const outline = entityOutline(entity);
 	const cam = { offsetSide: 'outside', stage: 'part-release' } as const;
 	const tabbed = splitClosedContour(outline, entity.tabCount, view.tabWidth);
@@ -74,7 +78,7 @@ function profileGeometry(entity: SolidEntity, view: SolidView): Geometry {
 			points,
 			type: 'cut' as const,
 			closed: false,
-			cam: { ...cam, chainKey: `solid-profile:${entity.id}` },
+			cam: { ...cam, chainKey: `flat-parts-profile:${entity.id}` },
 			role: 'profile',
 			owner: owner(entity)
 		})),
@@ -82,9 +86,9 @@ function profileGeometry(entity: SolidEntity, view: SolidView): Geometry {
 	};
 }
 
-/** All flat geometry of one Solid sheet: holes, then the profiles that free each part. */
-export function solidGeometry(design: DesignState, sheetId = design.activeSheetId): Geometry {
-	const view = solidSheetView(design, sheetId);
+/** All flat geometry of one Flat Parts sheet: holes, then the profiles that free each part. */
+export function flatPartsGeometry(design: DesignState, sheetId = design.activeSheetId): Geometry {
+	const view = flatPartsSheetView(design, sheetId);
 	const holes = view.entities.filter((entity) => entity.kind === 'hole').map(holePath);
 	const profiles = view.entities
 		.filter((entity) => entity.kind === 'profile')

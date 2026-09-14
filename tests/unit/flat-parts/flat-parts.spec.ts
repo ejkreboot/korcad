@@ -17,24 +17,24 @@ import { placeSupport } from '$lib/features/packaging/placement.js';
 import { packagingData, packagingSheetView } from '$lib/features/packaging/view.js';
 import {
 	addEntity,
-	releaseSolidSheet,
+	releaseFlatPartsSheet,
 	removeEntity,
-	solidActions,
+	flatPartsActions,
 	updateEntities
-} from '$lib/features/solid/actions.js';
-import { createSolidEntity } from '$lib/features/solid/defaults.js';
-import { entityOutline, solidGeometry } from '$lib/features/solid/geometry.js';
+} from '$lib/features/flat-parts/actions.js';
+import { createFlatPartsEntity } from '$lib/features/flat-parts/defaults.js';
+import { entityOutline, flatPartsGeometry } from '$lib/features/flat-parts/geometry.js';
 import {
 	moveEntityBox,
-	MIN_SOLID_DRAG,
+	MIN_FLAT_PARTS_DRAG,
 	resizeEntityBox
-} from '$lib/features/solid/manipulation.js';
-import { createEntityFromPreset } from '$lib/features/solid/presets.js';
-import type { SolidEntity } from '$lib/features/solid/types.js';
-import { validateSolid } from '$lib/features/solid/validation.js';
-import { solidSheetView } from '$lib/features/solid/view.js';
-import { SOLID_WORKSPACE, validateDocument } from '$lib/features/workspaces.js';
-import { solidDesign, supportDesign, withMachine } from '../../support/designs.js';
+} from '$lib/features/flat-parts/manipulation.js';
+import { createEntityFromPreset } from '$lib/features/flat-parts/presets.js';
+import type { FlatPartsEntity } from '$lib/features/flat-parts/types.js';
+import { validateFlatParts } from '$lib/features/flat-parts/validation.js';
+import { flatPartsSheetView } from '$lib/features/flat-parts/view.js';
+import { FLAT_PARTS_WORKSPACE, validateDocument } from '$lib/features/workspaces.js';
+import { flatPartsDesign, supportDesign, withMachine } from '../../support/designs.js';
 
 const fixture = (name: string) => fileURLToPath(new URL(`../../fixtures/${name}`, import.meta.url));
 
@@ -49,15 +49,15 @@ function golden(name: string, actual: string): void {
 }
 
 const entity = (design: DesignState, id: string) =>
-	solidSheetView(design).entities.find((candidate) => candidate.id === id)!;
+	flatPartsSheetView(design).entities.find((candidate) => candidate.id === id)!;
 
 /** The design with one entity changed, for validation cases. */
-const withEntity = (design: DesignState, id: string, values: Partial<SolidEntity>) =>
+const withEntity = (design: DesignState, id: string, values: Partial<FlatPartsEntity>) =>
 	updateEntities(design, [{ id, values }]);
 
-describe('solid geometry', () => {
+describe('flat parts geometry', () => {
 	it('cuts holes inside their line first, and parts outside theirs after', () => {
-		const { paths } = solidGeometry(solidDesign('router'));
+		const { paths } = flatPartsGeometry(flatPartsDesign('router'));
 		const holes = paths.filter((path) => path.owner?.kind === 'hole');
 		const parts = paths.filter((path) => path.owner?.kind === 'profile');
 		expect(holes).toHaveLength(2);
@@ -70,9 +70,9 @@ describe('solid geometry', () => {
 	});
 
 	it('keeps a routed part and hole at their drawn size by compensating away from the material', () => {
-		const design = solidDesign('router');
+		const design = flatPartsDesign('router');
 		const view = sheetView(design);
-		const { paths } = solidGeometry(design);
+		const { paths } = flatPartsGeometry(design);
 		const bore = paths.find((path) => path.owner?.id === 'bore')!;
 		const bracket = paths.find((path) => path.owner?.id === 'bracket')!;
 		const radius = view.bitWidth / 2;
@@ -84,15 +84,15 @@ describe('solid geometry', () => {
 	});
 
 	it('releases a routed part in one closed cut that carries its bridge tabs', () => {
-		const { paths, tabs } = solidGeometry(solidDesign('router'));
+		const { paths, tabs } = flatPartsGeometry(flatPartsDesign('router'));
 		const bracket = paths.filter((path) => path.owner?.id === 'bracket');
 		expect(bracket).toHaveLength(1);
 		expect(paths.every((path) => path.closed)).toBe(true);
 		expect(bracket[0]!.holdingTabs).toHaveLength(4);
 		// The canvas draws the same tabs a knife would leave as gaps.
-		expect(tabs).toEqual(solidGeometry(solidDesign('knife')).tabs);
-		const none = withEntity(solidDesign('router'), 'bracket', { tabCount: 0 });
-		const untabbed = solidGeometry(none).paths.find((path) => path.owner?.id === 'bracket')!;
+		expect(tabs).toEqual(flatPartsGeometry(flatPartsDesign('knife')).tabs);
+		const none = withEntity(flatPartsDesign('router'), 'bracket', { tabCount: 0 });
+		const untabbed = flatPartsGeometry(none).paths.find((path) => path.owner?.id === 'bracket')!;
 		expect(untabbed.holdingTabs).toBeUndefined();
 		expect(paths.filter((path) => path.owner?.kind === 'hole').every((p) => !p.holdingTabs)).toBe(
 			true
@@ -100,21 +100,21 @@ describe('solid geometry', () => {
 	});
 
 	it('leaves holding tabs in a knife-cut part, chained around it', () => {
-		const { paths, tabs } = solidGeometry(solidDesign('knife'));
+		const { paths, tabs } = flatPartsGeometry(flatPartsDesign('knife'));
 		const runs = paths.filter((path) => path.owner?.id === 'bracket');
 		expect(runs).toHaveLength(4);
 		expect(tabs).toHaveLength(4 + 3);
 		expect(
-			runs.every((path) => !path.closed && path.cam.chainKey === 'solid-profile:bracket')
+			runs.every((path) => !path.closed && path.cam.chainKey === 'flat-parts-profile:bracket')
 		).toBe(true);
-		const none = withEntity(solidDesign('knife'), 'bracket', { tabCount: 0 });
-		expect(solidGeometry(none).paths.filter((path) => path.owner?.id === 'bracket')).toHaveLength(
-			1
-		);
+		const none = withEntity(flatPartsDesign('knife'), 'bracket', { tabCount: 0 });
+		expect(
+			flatPartsGeometry(none).paths.filter((path) => path.owner?.id === 'bracket')
+		).toHaveLength(1);
 	});
 
 	it('draws a slot with fully rounded ends', () => {
-		const slot = entityOutline(entity(solidDesign(), 'adjust'));
+		const slot = entityOutline(entity(flatPartsDesign(), 'adjust'));
 		const bounds = outlineBounds(slot);
 		expect(bounds).toEqual({ left: 150, right: 220, bottom: 100, top: 120 });
 		// The end caps are half-circles of half the slot's height.
@@ -122,37 +122,37 @@ describe('solid geometry', () => {
 	});
 
 	it('is only drawn on its own sheet', () => {
-		expect(solidGeometry(solidDesign(), 'deck').paths).toEqual([]);
+		expect(flatPartsGeometry(flatPartsDesign(), 'deck').paths).toEqual([]);
 	});
 });
 
-describe('solid golden output', () => {
+describe('flat parts golden output', () => {
 	for (const mode of ['router', 'knife'] as const) {
 		it(`emits a stable ${mode} program and SVG`, () => {
-			const design = solidDesign(mode);
+			const design = flatPartsDesign(mode);
 			expect(validateDocument(design)).toEqual([]);
-			const geometry = SOLID_WORKSPACE.geometry(design);
+			const geometry = FLAT_PARTS_WORKSPACE.geometry(design);
 			golden(
-				`expected-gcode/solid-plate-${mode}.nc`,
+				`expected-gcode/flat-parts-${mode}.nc`,
 				generateGcode(
 					geometry.paths,
 					sheetView(design),
 					'cut',
-					SOLID_WORKSPACE.gcodeOptions(design, 'plate')
+					FLAT_PARTS_WORKSPACE.gcodeOptions(design, 'sheet')
 				)
 			);
 			golden(
-				`designs/solid-plate-${mode}.svg`,
-				designSvg(geometry, SOLID_WORKSPACE.labels(design, 'plate'))
+				`designs/flat-parts-${mode}.svg`,
+				designSvg(geometry, FLAT_PARTS_WORKSPACE.labels(design, 'sheet'))
 			);
 		});
 	}
 
 	it('rises over each routed bridge tab while still cutting, and never below the cut', () => {
-		const design = solidDesign('router');
+		const design = flatPartsDesign('router');
 		const view = sheetView(design);
 		const program = (d: DesignState) =>
-			generateGcode(SOLID_WORKSPACE.geometry(d).paths, sheetView(d), 'cut');
+			generateGcode(FLAT_PARTS_WORKSPACE.geometry(d).paths, sheetView(d), 'cut');
 		const moves = simulationMoves(program(design), view);
 		// Bracket 4 + nut plate 3. A tab on a hexagon corner turns it in two moves.
 		const rises = moves.filter((move) => move.a.z === -view.cutDepth && move.b.z === -2);
@@ -168,140 +168,146 @@ describe('solid golden output', () => {
 		expect(Math.min(...moves.map((move) => move.b.z))).toBe(-view.cutDepth);
 		expect(moves.every((move) => move.a.z === move.b.z || move.a.x === move.b.x)).toBe(true);
 
-		const knife = program(solidDesign('knife'));
+		const knife = program(flatPartsDesign('knife'));
 		expect(knife).not.toContain('Holding tabs:');
 		expect(knife).not.toContain('holding tab');
 	});
 
 	it('warns in the program about a routed part left without tabs', () => {
-		const untabbed = withEntity(solidDesign('router'), 'nut', { tabCount: 0 });
-		expect(SOLID_WORKSPACE.gcodeOptions(untabbed, 'plate').headerNotes).toEqual([
+		const untabbed = withEntity(flatPartsDesign('router'), 'nut', { tabCount: 0 });
+		expect(FLAT_PARTS_WORKSPACE.gcodeOptions(untabbed, 'sheet').headerNotes).toEqual([
 			'; No holding tabs on: Nut plate; secure these parts before the release cut'
 		]);
-		expect(SOLID_WORKSPACE.gcodeOptions(solidDesign('router'), 'plate').headerNotes ?? []).toEqual(
-			[]
-		);
-		const knife = withEntity(solidDesign('knife'), 'nut', { tabCount: 0 });
-		expect(SOLID_WORKSPACE.gcodeOptions(knife, 'plate').headerNotes ?? []).toEqual([]);
+		expect(
+			FLAT_PARTS_WORKSPACE.gcodeOptions(flatPartsDesign('router'), 'sheet').headerNotes ?? []
+		).toEqual([]);
+		const knife = withEntity(flatPartsDesign('knife'), 'nut', { tabCount: 0 });
+		expect(FLAT_PARTS_WORKSPACE.gcodeOptions(knife, 'sheet').headerNotes ?? []).toEqual([]);
 	});
 
 	it('machines every hole before the part around it', () => {
-		const design = solidDesign('router');
-		const program = generateGcode(SOLID_WORKSPACE.geometry(design).paths, sheetView(design), 'cut');
+		const design = flatPartsDesign('router');
+		const program = generateGcode(
+			FLAT_PARTS_WORKSPACE.geometry(design).paths,
+			sheetView(design),
+			'cut'
+		);
 		const lastHole = Math.max(program.indexOf('(Bore)'), program.indexOf('(Adjust slot)'));
 		expect(lastHole).toBeGreaterThan(0);
 		expect(program.indexOf('(Bracket)')).toBeGreaterThan(lastHole);
 	});
 });
 
-describe('solid validation', () => {
+describe('flat parts validation', () => {
 	it('accepts the fixture on both machines', () => {
-		expect(validateSolid(solidDesign('router'))).toEqual([]);
-		expect(validateSolid(solidDesign('knife'))).toEqual([]);
+		expect(validateFlatParts(flatPartsDesign('router'))).toEqual([]);
+		expect(validateFlatParts(flatPartsDesign('knife'))).toEqual([]);
 	});
 
 	it('rejects a part off the sheet, counting a router bit outside the line', () => {
-		expect(validateSolid(withEntity(solidDesign(), 'nut', { x: SHEET - 90 }))).toContain(
+		expect(validateFlatParts(withEntity(flatPartsDesign(), 'nut', { x: SHEET - 90 }))).toContain(
 			'Nut plate: does not fit the sheet'
 		);
-		const flush = withEntity(solidDesign('router'), 'nut', { x: SHEET - 100 });
-		expect(validateSolid(flush)).toContain('Nut plate: does not fit the sheet');
-		expect(validateSolid(withEntity(solidDesign('knife'), 'nut', { x: SHEET - 100 }))).toEqual([]);
+		const flush = withEntity(flatPartsDesign('router'), 'nut', { x: SHEET - 100 });
+		expect(validateFlatParts(flush)).toContain('Nut plate: does not fit the sheet');
+		expect(
+			validateFlatParts(withEntity(flatPartsDesign('knife'), 'nut', { x: SHEET - 100 }))
+		).toEqual([]);
 	});
 
 	it('rejects a hole outside any part, or too close to its edge', () => {
-		expect(validateSolid(withEntity(solidDesign(), 'bore', { x: 500, y: 500 }))).toContain(
+		expect(validateFlatParts(withEntity(flatPartsDesign(), 'bore', { x: 500, y: 500 }))).toContain(
 			'Bore: is not inside a part'
 		);
-		const thin = withEntity(solidDesign(), 'bore', { x: 53, y: 90 });
-		expect(validateSolid(thin)).toContain(
+		const thin = withEntity(flatPartsDesign(), 'bore', { x: 53, y: 90 });
+		expect(validateFlatParts(thin)).toContain(
 			'Bore: leaves less than the minimum web to the edge of Bracket'
 		);
 	});
 
 	it('rejects holes that crowd or overlap each other', () => {
-		const touching = withEntity(solidDesign(), 'adjust', { x: 118, y: 100 });
-		expect(validateSolid(touching)).toContain(
+		const touching = withEntity(flatPartsDesign(), 'adjust', { x: 118, y: 100 });
+		expect(validateFlatParts(touching)).toContain(
 			'Bore and Adjust slot: leave less than the minimum web between them'
 		);
 	});
 
 	it('rejects parts closer than the web, which a router bit also eats into', () => {
-		const design = solidDesign('router');
+		const design = flatPartsDesign('router');
 		const gap = design.stock.minimumWeb + 1;
 		const near = withEntity(design, 'nut', { x: 250 + gap });
-		expect(validateSolid(withMachine(near, { fabricationMode: 'knife' }))).toEqual([]);
-		expect(validateSolid(near)).toContain(
+		expect(validateFlatParts(withMachine(near, { fabricationMode: 'knife' }))).toEqual([]);
+		expect(validateFlatParts(near)).toContain(
 			`Bracket and Nut plate: leave less than the ${design.stock.minimumWeb} mm minimum web between them`
 		);
 	});
 
 	it('rejects router bridge tabs that cannot be cut', () => {
-		const design = solidDesign('router');
+		const design = flatPartsDesign('router');
 		const stock = (values: Partial<typeof design.stock>) => ({
 			...design,
 			stock: { ...design.stock, ...values }
 		});
-		expect(validateSolid(stock({ tabHeight: design.stock.material }))).toContain(
+		expect(validateFlatParts(stock({ tabHeight: design.stock.material }))).toContain(
 			'Bracket: holding tabs must be thinner than the board'
 		);
-		expect(validateSolid(stock({ tabHeight: 0 }))).toContain(
+		expect(validateFlatParts(stock({ tabHeight: 0 }))).toContain(
 			'Bracket: holding tabs must be thinner than the board'
 		);
-		expect(validateSolid(withMachine(stock({ tabHeight: 1 }), { cutDepth: 1.5 }))).toContain(
+		expect(validateFlatParts(withMachine(stock({ tabHeight: 1 }), { cutDepth: 1.5 }))).toContain(
 			'Bracket: the cut depth stops above the holding tabs'
 		);
-		expect(validateSolid(stock({ tabWidth: 0 }))).toContain(
+		expect(validateFlatParts(stock({ tabWidth: 0 }))).toContain(
 			'Bracket: holding tabs need a tab width'
 		);
 		// 80 tabs of 5 mm fit around the bracket's ~623 mm outline on a knife, but not
 		// once each bridge also spans a 6.35 mm bit.
 		const crowded = withEntity(design, 'bracket', { tabCount: 80 });
-		expect(validateSolid(withMachine(crowded, { fabricationMode: 'knife' }))).toEqual([]);
-		expect(validateSolid(crowded)).toContain(
+		expect(validateFlatParts(withMachine(crowded, { fabricationMode: 'knife' }))).toEqual([]);
+		expect(validateFlatParts(crowded)).toContain(
 			'Bracket: holding tabs leave no room to cut between them'
 		);
 	});
 
 	it('rejects an entity too small to cut', () => {
-		expect(validateSolid(withEntity(solidDesign(), 'bore', { w: 0.5 }))).toContain(
+		expect(validateFlatParts(withEntity(flatPartsDesign(), 'bore', { w: 0.5 }))).toContain(
 			'Bore: is too small to cut'
 		);
 	});
 
 	it('is part of the document check that gates export', () => {
-		const broken = withEntity(solidDesign(), 'bore', { x: 500, y: 500 });
+		const broken = withEntity(flatPartsDesign(), 'bore', { x: 500, y: 500 });
 		expect(validateDocument(broken)).toContain('Bore: is not inside a part');
 	});
 });
 
-describe('the solid document', () => {
+describe('the flat parts document', () => {
 	it('round-trips through a design file', () => {
-		const design = solidDesign();
+		const design = flatPartsDesign();
 		expect(parseDesign(serializeDesign(design))).toEqual(design);
 	});
 
-	it('gives every Solid sheet an entry and drops data for any other sheet', () => {
-		const design = solidDesign();
+	it('gives every Flat Parts sheet an entry and drops data for any other sheet', () => {
+		const design = flatPartsDesign();
 		const raw = JSON.parse(serializeDesign(design));
-		raw.design.workspaces.solid.sheets.deck = { entities: [] };
-		raw.design.workspaces.solid.sheets.gone = { entities: [] };
+		raw.design.workspaces.flatParts.sheets.deck = { entities: [] };
+		raw.design.workspaces.flatParts.sheets.gone = { entities: [] };
 		raw.design.sheets.push({
 			id: 'blank',
 			name: 'Blank',
-			workspace: 'solid',
+			workspace: 'flatParts',
 			machineProfileId: 'default'
 		});
 		const read = parseDesign(JSON.stringify(raw));
-		expect(Object.keys(read.workspaces.solid!.sheets).sort()).toEqual(['blank', 'plate']);
+		expect(Object.keys(read.workspaces.flatParts!.sheets).sort()).toEqual(['blank', 'sheet']);
 	});
 
 	it('drops an entity it cannot read, or one reusing an id', () => {
-		const raw = JSON.parse(serializeDesign(solidDesign()));
-		const entities = raw.design.workspaces.solid.sheets.plate.entities;
+		const raw = JSON.parse(serializeDesign(flatPartsDesign()));
+		const entities = raw.design.workspaces.flatParts.sheets.sheet.entities;
 		entities.push({ id: 'x', kind: 'engraving' }, { ...entities[0], name: 'Copy' }, null);
 		const read = parseDesign(JSON.stringify(raw));
-		expect(solidSheetView(read).entities.map((item) => item.id)).toEqual([
+		expect(flatPartsSheetView(read).entities.map((item) => item.id)).toEqual([
 			'bracket',
 			'bore',
 			'adjust',
@@ -309,12 +315,12 @@ describe('the solid document', () => {
 		]);
 	});
 
-	it('keeps a tray net off a Solid sheet', () => {
+	it('keeps a tray net off a Flat Parts sheet', () => {
 		const base = supportDesign();
 		const design = {
 			...base,
-			sheets: [...solidDesign().sheets.filter((s) => s.id === 'plate'), ...base.sheets],
-			activeSheetId: 'plate'
+			sheets: [...flatPartsDesign().sheets.filter((s) => s.id === 'sheet'), ...base.sheets],
+			activeSheetId: 'sheet'
 		};
 		const tray = packagingData(design).supports[0]!;
 		const placement = placeSupport(
@@ -322,12 +328,12 @@ describe('the solid document', () => {
 			packagingSheetView(design),
 			() => 'new'
 		);
-		expect(placement.sheetId).not.toBe('plate');
+		expect(placement.sheetId).not.toBe('sheet');
 	});
 });
 
-describe('solid actions', () => {
-	const extra = createSolidEntity({
+describe('flat parts actions', () => {
+	const extra = createFlatPartsEntity({
 		id: 'e',
 		name: 'E',
 		kind: 'hole',
@@ -339,7 +345,7 @@ describe('solid actions', () => {
 	});
 
 	it('add, update, and remove an entity on its sheet', () => {
-		const added = addEntity(solidDesign(), 'plate', extra);
+		const added = addEntity(flatPartsDesign(), 'sheet', extra);
 		expect(entity(added, 'e')).toEqual(extra);
 		expect(
 			entity(updateEntities(added, [{ id: 'e', values: { w: 12, kind: 'profile' } }]), 'e')
@@ -348,11 +354,13 @@ describe('solid actions', () => {
 	});
 
 	it('remove a sheet’s parts with the sheet', () => {
-		expect(releaseSolidSheet(solidDesign(), 'plate').workspaces.solid!.sheets).toEqual({});
+		expect(releaseFlatPartsSheet(flatPartsDesign(), 'sheet').workspaces.flatParts!.sheets).toEqual(
+			{}
+		);
 	});
 
 	it('select what they add, as one undo step', () => {
-		let design = solidDesign();
+		let design = flatPartsDesign();
 		let steps = 0;
 		const host = {
 			get design() {
@@ -370,7 +378,7 @@ describe('solid actions', () => {
 				host.selection = selection;
 			}
 		};
-		const actions = solidActions(host);
+		const actions = flatPartsActions(host);
 		actions.addEntity(extra);
 		expect(steps).toBe(1);
 		expect(actions.selectedEntity?.id).toBe('e');
@@ -389,7 +397,7 @@ describe('solid actions', () => {
 	});
 });
 
-describe('solid manipulation', () => {
+describe('flat parts manipulation', () => {
 	const box = { x: 100, y: 100, w: 50, h: 40 };
 
 	it('moves a box by the pointer’s travel, kept on the sheet', () => {
@@ -419,29 +427,33 @@ describe('solid manipulation', () => {
 			h: 50
 		});
 		expect(resizeEntityBox(box, 'sw', { x: 400, y: 400 }, false)).toMatchObject({
-			w: MIN_SOLID_DRAG,
-			h: MIN_SOLID_DRAG
+			w: MIN_FLAT_PARTS_DRAG,
+			h: MIN_FLAT_PARTS_DRAG
 		});
 	});
 });
 
-describe('the solid registry entry', () => {
-	it('protects no sheet, names new plates, and frames an entity only on its sheet', () => {
-		const design = solidDesign();
-		expect(SOLID_WORKSPACE.protectsSheet(design, 'plate')).toBe(false);
-		expect(SOLID_WORKSPACE.newSheetName(design)).toBe('Plate 2');
-		expect(SOLID_WORKSPACE.selectionExists(design, { kind: 'hole', id: 'bore' })).toBe(true);
-		expect(SOLID_WORKSPACE.selectionExists(design, { kind: 'profile', id: 'bore' })).toBe(false);
-		expect(SOLID_WORKSPACE.selectionBounds(design, { kind: 'hole', id: 'bore' }, 'plate')).toEqual({
+describe('the flat parts registry entry', () => {
+	it('protects no sheet, names new sheets, and frames an entity only on its sheet', () => {
+		const design = flatPartsDesign();
+		expect(FLAT_PARTS_WORKSPACE.protectsSheet(design, 'sheet')).toBe(false);
+		expect(FLAT_PARTS_WORKSPACE.newSheetName(design)).toBe('Sheet 2');
+		expect(FLAT_PARTS_WORKSPACE.selectionExists(design, { kind: 'hole', id: 'bore' })).toBe(true);
+		expect(FLAT_PARTS_WORKSPACE.selectionExists(design, { kind: 'profile', id: 'bore' })).toBe(
+			false
+		);
+		expect(
+			FLAT_PARTS_WORKSPACE.selectionBounds(design, { kind: 'hole', id: 'bore' }, 'sheet')
+		).toEqual({
 			left: 80,
 			right: 120,
 			bottom: 90,
 			top: 130
 		});
 		expect(
-			SOLID_WORKSPACE.selectionBounds(design, { kind: 'hole', id: 'bore' }, 'deck')
+			FLAT_PARTS_WORKSPACE.selectionBounds(design, { kind: 'hole', id: 'bore' }, 'deck')
 		).toBeNull();
-		expect(SOLID_WORKSPACE.labels(design, 'plate').map((label) => label.name)).toEqual([
+		expect(FLAT_PARTS_WORKSPACE.labels(design, 'sheet').map((label) => label.name)).toEqual([
 			'Bracket',
 			'Nut plate'
 		]);

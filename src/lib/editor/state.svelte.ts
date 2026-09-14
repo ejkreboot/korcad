@@ -1,11 +1,19 @@
-import type { DesignState, MachineSettings, Sheet, StockSettings } from '$lib/core/design/types.js';
+import type {
+	DesignState,
+	FabricationMode,
+	MachineSettings,
+	Sheet,
+	StockSettings
+} from '$lib/core/design/types.js';
 import type { Selection, WorkspaceId } from '$lib/core/design/workspace.js';
 import { machineProfileFor, sheetView } from '$lib/core/design/machine.js';
 import {
 	addProfile,
+	addStockProfile,
 	assignProfile,
 	deleteProfile,
-	duplicateProfile
+	duplicateProfile,
+	setFabricationMode
 } from '$lib/core/design/profiles.js';
 import { createDefaultDesign } from '$lib/features/document.js';
 import {
@@ -205,6 +213,14 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 		/** Adds a stock drag-knife profile and cuts the active sheet on it. */
 		addMachineProfile() {
 			apply(addProfile(design, design.activeSheetId, newId()));
+		},
+		/** Adds a stock profile for a kind of machine and cuts the active sheet on it. */
+		addStockMachineProfile(fabricationMode: FabricationMode) {
+			apply(addStockProfile(design, design.activeSheetId, newId(), fabricationMode));
+		},
+		/** Changes the kind of machine the active sheet's profile is, renaming a stock name to match. */
+		setFabricationMode(fabricationMode: FabricationMode) {
+			apply(setFabricationMode(design, machine.id, fabricationMode));
 		},
 		/** Copies the active sheet's profile and cuts the active sheet on the copy. */
 		duplicateMachineProfile() {

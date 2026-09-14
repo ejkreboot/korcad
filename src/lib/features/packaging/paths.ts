@@ -7,7 +7,7 @@ import type { Pocket, Support } from './types.js';
  *
  * Every packaging path says where it is constructed which side of the line the
  * tool runs, which stage it machines in, and which chain it joins — the same
- * contract Solid follows. Core CAM reads only that `CamIntent`; the role string
+ * contract Flat Parts follows. Core CAM reads only that `CamIntent`; the role string
  * is for display, fold labels, and G-code comments.
  *
  * The rules, as they were when intent was derived from role strings (the

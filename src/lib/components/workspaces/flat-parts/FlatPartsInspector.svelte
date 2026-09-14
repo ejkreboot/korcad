@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { display, parseDisplay } from '$lib/core/units.js';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
-	import { solidActions } from '$lib/features/solid/actions.js';
-	import { HOLE_PRESETS, PROFILE_PRESETS } from '$lib/features/solid/presets.js';
-	import type { SolidEntity, SolidShape } from '$lib/features/solid/types.js';
+	import { flatPartsActions } from '$lib/features/flat-parts/actions.js';
+	import { HOLE_PRESETS, PROFILE_PRESETS } from '$lib/features/flat-parts/presets.js';
+	import type { FlatPartsEntity, FlatPartsShape } from '$lib/features/flat-parts/types.js';
 
-	/** The selected part or hole, or a summary of the plate when nothing is selected. */
+	/** The selected part or hole, or a summary of the sheet when nothing is selected. */
 	let { editor }: { editor: EditorState } = $props();
 
-	const actions = $derived(solidActions(editor));
+	const actions = $derived(flatPartsActions(editor));
 	const entity = $derived(actions.selectedEntity);
 	const units = $derived(editor.design.stock.units);
 	const unitLabel = $derived(units === 'in' ? 'in' : 'mm');
@@ -17,8 +17,9 @@
 	const parts = $derived(actions.view.entities.filter((item) => item.kind === 'profile').length);
 	const holes = $derived(actions.view.entities.length - parts);
 
-	const shapes = (item: SolidEntity) => (item.kind === 'profile' ? PROFILE_PRESETS : HOLE_PRESETS);
-	const shapeLabel = (item: SolidEntity) =>
+	const shapes = (item: FlatPartsEntity) =>
+		item.kind === 'profile' ? PROFILE_PRESETS : HOLE_PRESETS;
+	const shapeLabel = (item: FlatPartsEntity) =>
 		shapes(item).find((preset) => preset.id === item.shape)?.label ?? item.shape;
 
 	function setLength(key: 'x' | 'y' | 'w' | 'h' | 'cornerRadius', raw: string): void {
@@ -56,7 +57,7 @@
 				<select
 					value={entity.shape}
 					onchange={(e) =>
-						actions.updateEntity(entity.id, { shape: e.currentTarget.value as SolidShape })}
+						actions.updateEntity(entity.id, { shape: e.currentTarget.value as FlatPartsShape })}
 				>
 					{#each shapes(entity) as preset (preset.id)}
 						<option value={preset.id}>{preset.label}</option>
@@ -156,7 +157,7 @@
 	</section>
 {:else}
 	<section class="panel">
-		<h2>Plate</h2>
+		<h2>Sheet</h2>
 		<p class="help">
 			{parts}
 			{parts === 1 ? 'part' : 'parts'} and {holes}

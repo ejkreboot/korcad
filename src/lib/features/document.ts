@@ -1,6 +1,6 @@
 import {
-	createDefaultMachineProfile,
 	createDefaultStock,
+	createStockMachineProfile,
 	DEFAULT_MACHINE_PROFILE_ID
 } from '$lib/core/design/defaults.js';
 import { normalizeDocument } from '$lib/core/design/normalize.js';
@@ -28,8 +28,8 @@ function deckSheet(machineProfileId: string): Sheet {
 }
 
 /**
- * A new design: one empty sheet drawn in `workspaceId`, on the default machine
- * profile, carrying only that workspace's data. Packaging's first sheet is its
+ * A new design: one empty sheet drawn in `workspaceId`, on a stock profile for
+ * the kind of machine that workspace starts on, carrying only its data. Packaging's first sheet is its
  * deck, which keeps the `deck` id every packaging default refers to.
  */
 export function createDefaultDesign(workspaceId: WorkspaceId = DEFAULT_WORKSPACE): DesignState {
@@ -37,7 +37,7 @@ export function createDefaultDesign(workspaceId: WorkspaceId = DEFAULT_WORKSPACE
 	const blank: DesignState = {
 		stock: createDefaultStock(),
 		toolpathOrder: 'optimized',
-		machineProfiles: [createDefaultMachineProfile()],
+		machineProfiles: [createStockMachineProfile(workspace.fabricationMode)],
 		sheets: [],
 		activeSheetId: '',
 		workspaces: {}

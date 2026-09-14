@@ -23,7 +23,7 @@ import {
 	FIXTURE_DESIGNS,
 	foldedDesign,
 	patchDesign,
-	solidDesign,
+	flatPartsDesign,
 	supportDesign,
 	withMachine
 } from '../../support/designs.js';
@@ -63,11 +63,11 @@ describe('the registry', () => {
 	});
 
 	it('finds the sheet to show when switching workspace', () => {
-		const design = solidDesign();
-		expect(sheetForWorkspace(design, 'solid')).toBe('plate');
+		const design = flatPartsDesign();
+		expect(sheetForWorkspace(design, 'flatParts')).toBe('sheet');
 		expect(sheetForWorkspace(design, 'packaging')).toBe('deck');
 		expect(sheetForWorkspace(createDefaultDesign(), 'packaging')).toBe('deck');
-		expect(sheetForWorkspace(createDefaultDesign(), 'solid')).toBeNull();
+		expect(sheetForWorkspace(createDefaultDesign(), 'flatParts')).toBeNull();
 	});
 
 	it('creates the data a new document starts with', () => {
@@ -87,14 +87,20 @@ describe('the registry', () => {
 			expect(validateDocument(design)).toEqual([]);
 			expect(parseDesign(serializeDesign(design))).toEqual(design);
 		}
-		const solid = createDefaultDesign('solid');
-		expect(solid.sheets[0]?.name).toBe('Plate 1');
-		expect(solid.workspaces.solid?.sheets[solid.activeSheetId]).toEqual({ entities: [] });
+		const flatParts = createDefaultDesign('flatParts');
+		expect(flatParts.sheets[0]?.name).toBe('Sheet 1');
+		expect(flatParts.machineProfiles).toEqual([
+			{ ...createDefaultDesign().machineProfiles[0], name: 'Router', fabricationMode: 'router' }
+		]);
+		expect(createDefaultDesign().machineProfiles[0]?.fabricationMode).toBe('knife');
+		expect(flatParts.workspaces.flatParts?.sheets[flatParts.activeSheetId]).toEqual({
+			entities: []
+		});
 	});
 
 	it('makes the first packaging sheet a project gains its deck', () => {
-		const solid = createDefaultDesign('solid');
-		expect(PACKAGING_WORKSPACE.newSheetName(solid)).toBe('Deck');
+		const flatParts = createDefaultDesign('flatParts');
+		expect(PACKAGING_WORKSPACE.newSheetName(flatParts)).toBe('Deck');
 		expect(PACKAGING_WORKSPACE.defaults('sheet-2').deckSheetId).toBe('sheet-2');
 		expect(PACKAGING_WORKSPACE.newSheetName(createDefaultDesign())).toBe('Parts 1');
 	});

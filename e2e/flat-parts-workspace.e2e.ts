@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { gotoEditor, readDraft } from './helpers.js';
 
 /**
- * The Solid workspace in the browser: a sheet chosen when it is added brings
+ * The Flat Parts workspace in the browser: a sheet chosen when it is added brings
  * its own tools and panels, leaves out folding and the 3D preview, and a part
  * with a hole exports one cut program. Packaging sheets beside it are
  * untouched.
@@ -33,24 +33,24 @@ async function draw(
 	await dragOnCanvas(page, from, to);
 }
 
-async function addSolidSheet(page: Page): Promise<void> {
+async function addFlatPartsSheet(page: Page): Promise<void> {
 	await page.getByRole('button', { name: 'Add a sheet' }).click();
-	await page.getByRole('menuitem', { name: /Solid sheet/ }).click();
-	await expect(page.getByRole('tab', { name: 'Plate 1' })).toHaveAttribute('aria-selected', 'true');
+	await page.getByRole('menuitem', { name: /Flat Parts sheet/ }).click();
+	await expect(page.getByRole('tab', { name: 'Sheet 1' })).toHaveAttribute('aria-selected', 'true');
 }
 
-test('a Solid sheet has its own tools, and no folding or 3D', async ({ page }) => {
+test('a Flat Parts sheet has its own tools, and no folding or 3D', async ({ page }) => {
 	await gotoEditor(page);
 	await expect(page.getByRole('button', { name: 'Cutout' })).toBeVisible();
 	await expect(page.getByRole('button', { name: '3D' })).toBeVisible();
 
-	await addSolidSheet(page);
+	await addFlatPartsSheet(page);
 	await expect(page.getByRole('button', { name: 'Part', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Hole', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Cutout' })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: '3D' })).toHaveCount(0);
 	await expect(page.locator('.legend').getByText('Down fold')).toHaveCount(0);
-	await expect(page.getByRole('heading', { name: 'Plate' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Sheet', exact: true })).toBeVisible();
 
 	// The packaging deck is exactly as it was.
 	await page.getByRole('tab', { name: 'Deck' }).click();
@@ -61,7 +61,7 @@ test('a Solid sheet has its own tools, and no folding or 3D', async ({ page }) =
 
 test('a part with a hole exports one cut program, the hole first', async ({ page }) => {
 	await gotoEditor(page);
-	await addSolidSheet(page);
+	await addFlatPartsSheet(page);
 
 	await draw(page, 'Part', /Rounded rectangle/, [0.2, 0.3], [0.7, 0.7]);
 	await expect(page.getByRole('heading', { name: 'Part 1' })).toBeVisible();
@@ -72,7 +72,7 @@ test('a part with a hole exports one cut program, the hole first', async ({ page
 	const download = page.waitForEvent('download');
 	await page.getByRole('button', { name: 'G-code' }).click();
 	const file = await download;
-	expect(file.suggestedFilename()).toBe('plate-1.nc');
+	expect(file.suggestedFilename()).toBe('sheet-1.nc');
 	const program = readFileSync((await file.path())!, 'utf8');
 	expect(program).toContain('tool: drag knife');
 	expect(program.indexOf('(Hole 1)')).toBeGreaterThan(0);
@@ -82,18 +82,18 @@ test('a part with a hole exports one cut program, the hole first', async ({ page
 
 test('moving a part carries its hole, as one undo step', async ({ page }) => {
 	await gotoEditor(page);
-	await addSolidSheet(page);
+	await addFlatPartsSheet(page);
 	await draw(page, 'Part', /^Rectangle/, [0.2, 0.3], [0.7, 0.7]);
 	await draw(page, 'Hole', /^Hole/, [0.35, 0.45], [0.45, 0.55]);
 
 	const entities = async () => {
 		const design = (await readDraft(page))!;
-		const solid = (
+		const flatParts = (
 			design.workspaces as {
-				solid: { sheets: Record<string, { entities: { name: string; x: number }[] }> };
+				flatParts: { sheets: Record<string, { entities: { name: string; x: number }[] }> };
 			}
-		).solid;
-		return Object.values(solid.sheets)[0]!.entities;
+		).flatParts;
+		return Object.values(flatParts.sheets)[0]!.entities;
 	};
 	const before = await entities();
 	// Grab the part between its edge and the hole.
@@ -110,11 +110,11 @@ test('moving a part carries its hole, as one undo step', async ({ page }) => {
 
 test('a routed part keeps bridge holding tabs unless they are turned off', async ({ page }) => {
 	await gotoEditor(page);
-	await addSolidSheet(page);
-	await page.getByRole('button', { name: 'Machine' }).click();
+	await addFlatPartsSheet(page);
+	await page.getByRole('button', { name: 'Tool', exact: true }).click();
 	await page.getByLabel('Fabrication').selectOption('router');
 	// Collapse it again, so the canvas is where the drag expects it.
-	await page.getByRole('button', { name: 'Machine' }).click();
+	await page.getByRole('button', { name: 'Tool', exact: true }).click();
 
 	// Well inside the sheet: a router's bit runs outside the line, so a part
 	// clamped to the sheet edge would not fit.

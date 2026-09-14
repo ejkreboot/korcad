@@ -6,7 +6,7 @@ a workspace:
 - **Folded Packaging** — inserts from cardstock, cardboard, and similar sheet
   goods: folded pockets, perimeter walls and glue flanges, rolled edge joists,
   recessed trays and risers, and a 3D assembly preview.
-- **Solid** — flat parts cut from a plate, with holes and slots, cut outside and
+- **Flat Parts** — flat parts cut from a sheet, with holes and slots, cut outside and
   inside their lines so both keep their drawn size.
 
 Every sheet is cut on a named machine profile (drag knife or router), with
@@ -33,11 +33,11 @@ module import.
 
 ```text
 src/lib/core/       units, geometry and outlines, design model, machine profiles, CAM, export
-src/lib/features/   the workspace registry, and each workspace (packaging, solid)
+src/lib/features/   the workspace registry, and each workspace (packaging, flatParts)
 src/lib/editor/     design-document ownership, history, tools, viewport, persistence
 src/lib/viewer/     the Three.js scene builder
 src/lib/components/ the editor shell, and each workspace's panels and canvas layer
-tests/unit/         unit tests, by layer (core, features, packaging, solid, editor)
+tests/unit/         unit tests, by layer (core, features, packaging, flatParts, editor)
 tests/fixtures/     golden designs and expected G-code
 e2e/                Playwright tests for editor interaction
 ```
@@ -86,7 +86,7 @@ Also built since:
   files
 - a workspace registry, so the editor, toolbar, export, and 3D viewer look up the
   active sheet's workspace instead of importing packaging
-- the Solid workspace, a workspace switcher, and adding, duplicating, and
+- the Flat Parts workspace, a workspace switcher, and adding, duplicating, and
   deleting machine profiles
 
 Not yet ported:
@@ -107,7 +107,7 @@ to resize it, or the outer grips to set the perimeter wall height. Draw openings
 and supports with the Cutout and Support menus; the preset you pick sets the
 semantic type, not just the outline.
 
-On a Solid sheet, draw parts with the Part menu and holes or slots inside them
+On a Flat Parts sheet, draw parts with the Part menu and holes or slots inside them
 with the Hole menu. Moving a part carries its holes. Each part keeps holding tabs
 (four by default): gaps in a knife cut, or on a router bridges the bit rises
 over, leaving the tab thickness set in the Material panel. A routed part with no

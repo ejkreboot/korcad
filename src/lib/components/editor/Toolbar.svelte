@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Icon from '$lib/components/icons/Icon.svelte';
+	import MaskIcon from '$lib/components/icons/MaskIcon.svelte';
 	import WorkspaceSwitcher from './WorkspaceSwitcher.svelte';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
 	import type { ToolState } from '$lib/editor/tools.svelte.js';
@@ -216,10 +217,10 @@
 			<Icon name="folder_open" />
 		</button>
 		<button class="button icon" aria-label="SVG" title="Export design SVG" onclick={onExportSvg}>
-			<Icon name="timeline" />
+			<MaskIcon src="/SVG_download.svg" />
 		</button>
 		<button
-			class="button icon primary"
+			class="button icon"
 			aria-label="G-code"
 			title={blocked
 				? 'Resolve validation issues before exporting machine output'
@@ -227,7 +228,7 @@
 			disabled={blocked}
 			onclick={onExportGcode}
 		>
-			<Icon name="content_cut" />
+			<MaskIcon src="/G_code_download.svg" />
 		</button>
 	</div>
 </div>

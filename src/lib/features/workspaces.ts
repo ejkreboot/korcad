@@ -2,12 +2,18 @@ import type { Assembly } from '$lib/core/assembly/model.js';
 import type { GcodeOptions } from '$lib/core/cam/gcode.js';
 import type { WorkspaceReader } from '$lib/core/design/normalize.js';
 import { validateMachineSettings } from '$lib/core/design/validation.js';
-import type { DesignState, Geometry, MachineSettings, Sheet } from '$lib/core/design/types.js';
+import type {
+	DesignState,
+	FabricationMode,
+	Geometry,
+	MachineSettings,
+	Sheet
+} from '$lib/core/design/types.js';
 import type { Selection, WorkspaceDataMap, WorkspaceId } from '$lib/core/design/workspace.js';
 import type { SvgLabel } from '$lib/core/export/svg.js';
 import type { IconName } from '$lib/components/icons/paths.js';
 import { PACKAGING_WORKSPACE } from './packaging/workspace.js';
-import { SOLID_WORKSPACE } from './solid/workspace.js';
+import { FLAT_PARTS_WORKSPACE } from './flat-parts/workspace.js';
 
 /**
  * The workspace registry: every workspace this build knows, and everything the
@@ -58,6 +64,8 @@ export type Workspace<Id extends WorkspaceId = WorkspaceId> = WorkspaceReader & 
 	 */
 	readonly dataScope: 'document' | 'sheet';
 	readonly capabilities: WorkspaceCapabilities;
+	/** The kind of machine a new project in this workspace starts on. */
+	readonly fabricationMode: FabricationMode;
 	readonly tools: readonly WorkspaceTool[];
 	/** The name a sheet added in this workspace gets. */
 	newSheetName(design: DesignState): string;
@@ -104,9 +112,9 @@ export type DocumentHost = {
 	select(selection: Selection | null): void;
 };
 
-export { PACKAGING_WORKSPACE, SOLID_WORKSPACE };
+export { PACKAGING_WORKSPACE, FLAT_PARTS_WORKSPACE };
 
-export const WORKSPACES: readonly Workspace[] = [PACKAGING_WORKSPACE, SOLID_WORKSPACE];
+export const WORKSPACES: readonly Workspace[] = [PACKAGING_WORKSPACE, FLAT_PARTS_WORKSPACE];
 
 /** The workspace a new design opens in. */
 export const DEFAULT_WORKSPACE: WorkspaceId = PACKAGING_WORKSPACE.id;
