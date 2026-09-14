@@ -4,11 +4,10 @@ import { sheetView } from '$lib/core/design/machine.js';
 import type { DesignState } from '$lib/core/design/types.js';
 import { serializeDesign } from '$lib/core/export/design-file.js';
 import { outlineBounds } from '$lib/core/geometry/contour.js';
-import type { Point } from '$lib/core/geometry/primitives.js';
 import { parseDesign } from '$lib/features/document.js';
 import { scaleEntity, updateEntity } from '$lib/features/flat-parts/actions.js';
 import { entityOutline, flatPartsGeometry } from '$lib/features/flat-parts/geometry.js';
-import { classifyOutlines, importSvg } from '$lib/features/flat-parts/import.js';
+import { importSvg } from '$lib/features/flat-parts/import.js';
 import { validateFlatParts } from '$lib/features/flat-parts/validation.js';
 import { flatPartsSheetView, withFlatPartsSheet } from '$lib/features/flat-parts/view.js';
 import { FLAT_PARTS_WORKSPACE } from '$lib/features/workspaces.js';
@@ -20,13 +19,6 @@ const empty = (mode: 'router' | 'knife' = 'router'): DesignState =>
 const svg = (body: string) =>
 	`<svg xmlns="http://www.w3.org/2000/svg" width="300mm" height="300mm" viewBox="0 0 300 300">${body}</svg>`;
 
-const square = (x: number, y: number, size: number): Point[] => [
-	{ x, y },
-	{ x: x + size, y },
-	{ x: x + size, y: y + size },
-	{ x, y: y + size }
-];
-
 /** A 200 x 100 mm plate with a round hole and a square window, drawn clockwise in SVG. */
 const PLATE = svg(`
 	<path d="M0 0 H200 V100 H0 Z"/>
@@ -35,25 +27,6 @@ const PLATE = svg(`
 `);
 
 const entities = (design: DesignState) => flatPartsSheetView(design, 'sheet').entities;
-
-describe('classifying imported outlines', () => {
-	it('alternates parts and holes by nesting depth', () => {
-		const classified = classifyOutlines([
-			square(0, 0, 100),
-			square(10, 10, 80),
-			square(20, 20, 60),
-			square(30, 30, 10),
-			square(200, 0, 50)
-		]);
-		expect(classified.map(({ depth, kind }) => [depth, kind])).toEqual([
-			[0, 'profile'],
-			[1, 'hole'],
-			[2, 'profile'],
-			[3, 'hole'],
-			[0, 'profile']
-		]);
-	});
-});
 
 describe('importing an SVG into Flat Parts', () => {
 	it('makes a tabbed part with holes that validates and cuts holes first', () => {
@@ -149,7 +122,7 @@ describe('importing an SVG into Flat Parts', () => {
 		expect(() =>
 			importSvg(empty(), 'sheet', svg('<line x1="0" y1="0" x2="10" y2="10"/>'), 'lines.svg')
 		).toThrow(
-			'No closed outlines to cut in lines.svg: parts and holes need closed shapes. Skipped 1 open path.'
+			'No closed outlines to cut in lines.svg: parts and holes need closed outlines. Skipped 1 open path.'
 		);
 	});
 

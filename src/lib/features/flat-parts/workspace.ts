@@ -65,8 +65,9 @@ export const FLAT_PARTS_WORKSPACE: Workspace<'flatParts'> = {
 	imports: [
 		{
 			id: 'svg',
+			toolId: 'profile',
 			label: 'Import SVG',
-			title: 'Import closed outlines from an SVG as parts and holes',
+			description: 'Outlines become parts and holes',
 			icon: 'upload_file',
 			accept: '.svg,image/svg+xml',
 			read: importSvg

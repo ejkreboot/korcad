@@ -44,11 +44,13 @@ export type WorkspaceTool = {
 	unavailable(machine: MachineSettings): string | null;
 };
 
-/** A kind of file a workspace can bring onto one of its sheets, offered on the toolbar. */
+/** A kind of file a workspace can bring onto one of its sheets, offered in a drawing tool's menu. */
 export type WorkspaceImport = {
 	readonly id: string;
+	/** The drawing tool whose menu offers it, after that tool's presets. */
+	readonly toolId: string;
 	readonly label: string;
-	readonly title: string;
+	readonly description: string;
 	readonly icon: IconName;
 	/** File types offered by the file picker, as an `accept` attribute lists them. */
 	readonly accept: string;

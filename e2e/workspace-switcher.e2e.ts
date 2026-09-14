@@ -63,8 +63,8 @@ test('starts a new project in a chosen workspace, and undo brings the old one ba
 	await page.getByLabel(/Deck width/).blur();
 
 	page.once('dialog', (dialog) => dialog.accept());
-	await page.getByRole('button', { name: 'New project' }).click();
-	await page.getByRole('menuitem', { name: /Flat Parts/ }).click();
+	await page.getByRole('button', { name: 'File', exact: true }).click();
+	await page.getByRole('menuitem', { name: /New Flat Parts project/ }).click();
 
 	await expect(switcher(page)).toHaveAccessibleName('Workspace: Flat Parts');
 	await expect(page.getByRole('tab')).toHaveCount(1);
@@ -96,8 +96,8 @@ test('keeps the design when a new project is declined', async ({ page }) => {
 	await gotoEditor(page);
 	await switchTo(page, /Flat Parts/);
 	page.once('dialog', (dialog) => dialog.dismiss());
-	await page.getByRole('button', { name: 'New project' }).click();
-	await page.getByRole('menuitem', { name: /Folded Packaging/ }).click();
+	await page.getByRole('button', { name: 'File', exact: true }).click();
+	await page.getByRole('menuitem', { name: /New Folded Packaging project/ }).click();
 	await expect(page.getByRole('tab')).toHaveCount(2);
 	await expect(switcher(page)).toHaveAccessibleName('Workspace: Flat Parts');
 });
@@ -161,4 +161,13 @@ test('keeps a profile when its deletion is cancelled', async ({ page }) => {
 		.click();
 	await expect(page.getByLabel('Tool name')).toHaveValue('New tool');
 	expect((await draft(page)).machineProfiles).toHaveLength(2);
+});
+
+test('opening the workspace chooser closes the File menu', async ({ page }) => {
+	await gotoEditor(page);
+	await page.getByRole('button', { name: 'File', exact: true }).click();
+	await expect(page.getByRole('menuitem', { name: /Open design file/ })).toBeVisible();
+	await switcher(page).click();
+	await expect(page.getByRole('menuitem', { name: /Open design file/ })).toHaveCount(0);
+	await expect(page.getByRole('menuitemradio', { name: /Flat Parts/ })).toBeVisible();
 });

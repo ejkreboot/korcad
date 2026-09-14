@@ -8,6 +8,7 @@ import { createDefaultPackaging } from './defaults.js';
 import { packagingHeaderNotes } from './gcode.js';
 import { resolveSupportHeights } from './levels.js';
 import { allGeometry } from './model.js';
+import { importSvgOpenings } from './import.js';
 import { normalizePackaging } from './normalize.js';
 import { CUTOUT_PRESETS, SUPPORT_PRESETS } from './presets.js';
 import { riserFlatBounds } from './supports.js';
@@ -76,7 +77,17 @@ export const PACKAGING_WORKSPACE: Workspace<'packaging'> = {
 	capabilities: { folding: true, assembly: true },
 	// Board is creased and cut with a drag knife; supports cannot be routed.
 	fabricationMode: 'knife',
-	imports: [],
+	imports: [
+		{
+			id: 'svg',
+			toolId: 'cutout',
+			label: 'Import SVG',
+			description: 'Opening shaped like a drawn outline',
+			icon: 'upload_file',
+			accept: '.svg,image/svg+xml',
+			read: importSvgOpenings
+		}
+	],
 	tools: [
 		{
 			id: 'cutout',

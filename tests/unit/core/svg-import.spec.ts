@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MM_PER_IN } from '$lib/core/constants.js';
 import { outlineBounds } from '$lib/core/geometry/contour.js';
 import type { Point } from '$lib/core/geometry/primitives.js';
+import { importSvgOutlines, nestingDepths } from '$lib/core/import/outlines.js';
 import { readSvgOutlines } from '$lib/core/import/svg.js';
 
 const TOLERANCE = 0.05;
@@ -151,5 +152,41 @@ describe('reading SVG outlines', () => {
 				tolerance: TOLERANCE
 			})
 		).not.toThrow();
+	});
+});
+
+const square = (x: number, y: number, side: number): Point[] => [
+	{ x, y },
+	{ x: x + side, y },
+	{ x: x + side, y: y + side },
+	{ x, y: y + side }
+];
+
+describe('preparing imported outlines to cut', () => {
+	it('measures how deeply each outline is nested', () => {
+		const nested = nestingDepths([
+			square(0, 0, 100),
+			square(10, 10, 80),
+			square(20, 20, 60),
+			square(30, 30, 10),
+			square(200, 0, 50)
+		]);
+		expect(nested.map(({ depth }) => depth)).toEqual([0, 1, 2, 3, 0]);
+	});
+
+	it('winds every outline counter-clockwise, whichever way it was drawn', () => {
+		const { outlines } = importSvgOutlines(
+			'<svg><polygon points="0,0 0,10 10,10 10,0"/><polygon points="20,0 30,0 30,10 20,10"/></svg>',
+			'wound.svg',
+			1,
+			'shapes'
+		);
+		for (const { points } of outlines) {
+			const area = points.reduce((sum, p, index) => {
+				const q = points[(index + 1) % points.length]!;
+				return sum + p.x * q.y - q.x * p.y;
+			}, 0);
+			expect(area).toBeGreaterThan(0);
+		}
 	});
 });

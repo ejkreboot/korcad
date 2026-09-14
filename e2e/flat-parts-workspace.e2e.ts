@@ -151,7 +151,8 @@ test('an imported SVG becomes a tabbed part with its holes', async ({ page }) =>
 		<line x1="0" y1="0" x2="10" y2="10"/>
 	</svg>`;
 	const chooser = page.waitForEvent('filechooser');
-	await page.getByRole('button', { name: 'Import SVG' }).click();
+	await page.getByRole('button', { name: 'Part', exact: true }).click();
+	await page.getByRole('menuitem', { name: /Import SVG/ }).click();
 	await (
 		await chooser
 	).setFiles({ name: 'plate.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(drawing) });

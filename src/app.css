@@ -28,6 +28,8 @@
 	--tab: #2f8f6b;
 
 	--radius: 5px;
+	/* The brand box and the toolbar bar share a height, so their lower edges line up. */
+	--bar-height: 63px;
 	--font: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
 	--mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
@@ -93,8 +95,9 @@ button {
 .brand {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	padding: 14px 18px;
+	gap: 8px;
+	min-height: var(--bar-height);
+	padding: 0 18px;
 	background: var(--surface);
 	border-bottom: 1px solid var(--line);
 }
@@ -105,7 +108,7 @@ button {
 	display: block;
 	flex-shrink: 0;
 	width: auto;
-	height: 52px;
+	height: 42px;
 }
 
 .brand h1 {
@@ -293,6 +296,7 @@ input[type='number'] {
 	display: flex;
 	align-items: center;
 	gap: 12px;
+	min-height: var(--bar-height);
 	padding: 12px 20px;
 	background: var(--surface);
 	border-bottom: 1px solid var(--line);
@@ -308,13 +312,30 @@ input[type='number'] {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 4px 12px;
+	gap: 6px 10px;
 }
 
 .toolbar .group {
 	display: flex;
 	gap: 2px;
 	align-items: center;
+}
+
+/*
+ * Related controls share a box, so the row reads as a few kinds of command
+ * rather than a dozen loose glyphs. The workspace switcher is already a
+ * bordered button and stands on its own.
+ */
+.toolbar .group:not(.plain) {
+	padding: 2px;
+	border: 1px solid var(--line);
+	border-radius: calc(var(--radius) + 3px);
+	background: var(--surface-sunk);
+}
+
+/* The box is the sunk tone, so a hovered button lifts to the surface instead. */
+.toolbar .group:not(.plain) .button.icon:hover:not(:disabled) {
+	background: var(--surface);
 }
 
 .sheet-tabs {
@@ -351,18 +372,49 @@ input[type='number'] {
 
 /* ---- workspace switcher ---- */
 
-/* Named in words, unlike the icon tools beside it: it says where you are. */
+/*
+ * A menu-bar item, like File in a desktop application: a command menu named in
+ * words, with no border until it is pointed at or open.
+ */
+.button.menubar {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 5px 6px 5px 10px;
+	border-color: transparent;
+	background: transparent;
+	color: var(--ink);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.button.menubar[aria-expanded='true'] {
+	background: var(--surface-sunk);
+}
+
+/*
+ * A chooser, like a font picker: it shows the current workspace in words at the
+ * head of the tool box, because the workspace decides the tools beside it.
+ */
 .button.switcher {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
+	padding: 5px 6px 5px 8px;
+	margin-right: 4px;
+	border-color: var(--line);
+	background: var(--surface);
 	color: var(--ink);
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
+	font-size: 12px;
+	font-weight: 600;
 }
 
 .button.switcher :global(.icon:first-child) {
 	color: var(--accent);
+}
+
+.button.switcher :global(.icon:last-child) {
+	opacity: 0.6;
 }
 
 .menu button[aria-checked='true'] strong {
@@ -404,6 +456,17 @@ input[type='number'] {
 	background: none;
 	padding: 8px 9px;
 	text-align: left;
+}
+
+/* Room for a menu of full command names, such as the File menu, on one line each. */
+.menu.wide {
+	min-width: 310px;
+}
+
+.menu-separator {
+	height: 1px;
+	margin: 4px 6px;
+	background: var(--line);
 }
 
 .menu button:hover {

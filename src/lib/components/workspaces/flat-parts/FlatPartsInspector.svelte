@@ -194,7 +194,8 @@
 			{parts}
 			{parts === 1 ? 'part' : 'parts'} and {holes}
 			{holes === 1 ? 'hole' : 'holes'} on this sheet. Draw a part, then holes inside it, or import an
-			SVG, whose outlines become parts and holes by how they nest; select one to edit it.
+			SVG from the Part menu, whose outlines become parts and holes by how they nest; select one to edit
+			it.
 		</p>
 	</section>
 {/if}

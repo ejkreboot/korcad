@@ -69,14 +69,14 @@
 
 <aside class="sidebar">
 	<header class="brand">
-		<img class="brand-mark" src="/logo_graphic_only.png" alt="" width="48" height="52" />
+		<img class="brand-mark" src="/logo_graphic_only.png" alt="" width="39" height="42" />
 		<h1>
 			<img
 				class="brand-wordmark"
 				src="/logo_text_only.png"
 				alt="KorCad: CAD/CAM for makers"
-				width="166"
-				height="52"
+				width="134"
+				height="42"
 			/>
 		</h1>
 	</header>

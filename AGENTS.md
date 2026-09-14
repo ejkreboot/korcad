@@ -63,13 +63,15 @@ src/lib/
                  normalize, validation (tool settings)
     cam/         stages, compensation, routing, tabs (router bridges), gcode, simulation
     export/      svg, design-file (envelope)
-    import/      svg: a DOM-free SVG reader, closed and open outlines in mm, Y up
+    import/      svg (a DOM-free SVG reader: outlines in mm, Y up), outlines (specks,
+                 duplicates, winding, nesting depth)
     assembly/    model.ts: generic plates, walls, and draggable groups
   features/
     workspaces.ts  registry, plus reconcileDocument and validateDocument
     document.ts    createDefaultDesign, normalizeState, parseDesign
     packaging/     types, view, actions, geometry/perimeter/supports, folds, levels, mounting,
-                   anchoring, placement, paths (CAM intent), assembly, validation, gcode
+                   anchoring, placement, paths (CAM intent), assembly, validation, gcode,
+                   import (SVG outlines to deck openings)
     flat-parts/    types, view, actions, geometry, validation, manipulation, presets,
                    import (SVG outlines to parts and holes by nesting depth)
   editor/        state.svelte.ts (sole owner of the document), tools, history, viewport, persistence
@@ -122,12 +124,14 @@ type DesignState = {
   fractions of its box, so moving and resizing work as for any shape. `holesInside` finds a
   part's holes by containment; dragging a part and `scaleEntity` (uniform, about the part's
   lower-left corner) carry them.
-- **Workspace imports.** A `Workspace` lists `imports` (Flat Parts: SVG); the toolbar offers each
-  as a button and the page hands the file text to `read`, which returns the new document, a
-  selection, and a notice. An imported outline's kind is its nesting depth's parity (even: part,
-  odd: hole), because a closed through-cut frees whatever it encloses. A part nested in a hole
-  is rejected by validation: holes are cut before parts are released, so it would come loose
-  with the slug.
+- **Workspace imports.** A `Workspace` lists `imports`, each naming the drawing tool whose menu
+  offers it (`toolId`); the page hands the file text to `read`, which returns the new document,
+  a selection, and a notice. `core/import/outlines.ts` does the shared work (read, drop specks
+  and duplicates, wind counter-clockwise, measure nesting depth); each workspace decides what a
+  depth means. Flat Parts: even is a part, odd a hole, because a closed through-cut frees
+  whatever it encloses; a part nested in a hole is rejected by validation, since holes are cut
+  before parts are released. Packaging: depth 0 becomes an imported `profile` pocket on the
+  deck sheet, and anything deeper is skipped.
 - Selection is one generic `{ kind, id }` slot in `editor/state.svelte.ts`, and snap lives in
   `tools.svelte.ts`. Neither is saved. Drafts are full design files.
 - A support's height is relational: it names an anchor (`box-floor`, `deck-top`,
@@ -202,8 +206,13 @@ Never mutate inputs along the way.
   states like any other icon. Keep their text converted to paths: a mask image can only use
   fonts installed on the viewer's machine. An
   icon-only control gets `aria-label` and `title`, and toggles use `aria-pressed`. Group toolbar
-  items by spacing, not dividers. Material and Tool panels are `CollapsiblePanel`s,
-  collapsed by default.
+  items in boxed groups (Workspace and drawing tools; Edit and view; Export), each a
+  `role="group"` with an `aria-label`; boxes rather than dividers, so a wrapped row never starts
+  with one. File leads the row as a borderless menu-bar item in words (new project per
+  workspace, open, save): a new-document glyph reads as "add a sheet" in a multi-sheet app. The
+  workspace switcher is a chooser, not a menu, so it shows its current value and heads the tool
+  box whose tools it decides.
+  Material and Tool panels are `CollapsiblePanel`s, collapsed by default.
 
 ## Priorities
 
@@ -220,7 +229,7 @@ Next directions:
 - Import DXF profiles into Flat Parts (SVG import is in). Parts nested in another part's hole,
   which needs release ordering by depth. Export a multi-sheet job as a zip.
 - Rotate, copy, paste, and keyboard nudge for the selection.
-- A first-run choice of workspace. New project (toolbar) already starts a project in either
+- A first-run choice of workspace. File > New … project already starts a project in either
   workspace, but a fresh browser still opens a packaging deck.
 - Move `stock.boardFinish` into `PackagingData`: only the packaging 3D preview reads it (a
   document shape change).

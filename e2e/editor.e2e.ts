@@ -167,12 +167,14 @@ test('resizes the top deck by dragging its edge', async ({ page }) => {
 	const width = deckWidth(page);
 	const before = Number(await width.inputValue());
 
-	// The deck edge resizes the deck; a vertical line reports a zero-width box.
+	// The deck edge resizes the deck. Press the middle of its wide hit stroke:
+	// its edge is a sub-pixel boundary that shifts whenever the layout above moves.
 	const edge = page.locator('.deck-edge-hit[data-deck-action="right"]').first();
 	const box = (await edge.boundingBox())!;
-	await page.mouse.move(box.x, box.y + box.height / 2);
+	const x = box.x + box.width / 2;
+	await page.mouse.move(x, box.y + box.height / 2);
 	await page.mouse.down();
-	await page.mouse.move(box.x - 60, box.y + box.height / 2, { steps: 10 });
+	await page.mouse.move(x - 60, box.y + box.height / 2, { steps: 10 });
 	await page.mouse.up();
 
 	const after = Number(await width.inputValue());
@@ -344,9 +346,6 @@ test('drives the toolbar by icon buttons that keep their accessible names', asyn
 		'Redo',
 		'Snap',
 		'Simulate',
-		'New project',
-		'Save design',
-		'Open',
 		'SVG',
 		'G-code'
 	]) {
@@ -357,6 +356,19 @@ test('drives the toolbar by icon buttons that keep their accessible names', asyn
 		expect(await button.locator('.icon').count()).toBeGreaterThan(0);
 		await expect(button.locator('.icon').first()).toHaveAttribute('aria-hidden', 'true');
 	}
+
+	// File commands are words in a menu, so "new" cannot be mistaken for "add a sheet".
+	await page.getByRole('button', { name: 'File', exact: true }).click();
+	for (const name of [
+		/New Folded Packaging project/,
+		/New Flat Parts project/,
+		/Open design file/,
+		/Save design file/
+	]) {
+		await expect(page.getByRole('menuitem', { name })).toBeVisible();
+	}
+	await page.getByRole('button', { name: 'File', exact: true }).click();
+	await expect(page.getByRole('menuitem', { name: /Open design file/ })).toHaveCount(0);
 
 	// Toggles report their state rather than relying on colour alone.
 	await expect(page.getByRole('button', { name: '2D', exact: true })).toHaveAttribute(

@@ -29,12 +29,17 @@
 		onSimulate: () => void;
 	} = $props();
 
-	const NEW_PROJECT_MENU = 'new-project';
-	/** The toolbar menu that is open: a drawing tool's presets, or the new project menu. */
+	const FILE_MENU = 'file';
+	/** The toolbar menu that is open: a drawing tool's presets, or the File menu. */
 	let openMenu = $state<string | null>(null);
 	const blocked = $derived(editor.diagnostics.length > 0);
 	// Drawing happens on the flat sheet, so those tools are unavailable in 3D.
 	const assembling = $derived(tools.viewMode === 'assembly');
+
+	function fileCommand(command: () => void): void {
+		openMenu = null;
+		command();
+	}
 
 	function choose(toolId: string, presetId: string): void {
 		openMenu = null;
@@ -44,7 +49,10 @@
 
 <svelte:window
 	onpointerdown={(event) => {
-		if (!(event.target as HTMLElement)?.closest('.menu-host')) openMenu = null;
+		// Any press outside the open menu's own host closes it, including one on
+		// another menu, such as the workspace chooser, which keeps its own state.
+		const host = (event.target as HTMLElement)?.closest('[data-menu]');
+		if (host?.getAttribute('data-menu') !== openMenu) openMenu = null;
 	}}
 />
 
@@ -52,13 +60,61 @@
 	An icon toolbar: every control carries its name in `aria-label` and repeats
 	it in `title`, so the label is available to assistive technology and to
 	anyone hovering, without the row growing wide enough to wrap.
+
+	Controls sit in boxed groups, named for assistive technology: what you draw
+	with, editing and viewing, and export. File is a menu-bar item and stands
+	unboxed at the head of the row; the workspace chooser leads the tool box,
+	because it decides which tools are in it. Boxes rather than dividers,
+	because a wrapped row would otherwise start with a stray divider.
 -->
 <div class="toolbar" role="toolbar" aria-label="Editor commands">
-	<div class="group">
-		<WorkspaceSwitcher {editor} />
+	<!-- File comes first, as in any application; words, because a new-document glyph reads here as "add a sheet". -->
+	<div class="group plain">
+		<div class="menu-host" data-menu={FILE_MENU}>
+			<button
+				class="button menubar"
+				aria-haspopup="menu"
+				aria-expanded={openMenu === FILE_MENU}
+				aria-label="File"
+				title="New, open, and save designs"
+				onclick={() => (openMenu = openMenu === FILE_MENU ? null : FILE_MENU)}
+			>
+				<span>File</span>
+				<Icon name="expand_more" size={16} />
+			</button>
+			{#if openMenu === FILE_MENU}
+				<div class="menu wide" role="menu">
+					{#each WORKSPACES as workspace (workspace.id)}
+						<button role="menuitem" onclick={() => fileCommand(() => onNewProject(workspace.id))}>
+							<Icon name={workspace.icon} />
+							<span>
+								<strong>New {workspace.label} project…</strong>
+								<small>Start over with one empty sheet</small>
+							</span>
+						</button>
+					{/each}
+					<div class="menu-separator" role="separator"></div>
+					<button role="menuitem" onclick={() => fileCommand(onImport)}>
+						<Icon name="folder_open" />
+						<span>
+							<strong>Open design file…</strong>
+							<small>Replace this design with a saved one</small>
+						</span>
+					</button>
+					<button role="menuitem" onclick={() => fileCommand(onSaveDesign)}>
+						<Icon name="save" />
+						<span>
+							<strong>Save design file</strong>
+							<small>Download this design to keep or share</small>
+						</span>
+					</button>
+				</div>
+			{/if}
+		</div>
 	</div>
 
-	<div class="group">
+	<div class="group" role="group" aria-label="Workspace and drawing tools">
+		<WorkspaceSwitcher {editor} />
 		<button
 			class="button icon"
 			class:active={tools.tool === 'select'}
@@ -73,7 +129,7 @@
 
 		{#each editor.workspace.tools as tool (tool.id)}
 			{@const unavailable = tool.unavailable(editor.machine)}
-			<div class="menu-host">
+			<div class="menu-host" data-menu={tool.id}>
 				<button
 					class="button icon split"
 					class:active={tools.tool === tool.id}
@@ -98,26 +154,58 @@
 								</span>
 							</button>
 						{/each}
+						{#each editor.workspace.imports.filter((entry) => entry.toolId === tool.id) as entry (entry.id)}
+							<button
+								role="menuitem"
+								onclick={() => {
+									openMenu = null;
+									onWorkspaceImport(entry.id);
+								}}
+							>
+								<Icon name={entry.icon} />
+								<span>
+									<strong>{entry.label}…</strong>
+									<small>{entry.description}</small>
+								</span>
+							</button>
+						{/each}
 					</div>
 				{/if}
 			</div>
 		{/each}
-
-		{#each editor.workspace.imports as entry (entry.id)}
-			<button
-				class="button icon"
-				aria-label={entry.label}
-				title={entry.title}
-				disabled={assembling}
-				onclick={() => onWorkspaceImport(entry.id)}
-			>
-				<Icon name={entry.icon} />
-			</button>
-		{/each}
+		<button
+			class="button icon"
+			class:active={tools.snapEnabled}
+			aria-pressed={tools.snapEnabled}
+			aria-label="Snap"
+			title="Snap to a quarter-inch grid"
+			onclick={() => tools.setSnap(!tools.snapEnabled)}
+		>
+			<Icon name="grid_4x4" />
+		</button>
 	</div>
 
-	{#if editor.workspace.capabilities.assembly}
-		<div class="group">
+	<div class="group" role="group" aria-label="Edit and view">
+		<button
+			class="button icon"
+			aria-label="Undo"
+			title="Undo"
+			disabled={!editor.canUndo}
+			onclick={() => editor.undo()}
+		>
+			<Icon name="undo" />
+		</button>
+		<button
+			class="button icon"
+			aria-label="Redo"
+			title="Redo"
+			disabled={!editor.canRedo}
+			onclick={() => editor.redo()}
+		>
+			<Icon name="redo" />
+		</button>
+
+		{#if editor.workspace.capabilities.assembly}
 			<button
 				class="button icon"
 				class:active={tools.viewMode === 'flat'}
@@ -138,41 +226,7 @@
 			>
 				<Icon name="view_in_ar" />
 			</button>
-		</div>
-	{/if}
-
-	<div class="group">
-		<button
-			class="button icon"
-			aria-label="Undo"
-			title="Undo"
-			disabled={!editor.canUndo}
-			onclick={() => editor.undo()}
-		>
-			<Icon name="undo" />
-		</button>
-		<button
-			class="button icon"
-			aria-label="Redo"
-			title="Redo"
-			disabled={!editor.canRedo}
-			onclick={() => editor.redo()}
-		>
-			<Icon name="redo" />
-		</button>
-		<button
-			class="button icon"
-			class:active={tools.snapEnabled}
-			aria-pressed={tools.snapEnabled}
-			aria-label="Snap"
-			title="Snap to a quarter-inch grid"
-			onclick={() => tools.setSnap(!tools.snapEnabled)}
-		>
-			<Icon name="grid_4x4" />
-		</button>
-	</div>
-
-	<div class="group">
+		{/if}
 		<button
 			class="button icon"
 			aria-label="Simulate"
@@ -186,50 +240,7 @@
 		</button>
 	</div>
 
-	<div class="group">
-		<div class="menu-host">
-			<button
-				class="button icon split"
-				aria-haspopup="menu"
-				aria-expanded={openMenu === NEW_PROJECT_MENU}
-				aria-label="New project"
-				title="Start a new project"
-				onclick={() => (openMenu = openMenu === NEW_PROJECT_MENU ? null : NEW_PROJECT_MENU)}
-			>
-				<Icon name="note_add" />
-				<Icon name="expand_more" size={14} />
-			</button>
-			{#if openMenu === NEW_PROJECT_MENU}
-				<div class="menu" role="menu">
-					{#each WORKSPACES as workspace (workspace.id)}
-						<button
-							role="menuitem"
-							onclick={() => {
-								openMenu = null;
-								onNewProject(workspace.id);
-							}}
-						>
-							<Icon name={workspace.icon} />
-							<span>
-								<strong>{workspace.label}</strong>
-								<small>A new project with one empty sheet</small>
-							</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</div>
-		<button
-			class="button icon"
-			aria-label="Save design"
-			title="Save design file"
-			onclick={onSaveDesign}
-		>
-			<Icon name="save" />
-		</button>
-		<button class="button icon" aria-label="Open" title="Open a design file" onclick={onImport}>
-			<Icon name="folder_open" />
-		</button>
+	<div class="group" role="group" aria-label="Export">
 		<button class="button icon" aria-label="SVG" title="Export design SVG" onclick={onExportSvg}>
 			<MaskIcon src="/SVG_download.svg" />
 		</button>

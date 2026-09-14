@@ -80,15 +80,17 @@ UPDATE_GOLDEN=1 npm run test:unit
 - copy and paste
 - keyboard nudge
 - calibration coupon generator
-- DXF import; parts nested inside another part's hole
+- DXF import; parts nested inside another part's hole; clearance offset for imported
+  openings
 - multi-sheet job export
 
 ## Canvas
 
-New project in the toolbar starts over with one empty sheet in the workspace
-you pick; undo brings the previous design back. The toolbar starts with the
-workspace switcher; the drawing tools beside it belong to the active sheet's
-workspace, and "+" on the sheet tabs adds a sheet in either.
+The toolbar starts with the File menu: New Flat Parts project and New Folded
+Packaging project start over with one empty sheet (undo brings the previous design
+back), and Open and Save read and write design files. Next comes a box led by the
+workspace chooser; the drawing tools beside it belong to the active sheet's workspace, and
+"+" on the sheet tabs adds a sheet in either. SVG and G-code export sit at the end.
 
 On a packaging sheet, drag the deck body to move it with its openings, its edges
 to resize it, or the outer grips to set the perimeter wall height. Draw openings
@@ -103,16 +105,23 @@ inside it about its lower-left corner; untick it to stretch the part alone. Each
 over, leaving the tab thickness set in the Material panel. A routed part with no
 tabs is named in the program header, because its last cut frees it.
 
-Import SVG (toolbar, Flat Parts only) reads every path and basic shape in the file,
-with transforms and real units, and flattens curves to within 0.05 mm. Fill and
-stroke are ignored: a cut follows the geometry. Each closed outline's nesting depth
-decides what cutting it frees: outlines inside an even number of others are parts,
-cut outside the line and given up to four tabs; those inside an odd number are
-holes. Open paths, text, images, specks under 1 mm, and duplicate outlines are
-skipped, and the footer says what came in, at what size, and what was left out.
-The drawing lands with its lower-left corner half an inch in from the sheet's.
-Outlines that cross, and parts nested inside another part's hole, import but fail
-validation.
+**Import SVG…** sits at the end of the Part menu (Flat Parts) and the Cutout menu
+(packaging). It reads every path and basic shape in the file, with transforms and
+real units, and flattens curves to within 0.05 mm. Fill and stroke are ignored: a
+cut follows the geometry. Open paths, text, images, specks under 1 mm, and
+duplicate outlines are skipped, and the footer says what came in, at what size,
+and what was left out.
+
+- On a Flat Parts sheet, each closed outline's nesting depth decides what cutting
+  it frees: outlines inside an even number of others are parts, cut outside the
+  line and given up to four tabs; those inside an odd number are holes. The
+  drawing lands with its lower-left corner half an inch in from the sheet's.
+  Outlines that cross, and parts nested inside another part's hole, import but
+  fail validation.
+- On the packaging deck, each outermost outline becomes an opening of that shape,
+  named after the file and centred on the deck. Outlines inside it would fall out
+  with its slug, so they are skipped. The opening is cut inside its line at the
+  drawn size, so draw or scale in any clearance the product needs.
 
 Scroll to zoom, middle-drag or hold space to pan, and Snap constrains to a
 quarter-inch grid. One drag is one undo step.
