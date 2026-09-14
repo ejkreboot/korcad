@@ -1,5 +1,4 @@
 /**
- * Values ported verbatim from the original single-file prototype.
  * Changing any of these changes manufactured output, so they are kept
  * together and covered by tests rather than inlined at call sites.
  */

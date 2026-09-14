@@ -4,8 +4,11 @@
 
 KorCad is a local-first, browser-based 2D CAD/CAM app for small CNC jobs, and it is FOSS.
 
-Each sheet is drawn in a **workspace** and cut on a named **machine profile** (drag knife or
-router). Those two ideas are independent.
+**Version 1.0 is the baseline.** What is described here is the shipped behaviour to build on;
+there is no earlier implementation to match.
+
+Each sheet is drawn in a **workspace** and cut with a named **tool** (drag knife or router;
+`MachineProfile` in code). Those two ideas are independent.
 
 - **Flat Parts**: flat parts with holes and slots cut from sheet stock, usually on a router.
 - **Packaging**: KorCad's origin. Inserts from cardstock and cardboard: folded pockets, perimeter
@@ -56,7 +59,8 @@ src/lib/
   core/          framework-, DOM-, and Three-free; plain data in, plain data out
     constants.ts, units.ts
     geometry/    primitives, outline (shapes, holding-tab splitting), contour (distance, containment)
-    design/      types, workspace (WorkspaceDataMap), machine (SheetView), profiles, defaults, normalize
+    design/      types, workspace (WorkspaceDataMap), machine (SheetView), profiles, defaults,
+                 normalize, validation (tool settings)
     cam/         stages, compensation, routing, tabs (router bridges), gcode, simulation
     export/      svg, design-file (envelope)
     assembly/    model.ts: generic plates, walls, and draggable groups
@@ -72,7 +76,7 @@ src/lib/
     editor/      the shell: Canvas, Inspector, Toolbar, SheetTabs, WorkspaceSwitcher,
                  AssemblyViewer, SimulationDialog, CollapsiblePanel
     workspaces/  index.ts (UI registry), packaging/, flat-parts/: inspectors, canvas layers, controllers
-    icons/       vendored Material Symbols path data and Icon.svelte
+    icons/       vendored Material Symbols path data, Icon.svelte, and MaskIcon.svelte
 routes/+page.svelte  the editor page
 tests/unit/{core,features,packaging,flat-parts,editor}   tests/fixtures/   e2e/
 ```
@@ -118,7 +122,9 @@ type DesignState = {
 - A support's height is relational: it names an anchor (`box-floor`, `deck-top`,
   `deck-underside`, or `support-top`) plus an offset, and its height is `fixed` or `span`.
   `resolveSupportHeights` runs in packaging's `reconcile` on every mutation and on import. A drop
-  gesture picks a relationship through `anchoring.ts`, never a raw Z.
+  gesture picks a relationship through `anchoring.ts`, never a raw Z. A new riser spans to the
+  deck underside, and validation rejects a fixed support taller than the space under the deck,
+  allowing 0.5 mm of assembly slop.
 
 ### Editor state
 
@@ -187,11 +193,6 @@ Never mutate inputs along the way.
   icon-only control gets `aria-label` and `title`, and toggles use `aria-pressed`. Group toolbar
   items by spacing, not dividers. Material and Tool panels are `CollapsiblePanel`s,
   collapsed by default.
-- **The reference prototype:** `insert-generator.html` is a local, gitignored, read-only
-  reference for packaging behaviour. Search it; never read it whole, edit it, or import it.
-  Deliberate departures from it: risers span to the deck by default, mounts are named anchors,
-  fixed supports taller than the space under the deck are rejected (0.5 mm slop), the camera
-  fit uses the bounding sphere, and shadows use `PCFShadowMap`.
 
 ## Priorities
 
@@ -213,7 +214,7 @@ Next directions:
   document shape change).
 - Packaging: port the calibration coupon, edit fold direction by clicking a fold on the canvas,
   and add bridge tabs on the routed deck outline.
-- Later: laser and vinyl profiles, with `engrave`, `mark`, and `drill` operations. Geometric hit
+- Later: laser and vinyl tools, with `engrave`, `mark`, and `drill` operations. Geometric hit
   testing. Shared nesting once a second workspace needs it (it lives in
   `packaging/placement.ts` for now). Offline PWA support (the manifest is already there).
 
@@ -246,3 +247,4 @@ the range you need.
   imports.
 - `check`, `lint`, the unit suite, the build, and the e2e suite all pass.
 - A UI change has been viewed in a browser at desktop and phone widths.
+- README.md and AGENTS.md updated as indicated to reflect current state and features.

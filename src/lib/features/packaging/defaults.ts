@@ -7,8 +7,8 @@ const noSides = (): SideFlags => ({ top: false, right: false, bottom: false, lef
 export const DEFAULT_DECK_SHEET_ID = 'deck';
 
 /**
- * Ported verbatim from the monolith's `defaults()`. These values are part of
- * the manufactured result; do not "clean them up" without updated fixtures.
+ * Packaging defaults. These values are part of the manufactured result; do not
+ * "clean them up" without updated fixtures.
  */
 export function createDefaultPackaging(deckSheetId: string = DEFAULT_DECK_SHEET_ID): PackagingData {
 	return {

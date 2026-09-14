@@ -9,8 +9,8 @@ a workspace:
 - **Flat Parts** — flat parts cut from a sheet, with holes and slots, cut outside and
   inside their lines so both keep their drawn size.
 
-Every sheet is cut on a named machine profile (drag knife or router), with
-holding tabs, compensation, toolpath simulation, and G-code and SVG export.
+Every sheet is cut with a named tool (drag knife or router), with holding tabs,
+compensation, toolpath simulation, and G-code and SVG export.
 
 Nothing is uploaded. Drafts live in `localStorage`; durable sharing is an
 explicit file export.
@@ -32,18 +32,18 @@ The computational core is framework- and DOM-free, and is unit-tested by direct
 module import.
 
 ```text
-src/lib/core/       units, geometry and outlines, design model, machine profiles, CAM, export
-src/lib/features/   the workspace registry, and each workspace (packaging, flatParts)
+src/lib/core/       units, geometry and outlines, design model, tools, CAM, export
+src/lib/features/   the workspace registry, and each workspace (packaging, flat-parts)
 src/lib/editor/     design-document ownership, history, tools, viewport, persistence
 src/lib/viewer/     the Three.js scene builder
 src/lib/components/ the editor shell, and each workspace's panels and canvas layer
-tests/unit/         unit tests, by layer (core, features, packaging, flatParts, editor)
+tests/unit/         unit tests, by layer (core, features, packaging, flat-parts, editor)
 tests/fixtures/     golden designs and expected G-code
 e2e/                Playwright tests for editor interaction
 ```
 
 `src/lib/core` must never import Svelte, the DOM, Three.js, or any UI concern.
-See `AGENTS.md` for the full architecture and migration rules.
+See `AGENTS.md` for the full architecture and project conventions.
 
 ## Golden fixtures
 
@@ -55,52 +55,39 @@ test pass:
 UPDATE_GOLDEN=1 npm run test:unit
 ```
 
-## Migration status
+## Features
 
-This app is a migration of the single-file `insert-generator.html` prototype,
-which is kept as a read-only reference until the new editor reproduces its
-regression fixtures.
-
-Ported and tested:
-
-- design model, defaults, and validated design-file normalization
-- fold allowance and bend deduction
-- pocket, perimeter (plain / folded / joist), tray, riser, and platform geometry
-- manufacturability validation
-- drag-knife and router compensation, machining stages, route planning
-- G-code generation and G-code simulation
+- design files: versioned, validated on import, with local drafts
+- Folded Packaging: fold allowance and bend deduction; pocket, perimeter (plain,
+  folded, joist), tray, riser, and platform geometry; supports anchored to real
+  surfaces; a Three.js assembly preview
+- Flat Parts: parts, holes, and slots on independent sheets, with holding tabs
+- manufacturability validation, including every tool a sheet uses
+- drag-knife and router compensation, machining stages, route planning, router
+  passes, and bridge tabs
+- G-code export and a toolpath simulator that plays the emitted program, pass by
+  pass, with tool-change stops
 - design-file and SVG export
-- 2D SVG canvas with grid, CAD cursor, zoom and pan
-- drawing, dragging, and resizing the deck, openings, and supports
-- semantic opening and support types, material properties, multi-sheet designs
-- inspector, sheet tabs, undo/redo, local drafts
+- 2D SVG canvas with grid, CAD cursor, zoom and pan; drawing, dragging, and
+  resizing
+- multi-sheet designs, a workspace switcher, named tools, undo/redo, and New
+  project
 
-Also built since:
+## To do
 
-- the Three.js assembly preview and the 3D assembly model
-- the toolpath simulator, with per-pass playback and tool-change checkpoints
-- named machine profiles, referenced per sheet
-- explicit manufacturing intent on every path, so CAM is feature-agnostic
-- a workspace-namespaced document (version 8): each workspace's data lives under
-  `workspaces`, each sheet names its workspace, and drafts are saved as design
-  files
-- a workspace registry, so the editor, toolbar, export, and 3D viewer look up the
-  active sheet's workspace instead of importing packaging
-- the Flat Parts workspace, a workspace switcher, and adding, duplicating, and
-  deleting machine profiles
-
-Not yet ported:
-
-- rotate, copy/paste, and keyboard nudge of the selection
-- the calibration coupon generator
-- SVG profile import and multi-sheet job (.zip) export
+- rotate the selection
+- copy and paste
+- keyboard nudge
+- calibration coupon generator
+- SVG import
+- multi-sheet job export
 
 ## Canvas
 
 New project in the toolbar starts over with one empty sheet in the workspace
 you pick; undo brings the previous design back. The toolbar starts with the
-workspace switcher; the tools beside it belong to
-the active sheet's workspace, and "+" on the sheet tabs adds a sheet in either.
+workspace switcher; the drawing tools beside it belong to the active sheet's
+workspace, and "+" on the sheet tabs adds a sheet in either.
 
 On a packaging sheet, drag the deck body to move it with its openings, its edges
 to resize it, or the outer grips to set the perimeter wall height. Draw openings
@@ -120,9 +107,9 @@ quarter-inch grid. One drag is one undo step.
 
 Exported programs assume a 24 x 24 inch sheet, origin at the lower left, and Z
 zero at the material surface. The spindle stays off for knife and creasing work.
-A router cuts in equal passes no deeper than the profile's depth per pass. A
+A router cuts in equal passes no deeper than the tool's depth per pass. A
 sheet gets a separate crease program only when something on it is creased from
 the back. Export is blocked while validation reports a problem, including an
-unsafe setting on any machine profile a sheet uses. A preview is not proof
+unsafe setting on any tool a sheet uses. A preview is not proof
 that a program is safe to run; verify tool setup and workholding, and cut a
 calibration coupon before trusting dimensions.

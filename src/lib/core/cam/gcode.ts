@@ -110,7 +110,7 @@ export function generateGcode(
 		'Unknown';
 
 	const lines: string[] = [
-		options.title ?? '; KorCad v0.1',
+		options.title ?? '; KorCad v1.0',
 		`; Sheet: ${sheetName}`,
 		`; Operation: ${operation}; tool: ${toolDescription}`,
 		'; 24 x 24 inch sheet; origin at lower left; Z zero at material surface',

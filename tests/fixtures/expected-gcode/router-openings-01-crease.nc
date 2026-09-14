@@ -1,4 +1,4 @@
-; KorCad v0.1
+; KorCad v1.0
 ; Sheet: Deck
 ; Operation: crease; tool: 6.35 mm router bit
 ; 24 x 24 inch sheet; origin at lower left; Z zero at material surface
