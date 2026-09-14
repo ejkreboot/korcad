@@ -177,3 +177,43 @@ test('an imported SVG becomes a tabbed part with its holes', async ({ page }) =>
 		['hole', 'path']
 	]);
 });
+
+test('keeping proportions scales a part and the holes inside it', async ({ page }) => {
+	await gotoEditor(page);
+	await addFlatPartsSheet(page);
+	await page.getByRole('button', { name: 'Part', exact: true }).click();
+	await page.getByRole('menuitem', { name: /^Rectangle/ }).click();
+	await dragOnCanvas(page, [0.2, 0.3], [0.7, 0.7]);
+	await page.getByRole('button', { name: 'Hole', exact: true }).click();
+	await page.getByRole('menuitem', { name: /^Hole/ }).click();
+	await dragOnCanvas(page, [0.35, 0.45], [0.45, 0.55]);
+
+	const entities = async () => {
+		const design = (await readDraft(page))!;
+		const flatParts = (
+			design.workspaces as {
+				flatParts: {
+					sheets: Record<string, { entities: { name: string; x: number; w: number; h: number }[] }>;
+				};
+			}
+		).flatParts;
+		return Object.values(flatParts.sheets)[0]!.entities;
+	};
+	const [part, hole] = await entities();
+
+	await page
+		.locator('[data-flat-parts-entity]')
+		.first()
+		.click({ position: { x: 6, y: 6 } });
+	await expect(page.getByRole('heading', { name: 'Part 1' })).toBeVisible();
+	await page.getByLabel('Keep proportions and scale holes').check();
+	const width = page.getByLabel(/^Width/);
+	await width.fill(String(Number(await width.inputValue()) * 2));
+	await width.press('Enter');
+
+	await expect.poll(async () => (await entities())[0]!.w).toBeCloseTo(part!.w * 2, 1);
+	const [scaledPart, scaledHole] = await entities();
+	expect(scaledPart!.h).toBeCloseTo(part!.h * 2, 1);
+	expect(scaledHole!.w).toBeCloseTo(hole!.w * 2, 1);
+	expect(scaledHole!.x - scaledPart!.x).toBeCloseTo((hole!.x - part!.x) * 2, 1);
+});

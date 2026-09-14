@@ -96,7 +96,9 @@ and supports with the Cutout and Support menus; the preset you pick sets the
 semantic type, not just the outline.
 
 On a Flat Parts sheet, draw parts with the Part menu and holes or slots inside them
-with the Hole menu. Moving a part carries its holes. Each part keeps holding tabs
+with the Hole menu. Moving a part carries its holes. With "Keep proportions and scale
+holes" ticked, a width or height typed into the inspector scales the part and every hole
+inside it about its lower-left corner; untick it to stretch the part alone. Each part keeps holding tabs
 (four by default): gaps in a knife cut, or on a router bridges the bit rises
 over, leaving the tab thickness set in the Material panel. A routed part with no
 tabs is named in the program header, because its last cut frees it.

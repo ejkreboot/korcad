@@ -19,6 +19,7 @@ import {
 	addEntity,
 	releaseFlatPartsSheet,
 	removeEntity,
+	scaleEntity,
 	flatPartsActions,
 	updateEntities
 } from '$lib/features/flat-parts/actions.js';
@@ -351,6 +352,39 @@ describe('flat parts actions', () => {
 			entity(updateEntities(added, [{ id: 'e', values: { w: 12, kind: 'profile' } }]), 'e')
 		).toMatchObject({ w: 12, kind: 'hole' });
 		expect(entity(removeEntity(added, 'e'), 'e')).toBeUndefined();
+	});
+
+	it('scale a part with the holes inside it, about its lower-left corner', () => {
+		const design = flatPartsDesign();
+		const scaled = scaleEntity(design, 'bracket', 1.5);
+		expect(entity(scaled, 'bracket')).toMatchObject({
+			x: 50,
+			y: 50,
+			w: 300,
+			h: 180,
+			cornerRadius: 15
+		});
+		// Bore sits 30, 40 from the bracket's corner; slot 100, 50.
+		expect(entity(scaled, 'bore')).toMatchObject({ x: 95, y: 110, w: 60, h: 60 });
+		expect(entity(scaled, 'adjust')).toMatchObject({ x: 200, y: 125, w: 105, h: 30 });
+		expect(entity(scaled, 'nut')).toEqual(entity(design, 'nut'));
+		expect(entity(scaled, 'bracket').tabCount).toBe(4);
+
+		// Scaling back restores the drawing.
+		const restored = scaleEntity(scaled, 'bracket', 1 / 1.5);
+		for (const id of ['bracket', 'bore', 'adjust']) {
+			expect(entity(restored, id)).toEqual(entity(design, id));
+		}
+	});
+
+	it('scale a hole on its own, and ignore a factor that is not a size', () => {
+		const design = flatPartsDesign();
+		const scaled = scaleEntity(design, 'bore', 0.5);
+		expect(entity(scaled, 'bore')).toMatchObject({ x: 80, y: 90, w: 20, h: 20 });
+		expect(entity(scaled, 'bracket')).toEqual(entity(design, 'bracket'));
+		for (const factor of [0, -1, Number.NaN, Infinity]) {
+			expect(scaleEntity(design, 'bracket', factor)).toBe(design);
+		}
 	});
 
 	it('remove a sheet’s parts with the sheet', () => {

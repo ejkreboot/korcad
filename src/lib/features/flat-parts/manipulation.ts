@@ -56,3 +56,23 @@ export function resizeEntityBox(
 	}
 	return { x, y, w, h };
 }
+
+/**
+ * A box scaled by `factor` about `anchor`: its corner moves away from the
+ * anchor in proportion, and its size and corner radius grow with it, so the
+ * shape drawn in it keeps its proportions. An imported outline is stored as
+ * fractions of its box, so it scales exactly with it.
+ */
+export function scaleEntityBox(
+	entity: Pick<FlatPartsEntity, 'x' | 'y' | 'w' | 'h' | 'cornerRadius'>,
+	anchor: Point,
+	factor: number
+): Pick<FlatPartsEntity, 'x' | 'y' | 'w' | 'h' | 'cornerRadius'> {
+	return {
+		x: round(anchor.x + (entity.x - anchor.x) * factor),
+		y: round(anchor.y + (entity.y - anchor.y) * factor),
+		w: round(entity.w * factor),
+		h: round(entity.h * factor),
+		cornerRadius: round(entity.cornerRadius * factor)
+	};
+}

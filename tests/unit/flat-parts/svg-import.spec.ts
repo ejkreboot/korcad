@@ -6,7 +6,7 @@ import { serializeDesign } from '$lib/core/export/design-file.js';
 import { outlineBounds } from '$lib/core/geometry/contour.js';
 import type { Point } from '$lib/core/geometry/primitives.js';
 import { parseDesign } from '$lib/features/document.js';
-import { updateEntity } from '$lib/features/flat-parts/actions.js';
+import { scaleEntity, updateEntity } from '$lib/features/flat-parts/actions.js';
 import { entityOutline, flatPartsGeometry } from '$lib/features/flat-parts/geometry.js';
 import { classifyOutlines, importSvg } from '$lib/features/flat-parts/import.js';
 import { validateFlatParts } from '$lib/features/flat-parts/validation.js';
@@ -105,6 +105,25 @@ describe('importing an SVG into Flat Parts', () => {
 		);
 		expect(after.left).toBeCloseTo(before.left + 10);
 		expect(after.right - after.left).toBeCloseTo((before.right - before.left) * 2);
+	});
+
+	it('scales an imported plate as one piece', () => {
+		const { design } = importSvg(empty(), 'sheet', PLATE);
+		const part = entities(design)[0]!;
+		const holeSpan = (d: DesignState) =>
+			entities(d)
+				.filter((entity) => entity.kind === 'hole')
+				.map((entity) => outlineBounds(entityOutline(entity)));
+		const scaled = scaleEntity(design, part.id, 0.5);
+		expect(validateFlatParts(scaled)).toEqual([]);
+		const [before, after] = [holeSpan(design), holeSpan(scaled)];
+		after.forEach((box, index) => {
+			expect(box.left - part.x).toBeCloseTo((before[index]!.left - part.x) * 0.5, 2);
+			expect(box.right - box.left).toBeCloseTo(
+				(before[index]!.right - before[index]!.left) * 0.5,
+				2
+			);
+		});
 	});
 
 	it('says what it skipped, dropping duplicates and specks', () => {

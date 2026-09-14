@@ -1,9 +1,7 @@
 import type { Point } from '$lib/core/geometry/primitives.js';
-import { outlineInside } from '$lib/core/geometry/contour.js';
 import type { EditorState } from '$lib/editor/state.svelte.js';
 import type { ToolState } from '$lib/editor/tools.svelte.js';
 import { findEntity, flatPartsActions } from '$lib/features/flat-parts/actions.js';
-import { entityOutline } from '$lib/features/flat-parts/geometry.js';
 import {
 	MIN_FLAT_PARTS_DRAG,
 	moveEntityBox,
@@ -45,13 +43,7 @@ export function createFlatPartsCanvas(editor: EditorState, tools: ToolState): Ca
 					}
 				};
 			}
-			const outline = entityOutline(entity);
-			const carried =
-				entity.kind === 'profile'
-					? actions.view.entities.filter(
-							(other) => other.kind === 'hole' && outlineInside(entityOutline(other), outline)
-						)
-					: [];
+			const carried = actions.holesInside(entity);
 			return {
 				move(current: Point) {
 					const moved = moveEntityBox(original, stock, current, tools.snapEnabled);

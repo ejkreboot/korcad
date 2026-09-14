@@ -30,6 +30,27 @@
 		if (Number.isFinite(value)) actions.updateEntity(entity.id, { [key]: value });
 	}
 
+	/**
+	 * While on, a width or height typed in scales the whole entity to it, and a
+	 * part's holes with it. It applies when the field is committed rather than
+	 * on each keystroke, so typing 150 does not first shrink the part to 1 mm
+	 * and lose its holes' positions to rounding. Not saved; it is a way of editing.
+	 */
+	let proportional = $state(false);
+
+	function scaleTo(key: 'w' | 'h', raw: string): void {
+		if (!entity) return;
+		const value = parseDisplay(raw, units);
+		if (Number.isFinite(value) && value > 0) actions.scaleEntity(entity.id, value / entity[key]);
+	}
+
+	function setSize(key: 'w' | 'h', raw: string, committed: boolean): void {
+		if (proportional === committed) {
+			if (proportional) scaleTo(key, raw);
+			else setLength(key, raw);
+		}
+	}
+
 	function setCount(key: 'sides' | 'tabCount', raw: string, minimum: number): void {
 		if (!entity) return;
 		const value = Math.round(Number(raw));
@@ -93,7 +114,8 @@
 					type="number"
 					step="0.001"
 					value={mm(entity.w)}
-					oninput={(e) => setLength('w', e.currentTarget.value)}
+					oninput={(e) => setSize('w', e.currentTarget.value, false)}
+					onchange={(e) => setSize('w', e.currentTarget.value, true)}
 				/>
 			</label>
 			<label class="field">
@@ -102,8 +124,13 @@
 					type="number"
 					step="0.001"
 					value={mm(entity.h)}
-					oninput={(e) => setLength('h', e.currentTarget.value)}
+					oninput={(e) => setSize('h', e.currentTarget.value, false)}
+					onchange={(e) => setSize('h', e.currentTarget.value, true)}
 				/>
+			</label>
+			<label class="check proportional" class:on={proportional}>
+				<input type="checkbox" bind:checked={proportional} />
+				{entity.kind === 'profile' ? 'Keep proportions and scale holes' : 'Keep proportions'}
 			</label>
 			{#if entity.shape === 'rounded'}
 				<label class="field">
@@ -144,7 +171,7 @@
 		<p class="help">
 			{#if entity.kind === 'profile'}
 				A part is cut outside its line, so it keeps its drawn size. Moving it carries the holes
-				inside it.
+				inside it, and so does a new width or height while proportions are kept.
 				{#if router}
 					Each holding tab is a bridge the bit rises over, leaving the tab thickness set under
 					Material.
@@ -171,3 +198,11 @@
 		</p>
 	</section>
 {/if}
+
+<style>
+	.proportional {
+		grid-column: 1 / -1;
+		justify-content: flex-start;
+		text-transform: none;
+	}
+</style>

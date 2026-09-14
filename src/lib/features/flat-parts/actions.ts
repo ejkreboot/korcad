@@ -1,6 +1,9 @@
+import { outlineInside } from '$lib/core/geometry/contour.js';
 import type { DesignState } from '$lib/core/design/types.js';
 import type { Selection } from '$lib/core/design/workspace.js';
 import type { DocumentHost } from '../workspaces.js';
+import { entityOutline } from './geometry.js';
+import { scaleEntityBox } from './manipulation.js';
 import type { FlatPartsEntity, FlatPartsKind } from './types.js';
 import {
 	flatPartsData,
@@ -63,6 +66,35 @@ export function updateEntity(
 	return updateEntities(design, [{ id, values }]);
 }
 
+/** The holes cut through a part: those on its sheet lying wholly inside its outline. */
+export function holesInside(design: DesignState, part: FlatPartsEntity): FlatPartsEntity[] {
+	const sheetId = entitySheetId(design, part.id);
+	if (!sheetId || part.kind !== 'profile') return [];
+	const outline = entityOutline(part);
+	return flatPartsSheetView(design, sheetId).entities.filter(
+		(other) => other.kind === 'hole' && outlineInside(entityOutline(other), outline)
+	);
+}
+
+/**
+ * Scales an entity by `factor` about the lower-left corner of its box, the
+ * point its X and Y fields name. A part carries the holes inside it, scaled
+ * about the same corner, so a plate grows as one piece rather than leaving
+ * its holes behind. Tab width is a stock setting and does not scale.
+ */
+export function scaleEntity(design: DesignState, id: string, factor: number): DesignState {
+	const entity = findEntity(design, id);
+	if (!entity || !Number.isFinite(factor) || factor <= 0) return design;
+	const anchor = { x: entity.x, y: entity.y };
+	return updateEntities(
+		design,
+		[entity, ...holesInside(design, entity)].map((item) => ({
+			id: item.id,
+			values: scaleEntityBox(item, anchor, factor)
+		}))
+	);
+}
+
 export function removeEntity(design: DesignState, id: string): DesignState {
 	const sheetId = entitySheetId(design, id);
 	if (!sheetId) return design;
@@ -104,6 +136,12 @@ export function flatPartsActions(host: DocumentHost) {
 		},
 		removeEntity(id: string) {
 			host.update((design) => removeEntity(design, id));
+		},
+		scaleEntity(id: string, factor: number) {
+			host.update((design) => scaleEntity(design, id, factor));
+		},
+		holesInside(part: FlatPartsEntity): FlatPartsEntity[] {
+			return holesInside(host.design, part);
 		},
 		previewEntities(changes: readonly { id: string; values: Partial<FlatPartsEntity> }[]) {
 			host.preview((design) => updateEntities(design, changes));

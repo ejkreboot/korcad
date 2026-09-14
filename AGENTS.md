@@ -119,7 +119,9 @@ type DesignState = {
   `withPackaging`. Every packaging sheet must use the same fabrication mode.
 - **Flat Parts data belongs to one sheet**, at `workspaces.flatParts.sheets[sheetId].entities`: parts
   (`profile`, cut outside) and holes (`hole`, cut inside). A `path` entity stores its `outline` as
-  fractions of its box, so moving and resizing work as for any shape.
+  fractions of its box, so moving and resizing work as for any shape. `holesInside` finds a
+  part's holes by containment; dragging a part and `scaleEntity` (uniform, about the part's
+  lower-left corner) carry them.
 - **Workspace imports.** A `Workspace` lists `imports` (Flat Parts: SVG); the toolbar offers each
   as a button and the page hands the file text to `read`, which returns the new document, a
   selection, and a notice. An imported outline's kind is its nesting depth's parity (even: part,
