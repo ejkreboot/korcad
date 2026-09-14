@@ -143,7 +143,11 @@ type DesignState = {
   `rotateGroup` / `rotatePocketGroup` turn about the group box's centre and bake the turn into
   each member (`rotatePoints`, then `boxedOutline`); no angle is stored. Outlines become `path` /
   `profile`, except that a carried circle only moves, and a box-drawn hole (rectangle, rounded,
-  ellipse, slot) keeps its shape on quarter turns. `RotateControl.svelte` is the shared UI.
+  ellipse, slot) keeps its shape on quarter turns. `rotateEntity` / `rotatePocket` do the same for
+  one imported outline (`path` / `profile` only; drawn shapes keep their parameters), a part
+  carrying its holes. The shell reaches them through `Workspace.canRotate` / `rotateSelection`: the
+  toolbar's rotate buttons turn the selection 15° a press and are disabled when it cannot turn.
+  There is deliberately no typed angle, since a baked-in turn has no original to be relative to.
   Normalization drops memberless groups and dangling `groupId`s.
 - Selection is one generic `{ kind, id }` slot in `editor/state.svelte.ts`, and snap lives in
   `tools.svelte.ts`. Neither is saved. Drafts are full design files.

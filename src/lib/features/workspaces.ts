@@ -119,6 +119,10 @@ export type Workspace<Id extends WorkspaceId = WorkspaceId> = WorkspaceReader & 
 		selection: Selection,
 		sheetId: string
 	): { left: number; right: number; bottom: number; top: number } | null;
+	/** Whether the selection can be rotated: an imported outline or group, not a drawn shape. */
+	canRotate(design: DesignState, selection: Selection): boolean;
+	/** The document with the selection turned `degrees` counter-clockwise about the centre of its box. */
+	rotateSelection(design: DesignState, selection: Selection, degrees: number): DesignState;
 	/** Whether a sheet is one the workspace cannot do without, so it may not be renamed or removed. */
 	protectsSheet(design: DesignState, sheetId: string): boolean;
 	/** The document with this workspace's parts cut from a sheet removed, ahead of removing the sheet. */

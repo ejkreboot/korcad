@@ -1,5 +1,4 @@
 <script lang="ts">
-	import RotateControl from '$lib/components/editor/RotateControl.svelte';
 	import { display, parseDisplay } from '$lib/core/units.js';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
 	import { flatPartsActions } from '$lib/features/flat-parts/actions.js';
@@ -149,7 +148,6 @@
 					onchange={(e) => scaleGroupTo('h', e.currentTarget.value)}
 				/>
 			</label>
-			<RotateControl onrotate={(degrees) => actions.rotateGroup(group.group.id, degrees)} />
 			<label class="field">
 				Holding tabs
 				<input

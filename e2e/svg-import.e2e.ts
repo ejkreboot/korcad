@@ -57,8 +57,10 @@ async function pressTarget(page: Page, selector: string): Promise<void> {
 	await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.7);
 }
 
-test('a logo imported to the deck scales as one group', async ({ page }) => {
+test('a logo imported to the deck scales and rotates as one group', async ({ page }) => {
 	await gotoEditor(page);
+	// With nothing imported selected there is nothing to rotate.
+	await expect(page.getByRole('button', { name: 'Rotate left' })).toBeDisabled();
 	await importLogo(page, 'Cutout');
 	await expect(page.getByRole('heading', { name: 'acme' })).toBeVisible();
 	await expect(page.locator('.badge')).toContainText('Imported group · 3 openings');
@@ -84,14 +86,14 @@ test('a logo imported to the deck scales as one group', async ({ page }) => {
 		[15, 25]
 	]);
 
-	// A quarter turn stands the halved logo on end, and one typed angle turns it back.
-	await page.getByRole('button', { name: 'Rotate 90° counter-clockwise' }).click();
-	await expect(page.getByLabel(/^Height/)).toHaveValue(String(Number((65 / 25.4).toFixed(3))));
-	const angle = page.getByLabel('Rotate', { exact: true });
-	await angle.fill('-90');
-	await angle.press('Enter');
-	await expect(angle).toHaveValue('');
-	await expect(page.getByLabel(/^Width/)).toHaveValue(String(Number((65 / 25.4).toFixed(3))));
+	// Six 15° steps stand the halved logo on end, and six back return it.
+	const left = page.getByRole('button', { name: 'Rotate left' });
+	const right = page.getByRole('button', { name: 'Rotate right' });
+	const size = String(Number((65 / 25.4).toFixed(3)));
+	for (let step = 0; step < 6; step++) await left.click();
+	await expect(page.getByLabel(/^Height/)).toHaveValue(size);
+	for (let step = 0; step < 6; step++) await right.click();
+	await expect(page.getByLabel(/^Width/)).toHaveValue(size);
 });
 
 test('a logo imported to Flat Parts moves and scales as one group', async ({ page }) => {

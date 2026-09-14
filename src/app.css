@@ -315,10 +315,13 @@ input[type='number'] {
 	gap: 6px 10px;
 }
 
+/* A box wider than a phone wraps its own buttons rather than widening the page. */
 .toolbar .group {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 2px;
 	align-items: center;
+	max-width: 100%;
 }
 
 /*

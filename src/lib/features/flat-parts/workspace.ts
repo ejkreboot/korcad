@@ -5,7 +5,9 @@ import {
 	findEntity,
 	findGroup,
 	groupBox,
-	releaseFlatPartsSheet
+	releaseFlatPartsSheet,
+	rotateEntity,
+	rotateGroup
 } from './actions.js';
 import { createDefaultFlatParts } from './defaults.js';
 import { flatPartsGeometry } from './geometry.js';
@@ -99,6 +101,14 @@ export const FLAT_PARTS_WORKSPACE: Workspace<'flatParts'> = {
 		selection.kind === 'group'
 			? groupBox(design, selection.id) !== null
 			: findEntity(design, selection.id)?.kind === selection.kind,
+	canRotate: (design, selection) =>
+		selection.kind === 'group'
+			? groupBox(design, selection.id) !== null
+			: findEntity(design, selection.id)?.shape === 'path',
+	rotateSelection: (design, selection, degrees) =>
+		selection.kind === 'group'
+			? rotateGroup(design, selection.id, degrees)
+			: rotateEntity(design, selection.id, degrees),
 	selectionBounds: (design, selection, sheetId) => {
 		if (selection.kind === 'group') {
 			const box =

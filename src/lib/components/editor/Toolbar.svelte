@@ -36,6 +36,18 @@
 	// Drawing happens on the flat sheet, so those tools are unavailable in 3D.
 	const assembling = $derived(tools.viewMode === 'assembly');
 
+	/** Each press turns the selection this far; a turn is baked into its geometry, so steps stay coarse. */
+	const ROTATE_STEP = 15;
+	const rotatable = $derived(
+		editor.selection !== null && editor.workspace.canRotate(editor.design, editor.selection)
+	);
+
+	function rotate(degrees: number): void {
+		const selection = editor.selection;
+		if (selection)
+			editor.update((design) => editor.workspace.rotateSelection(design, selection, degrees));
+	}
+
 	function fileCommand(command: () => void): void {
 		openMenu = null;
 		command();
@@ -182,6 +194,28 @@
 			onclick={() => tools.setSnap(!tools.snapEnabled)}
 		>
 			<Icon name="grid_4x4" />
+		</button>
+		<button
+			class="button icon"
+			aria-label="Rotate left"
+			title={rotatable
+				? `Rotate the selection ${ROTATE_STEP}° counter-clockwise`
+				: 'Select an imported drawing to rotate it'}
+			disabled={!rotatable}
+			onclick={() => rotate(ROTATE_STEP)}
+		>
+			<Icon name="rotate_left" />
+		</button>
+		<button
+			class="button icon"
+			aria-label="Rotate right"
+			title={rotatable
+				? `Rotate the selection ${ROTATE_STEP}° clockwise`
+				: 'Select an imported drawing to rotate it'}
+			disabled={!rotatable}
+			onclick={() => rotate(-ROTATE_STEP)}
+		>
+			<Icon name="rotate_right" />
 		</button>
 	</div>
 

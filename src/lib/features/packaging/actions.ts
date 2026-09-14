@@ -160,6 +160,19 @@ export function rotatePocketGroup(design: DesignState, id: string, degrees: numb
 	);
 }
 
+/**
+ * Turns an imported opening `degrees` counter-clockwise about the centre of its
+ * box. Only an imported outline turns: a drawn opening is kept to its shape.
+ */
+export function rotatePocket(design: DesignState, id: string, degrees: number): DesignState {
+	const pocket = design.workspaces.packaging?.pockets.find((candidate) => candidate.id === id);
+	if (pocket?.shape !== 'profile' || !Number.isFinite(degrees) || degrees % 360 === 0) {
+		return design;
+	}
+	const pivot = point(pocket.x + pocket.w / 2, pocket.y + pocket.h / 2);
+	return updatePockets(design, pocketGroupRotationChanges([pocket], pivot, degrees));
+}
+
 export function renamePocketGroup(design: DesignState, id: string, name: string): DesignState {
 	return withPackaging(design, (data) => ({
 		...data,
@@ -280,6 +293,9 @@ export function packagingActions(host: DocumentHost) {
 		},
 		selectPocketGroup(id: string) {
 			host.select({ kind: 'pocket-group', id });
+		},
+		rotatePocket(id: string, degrees: number) {
+			host.update((design) => rotatePocket(design, id, degrees));
 		},
 		scalePocketGroup(id: string, factor: number) {
 			host.update((design) => scalePocketGroup(design, id, factor));

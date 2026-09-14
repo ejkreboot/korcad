@@ -260,6 +260,21 @@ export function rotateGroup(design: DesignState, id: string, degrees: number): D
 	return updateEntities(design, groupRotationChanges(groupCarried(design, id), pivot, degrees));
 }
 
+/**
+ * Turns an imported outline `degrees` counter-clockwise about the centre of its
+ * box. A part carries the holes inside it, as it does when it moves or scales.
+ * Only an imported outline turns: a drawn shape is kept to its parameters.
+ */
+export function rotateEntity(design: DesignState, id: string, degrees: number): DesignState {
+	const entity = findEntity(design, id);
+	if (entity?.shape !== 'path' || !Number.isFinite(degrees) || degrees % 360 === 0) return design;
+	const pivot = point(entity.x + entity.w / 2, entity.y + entity.h / 2);
+	return updateEntities(
+		design,
+		groupRotationChanges([entity, ...holesInside(design, entity)], pivot, degrees)
+	);
+}
+
 /** Gives every part in a group the same number of holding tabs. */
 export function setGroupTabs(design: DesignState, id: string, tabCount: number): DesignState {
 	return updateEntities(
@@ -375,6 +390,9 @@ export function flatPartsActions(host: DocumentHost) {
 		},
 		scaleEntity(id: string, factor: number) {
 			host.update((design) => scaleEntity(design, id, factor));
+		},
+		rotateEntity(id: string, degrees: number) {
+			host.update((design) => rotateEntity(design, id, degrees));
 		},
 		holesInside(part: FlatPartsEntity): FlatPartsEntity[] {
 			return holesInside(host.design, part);

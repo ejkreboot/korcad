@@ -8,8 +8,10 @@ import { parseDesign } from '$lib/features/document.js';
 import {
 	addEntity,
 	groupBox,
+	holesInside,
 	moveGroup,
 	removeGroup,
+	rotateEntity,
 	rotateGroup,
 	scaleEntity,
 	scaleGroup,
@@ -161,6 +163,50 @@ describe('importing an SVG into Flat Parts', () => {
 		);
 	});
 
+	it('rotates a single imported part with its holes, and leaves a drawn shape alone', () => {
+		const { design } = importSvg(empty(), 'sheet', PLATE);
+		const [part, ...holes] = entities(design);
+		const turned = rotateEntity(design, part!.id, 90);
+		// 200 x 100 at (12.7, 12.7) turns about its centre (112.7, 62.7) to 100 x 200.
+		expect(entities(turned)[0]).toMatchObject({ x: 62.7, y: -37.3, w: 100, h: 200 });
+		expect(
+			entities(turned)
+				.slice(1)
+				.map((hole) => [hole.w, hole.h])
+		).toEqual(holes.map((hole) => [hole.h, hole.w]));
+		expect(holesInside(turned, entities(turned)[0]!)).toHaveLength(2);
+		const back = entities(rotateEntity(turned, part!.id, -90));
+		back.forEach((entity, index) => {
+			const original = entities(design)[index]!;
+			expect([entity.x, entity.y, entity.w, entity.h]).toEqual([
+				original.x,
+				original.y,
+				original.w,
+				original.h
+			]);
+			entityOutline(entity).forEach((vertex, at) => {
+				expect(vertex.x).toBeCloseTo(entityOutline(original)[at]!.x, 6);
+				expect(vertex.y).toBeCloseTo(entityOutline(original)[at]!.y, 6);
+			});
+		});
+
+		const drawn = addEntity(
+			empty(),
+			'sheet',
+			createFlatPartsEntity({
+				id: 'box',
+				name: 'Box',
+				kind: 'profile',
+				shape: 'rectangle',
+				x: 20,
+				y: 20,
+				w: 50,
+				h: 30
+			})
+		);
+		expect(rotateEntity(drawn, 'box', 90)).toBe(drawn);
+	});
+
 	it('round-trips imported outlines through a design file', () => {
 		const { design } = importSvg(empty(), 'sheet', PLATE);
 		expect(parseDesign(serializeDesign(design))).toEqual(design);
@@ -293,6 +339,39 @@ describe('importing a drawing of several parts as a group', () => {
 		);
 		expect(rotateGroup(design, id, 360)).toBe(design);
 		expect(rotateGroup(design, id, Number.NaN)).toBe(design);
+	});
+
+	it('offers rotation to imported drawings only, through the workspace registry', () => {
+		const { design, selection } = imported();
+		const member = entities(design)[0]!;
+		const drawn = addEntity(
+			design,
+			'sheet',
+			createFlatPartsEntity({
+				id: 'box',
+				name: 'Box',
+				kind: 'profile',
+				shape: 'rectangle',
+				x: 200,
+				y: 200,
+				w: 50,
+				h: 30
+			})
+		);
+		expect(FLAT_PARTS_WORKSPACE.canRotate(drawn, selection!)).toBe(true);
+		expect(FLAT_PARTS_WORKSPACE.canRotate(drawn, { kind: 'profile', id: member.id })).toBe(true);
+		expect(FLAT_PARTS_WORKSPACE.canRotate(drawn, { kind: 'profile', id: 'box' })).toBe(false);
+
+		// Six toolbar steps of 15 degrees land where one quarter turn does.
+		const stepped = Array.from({ length: 6 }).reduce<DesignState>(
+			(next) => FLAT_PARTS_WORKSPACE.rotateSelection(next, selection!, 15),
+			design
+		);
+		const quarter = groupBox(rotateGroup(design, selection!.id, 90), selection!.id)!;
+		const box = groupBox(stepped, selection!.id)!;
+		[box.x, box.y, box.w, box.h].forEach((value, index) =>
+			expect(value).toBeCloseTo([quarter.x, quarter.y, quarter.w, quarter.h][index]!, 2)
+		);
 	});
 
 	it('turns by any angle, keeping each outline wound counter-clockwise', () => {

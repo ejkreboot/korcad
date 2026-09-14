@@ -9,13 +9,14 @@ import {
 	movePocketGroup,
 	pocketGroupBox,
 	removePocketGroup,
+	rotatePocket,
 	rotatePocketGroup,
 	scalePocketGroup
 } from '$lib/features/packaging/actions.js';
 import { importSvgOpenings } from '$lib/features/packaging/import.js';
 import { packagingView } from '$lib/features/packaging/view.js';
 import { PACKAGING_WORKSPACE, validateDocument } from '$lib/features/workspaces.js';
-import { flatPartsDesign } from '../../support/designs.js';
+import { flatPartsDesign, foldedDesign } from '../../support/designs.js';
 
 const svg = (body: string) =>
 	`<svg xmlns="http://www.w3.org/2000/svg" width="300mm" height="300mm" viewBox="0 0 300 300">${body}</svg>`;
@@ -58,6 +59,42 @@ describe('importing an SVG as deck openings', () => {
 		expect(
 			outline.some((p) => Math.abs(p.x - box.right) < 0.01 && Math.abs(p.y - box.bottom) < 0.01)
 		).toBe(true);
+	});
+
+	it('rotates a single imported opening about its centre', () => {
+		const { design, selection } = importSvgOpenings(
+			createDefaultDesign(),
+			'deck',
+			PRODUCT,
+			'hub.svg'
+		);
+		const before = packagingView(design).pockets[0]!;
+		const turned = packagingView(rotatePocket(design, selection!.id, 90)).pockets[0]!;
+		expect(turned).toMatchObject({ shape: 'profile', w: 80, h: 120 });
+		expect(turned.x + turned.w / 2).toBeCloseTo(before.x + before.w / 2, 2);
+		expect(turned.y + turned.h / 2).toBeCloseTo(before.y + before.h / 2, 2);
+		expect(validateDocument(rotatePocket(design, selection!.id, 90))).toEqual([]);
+	});
+
+	it('offers rotation to imported openings only, through the workspace registry', () => {
+		const { design, selection } = importSvgOpenings(
+			createDefaultDesign(),
+			'deck',
+			PRODUCT,
+			'hub.svg'
+		);
+		expect(PACKAGING_WORKSPACE.canRotate(design, selection!)).toBe(true);
+		const drawn = packagingView(foldedDesign()).pockets[0]!;
+		expect(PACKAGING_WORKSPACE.canRotate(foldedDesign(), { kind: 'pocket', id: drawn.id })).toBe(
+			false
+		);
+		expect(
+			PACKAGING_WORKSPACE.rotateSelection(foldedDesign(), { kind: 'pocket', id: drawn.id }, 15)
+		).toEqual(foldedDesign());
+		const turned = packagingView(PACKAGING_WORKSPACE.rotateSelection(design, selection!, -15))
+			.pockets[0]!;
+		expect(turned.shape).toBe('profile');
+		expect(turned.w).toBeGreaterThan(120);
 	});
 
 	it('cuts the opening as an interior cut in the deck program', () => {

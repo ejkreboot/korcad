@@ -2,7 +2,7 @@ import type { DesignState } from '$lib/core/design/types.js';
 import type { Selection } from '$lib/core/design/workspace.js';
 import type { SvgLabel } from '$lib/core/export/svg.js';
 import type { Workspace } from '../workspaces.js';
-import { pocketGroupBox, releaseSheet } from './actions.js';
+import { pocketGroupBox, releaseSheet, rotatePocket, rotatePocketGroup } from './actions.js';
 import { buildAssembly } from './assembly.js';
 import { createDefaultPackaging } from './defaults.js';
 import { packagingHeaderNotes } from './gcode.js';
@@ -66,6 +66,20 @@ function selectionExists(design: DesignState, selection: Selection): boolean {
 		return data.supports.some((support) => support.id === selection.id);
 	}
 	return false;
+}
+
+/** Only an imported opening, or a group of them, turns; a drawn opening keeps its shape. */
+function canRotate(design: DesignState, selection: Selection): boolean {
+	if (selection.kind === 'pocket-group') return pocketGroupBox(design, selection.id) !== null;
+	if (selection.kind !== 'pocket') return false;
+	const pocket = design.workspaces.packaging?.pockets.find((item) => item.id === selection.id);
+	return pocket?.shape === 'profile';
+}
+
+function rotateSelection(design: DesignState, selection: Selection, degrees: number): DesignState {
+	if (selection.kind === 'pocket-group') return rotatePocketGroup(design, selection.id, degrees);
+	if (selection.kind === 'pocket') return rotatePocket(design, selection.id, degrees);
+	return design;
 }
 
 /**
@@ -146,6 +160,8 @@ export const PACKAGING_WORKSPACE: Workspace<'packaging'> = {
 	}),
 	labels,
 	selectionExists,
+	canRotate,
+	rotateSelection,
 	selectionBounds,
 	protectsSheet: (design, sheetId) => design.workspaces.packaging?.deckSheetId === sheetId,
 	releaseSheet

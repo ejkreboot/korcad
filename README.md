@@ -126,9 +126,10 @@ and what was left out.
 A drawing that yields two or more parts or openings, such as a logo, arrives as one
 **imported group**. Clicking any letter selects the whole group, which moves as one
 box, and its corner handles and Width and Height fields scale it proportionally.
-Rotate turns it about the centre of its box, a quarter turn at a time or by any
-angle typed in (positive is counter-clockwise); a turn that carries it off the
-sheet is flagged like any other, so move it back.
+The rotate buttons in the toolbar, beside Snap, turn it 15° at a time about the
+centre of its box; a turn that carries it off the sheet is flagged like any other,
+so move it back. They work on any imported drawing, a single outline or a group
+(a part turns with its holes), and stay disabled for shapes drawn in KorCad.
 Its members are named after the file (`logo part 3`), so a validation message says
 where to look. Groups are imported as they are: there is no ungrouping or editing
 of one member, so fix the drawing and import it again. Holding tabs on a Flat Parts
