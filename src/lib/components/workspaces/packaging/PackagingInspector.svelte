@@ -11,6 +11,7 @@
 	import { CUTOUT_PRESETS, SUPPORT_PRESETS } from '$lib/features/packaging/presets.js';
 	import { canSpanToDeck } from '$lib/features/packaging/levels.js';
 	import { supportHasAncestor } from '$lib/features/packaging/mounting.js';
+	import { regionOf } from '$lib/features/packaging/regions.js';
 	import { packagingActions } from '$lib/features/packaging/actions.js';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
 
@@ -27,6 +28,9 @@
 	const units = $derived(design.stock.units);
 	const pocket = $derived(packaging.pockets.find((p) => p.id === actions.selectedPocketId));
 	const support = $derived(packaging.supports.find((r) => r.id === actions.selectedSupportId));
+	const pocketHostName = $derived(
+		pocket ? (regionOf(packaging, pocket.host)?.name ?? 'a missing part') : ''
+	);
 	const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
 
 	const unitLabel = $derived(units === 'in' ? 'in' : 'mm');
@@ -219,6 +223,7 @@
 			<button class="link danger" onclick={() => actions.removePocket(pocket.id)}>Delete</button>
 		</div>
 		<p class="badge">{purposeLabel(pocket.purpose)}</p>
+		<p class="host-line">Cut into {pocketHostName}</p>
 
 		<div class="form-grid">
 			<label class="field wide">
@@ -410,6 +415,18 @@
 			<p class="help">
 				Draw the finished top opening, then refine its dimensions here. Walls and flanges are
 				generated inward. Corner relief slots let adjacent walls fold without colliding.
+			</p>
+		{/if}
+		{#if pocket.host.kind === 'stock'}
+			<p class="help">
+				This opening does not lie wholly on a part, so it is cut straight out of the stock and stays
+				where it is. Move it wholly onto a part and it becomes that part's opening, moving with it.
+			</p>
+		{:else if pocket.host.kind === 'support'}
+			<p class="help">
+				An opening may go anywhere on its part's net and moves with the part. The 3D view shows it
+				in the top panel, floor, and walls, but not in flanges or tabs, and folds its walls only
+				from the top panel or floor.
 			</p>
 		{/if}
 	</section>
@@ -624,6 +641,28 @@
 				</label>
 			{/each}
 		</div>
+		{#if SIDES.some((side) => support.pulls[side])}
+			<div class="form-grid" style="margin-top: 10px">
+				<label class="field">
+					Pull diameter ({unitLabel})
+					<input
+						type="number"
+						step="0.001"
+						value={mm(support.pullDiameter)}
+						oninput={(e) => setSupport('pullDiameter', e.currentTarget.value)}
+					/>
+				</label>
+				<label class="field">
+					Wall reach ({unitLabel})
+					<input
+						type="number"
+						step="0.001"
+						value={mm(support.pullDepth)}
+						oninput={(e) => setSupport('pullDepth', e.currentTarget.value)}
+					/>
+				</label>
+			</div>
+		{/if}
 	</section>
 {:else}
 	<section class="panel">
@@ -761,3 +800,11 @@
 		</p>
 	</section>
 {/if}
+
+<style>
+	.host-line {
+		margin: 6px 0 12px;
+		color: var(--ink-soft);
+		font-size: 12px;
+	}
+</style>

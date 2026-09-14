@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { gotoEditor } from './helpers.js';
+import { gotoEditor, readPackagingDraft } from './helpers.js';
 
 /** Drags on the canvas in client coordinates relative to the SVG box. */
 async function dragOnCanvas(
@@ -255,6 +255,89 @@ test('adds a support, which lands on its own parts sheet', async ({ page }) => {
 	await expect(page.getByRole('tab', { name: /Parts/ })).toBeVisible();
 	// Its deck opening is cut on the deck sheet.
 	expect(await page.locator('svg.drawing .cut').count()).toBeGreaterThan(0);
+});
+
+test('the Delete key removes the selection, and not while typing in a field', async ({ page }) => {
+	await gotoEditor(page);
+	await page.getByRole('button', { name: /^Cutout/ }).click();
+	await page.getByRole('menuitem', { name: /Product opening/ }).click();
+	await dragOnCanvas(page, { x: 300, y: 300 }, { x: 420, y: 380 });
+	const heading = page.getByRole('heading', { name: /^Pocket 1$/ });
+	await expect(heading).toBeVisible();
+
+	// Deleting a character in a field edits the field, not the document.
+	await page.getByLabel(/^Width/).press('Backspace');
+	await expect(heading).toBeVisible();
+
+	// Pressing the shape on the canvas hands the keyboard back to the drawing.
+	const box = (await page.locator('svg.drawing').boundingBox())!;
+	await page.mouse.click(box.x + 360, box.y + 340);
+	await page.keyboard.press('Delete');
+	await expect(heading).toHaveCount(0);
+
+	// One undo step brings it back.
+	await page.getByRole('button', { name: /^Undo/ }).click();
+	await expect(heading).toBeVisible();
+});
+
+test('sizes the finger pulls of a recessed tray', async ({ page }) => {
+	await gotoEditor(page);
+	await page.getByRole('button', { name: /^Support/ }).click();
+	await page.getByRole('menuitem', { name: /Recessed tray/ }).click();
+	await dragOnCanvas(page, { x: 320, y: 320 }, { x: 440, y: 400 });
+
+	// A tray starts with a pull on its bottom wall; the size fields follow the pulls.
+	const diameter = page.getByLabel(/^Pull diameter/);
+	await expect(diameter).toBeVisible();
+	await expect(page.getByLabel(/^Wall reach/)).toBeVisible();
+	await page.getByRole('checkbox', { name: 'bottom' }).uncheck();
+	await expect(diameter).toHaveCount(0);
+	await page.getByRole('checkbox', { name: 'bottom' }).check();
+
+	const before = await diameter.inputValue();
+	await diameter.fill(String(Number(before) * 0.8));
+	await expect(diameter).not.toHaveValue(before);
+});
+
+test('cuts an opening into a part, which moves with it and goes when deleted', async ({ page }) => {
+	const failures: string[] = [];
+	page.on('pageerror', (error) => failures.push(error.message));
+	await gotoEditor(page);
+	await page.getByRole('button', { name: 'Add a sheet' }).click();
+	await page.getByRole('menuitem', { name: /Folded Packaging sheet/ }).click();
+	await page.getByRole('button', { name: /^Support/ }).click();
+	await page.getByRole('menuitem', { name: /Glued riser box/ }).click();
+	await dragOnCanvas(page, { x: 300, y: 140 }, { x: 420, y: 230 });
+	await expect(page.locator('.badge')).toHaveText('Glued riser box');
+
+	// Drawn inside the riser's top panel, the opening belongs to the riser.
+	await page.getByRole('button', { name: /^Cutout/ }).click();
+	await page.getByRole('menuitem', { name: /Product opening/ }).click();
+	await dragOnCanvas(page, { x: 340, y: 165 }, { x: 380, y: 205 });
+	await expect(page.getByText('Cut into Riser 1')).toBeVisible();
+
+	type Saved = { id: string; x: number; host: { kind: string; supportId?: string } };
+	const openings = async () =>
+		((await readPackagingDraft(page))?.pockets as Saved[]).filter(
+			(pocket) => pocket.host.kind === 'support'
+		);
+	await expect.poll(async () => (await openings()).length).toBe(1);
+	const before = (await openings())[0]!.x;
+
+	// Dragging the riser by its wall carries the opening along.
+	await page.keyboard.press('Escape');
+	await dragOnCanvas(page, { x: 360, y: 145 }, { x: 400, y: 145 });
+	await expect.poll(async () => (await openings())[0]!.x).toBeGreaterThan(before);
+
+	await page.getByRole('button', { name: '3D', exact: true }).click();
+	await expect(page.locator('.viewer-loading')).toHaveCount(0);
+	await page.getByRole('button', { name: '2D', exact: true }).click();
+
+	// The riser is still selected from the drag; deleting it takes its opening too.
+	await expect(page.getByRole('heading', { name: 'Riser 1' })).toBeVisible();
+	await page.keyboard.press('Delete');
+	await expect.poll(async () => (await openings()).length).toBe(0);
+	expect(failures).toEqual([]);
 });
 
 test('adds, renames and removes a sheet', async ({ page }) => {

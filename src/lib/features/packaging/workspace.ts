@@ -2,7 +2,15 @@ import type { DesignState } from '$lib/core/design/types.js';
 import type { Selection } from '$lib/core/design/workspace.js';
 import type { SvgLabel } from '$lib/core/export/svg.js';
 import type { Workspace } from '../workspaces.js';
-import { pocketGroupBox, releaseSheet, rotatePocket, rotatePocketGroup } from './actions.js';
+import {
+	pocketGroupBox,
+	releaseSheet,
+	removePocket,
+	removePocketGroup,
+	removeSupport,
+	rotatePocket,
+	rotatePocketGroup
+} from './actions.js';
 import { buildAssembly } from './assembly.js';
 import { createDefaultPackaging } from './defaults.js';
 import { packagingHeaderNotes } from './gcode.js';
@@ -11,6 +19,7 @@ import { allGeometry } from './model.js';
 import { importSvgOpenings } from './import.js';
 import { normalizePackaging } from './normalize.js';
 import { CUTOUT_PRESETS, SUPPORT_PRESETS } from './presets.js';
+import { pocketSheetId } from './regions.js';
 import { riserFlatBounds } from './supports.js';
 import { validate } from './validation.js';
 import { packagingSheetView, packagingView } from './view.js';
@@ -19,9 +28,13 @@ import { packagingSheetView, packagingView } from './view.js';
  * Openings are labelled at their top-left corner. An imported group is labelled
  * once, as a whole, rather than letter by letter.
  */
-export function pocketLabels(design: DesignState): (SvgLabel & { key: string })[] {
+export function pocketLabels(
+	design: DesignState,
+	sheetId: string = packagingView(design).deckSheetId
+): (SvgLabel & { key: string })[] {
 	const view = packagingView(design);
-	const single = view.pockets
+	const onSheet = view.pockets.filter((pocket) => pocketSheetId(view, pocket) === sheetId);
+	const single = onSheet
 		.filter((pocket) => !pocket.groupId)
 		.map((pocket) => ({
 			key: `pocket-${pocket.id}`,
@@ -29,8 +42,9 @@ export function pocketLabels(design: DesignState): (SvgLabel & { key: string })[
 			x: pocket.x + 5 + (pocket.labelOffset?.x ?? 0),
 			y: pocket.y + pocket.h - 9 - (pocket.labelOffset?.y ?? 0)
 		}));
+	const groupsOnSheet = new Set(onSheet.map((pocket) => pocket.groupId));
 	const groups = view.pocketGroups.flatMap((group) => {
-		const box = pocketGroupBox(design, group.id);
+		const box = groupsOnSheet.has(group.id) ? pocketGroupBox(design, group.id) : null;
 		return box
 			? [{ key: `group-${group.id}`, name: group.name, x: box.x + 5, y: box.y + box.h - 9 }]
 			: [];
@@ -41,9 +55,7 @@ export function pocketLabels(design: DesignState): (SvgLabel & { key: string })[
 function labels(design: DesignState, sheetId: string): SvgLabel[] {
 	const view = packagingSheetView(design, sheetId);
 	return [
-		...(sheetId === view.deckSheetId
-			? pocketLabels(design).map(({ name, x, y }) => ({ name, x, y }))
-			: []),
+		...pocketLabels(design, sheetId).map(({ name, x, y }) => ({ name, x, y })),
 		...view.supports
 			.filter((support) => support.sheetId === sheetId)
 			.map((support) => {
@@ -82,6 +94,13 @@ function rotateSelection(design: DesignState, selection: Selection, degrees: num
 	return design;
 }
 
+function removeSelection(design: DesignState, selection: Selection): DesignState {
+	if (selection.kind === 'pocket-group') return removePocketGroup(design, selection.id);
+	if (selection.kind === 'pocket') return removePocket(design, selection.id);
+	if (selection.kind === 'support') return removeSupport(design, selection.id);
+	return design;
+}
+
 /**
  * An opening is framed where it is drawn on the deck; a support only on the
  * sheet its net is cut from.
@@ -89,12 +108,16 @@ function rotateSelection(design: DesignState, selection: Selection, degrees: num
 function selectionBounds(design: DesignState, selection: Selection, sheetId: string) {
 	const view = packagingSheetView(design, sheetId);
 	if (selection.kind === 'pocket-group') {
-		const box = sheetId === view.deckSheetId ? pocketGroupBox(design, selection.id) : null;
+		const member = view.pockets.find((pocket) => pocket.groupId === selection.id);
+		const box =
+			member && pocketSheetId(view, member) === sheetId
+				? pocketGroupBox(design, selection.id)
+				: null;
 		return box ? { left: box.x, right: box.x + box.w, bottom: box.y, top: box.y + box.h } : null;
 	}
 	if (selection.kind === 'pocket') {
 		const pocket = view.pockets.find((candidate) => candidate.id === selection.id);
-		return pocket
+		return pocket && pocketSheetId(view, pocket) === sheetId
 			? { left: pocket.x, right: pocket.x + pocket.w, bottom: pocket.y, top: pocket.y + pocket.h }
 			: null;
 	}
@@ -162,6 +185,7 @@ export const PACKAGING_WORKSPACE: Workspace<'packaging'> = {
 	selectionExists,
 	canRotate,
 	rotateSelection,
+	removeSelection,
 	selectionBounds,
 	protectsSheet: (design, sheetId) => design.workspaces.packaging?.deckSheetId === sheetId,
 	releaseSheet

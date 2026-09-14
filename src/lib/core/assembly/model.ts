@@ -93,7 +93,21 @@ export type FootprintPart = {
 	readonly d: number;
 };
 
-export type PartShape = BoxPart | PanelPart | WallPart | PlatePart | FootprintPart;
+/**
+ * A flat piece of board lying in any plane, with openings through it. The
+ * outline and holes are 2D in the sheet's own frame: `origin` is its (0, 0),
+ * and `u` and `v` are unit axes along its face. The board is centred on that
+ * plane, so a wall stands on its fold line the way a `box` wall does.
+ */
+export type SheetPart = {
+	readonly form: 'sheet';
+	readonly outline: readonly Point[];
+	readonly holes: readonly (readonly Point[])[];
+	readonly frame: { readonly origin: Point3; readonly u: Point3; readonly v: Point3 };
+	readonly thickness: number;
+};
+
+export type PartShape = BoxPart | PanelPart | WallPart | PlatePart | FootprintPart | SheetPart;
 
 export type AssemblyPart = PartShape & {
 	readonly material: AssemblyMaterial;
@@ -164,4 +178,44 @@ export function hingedFlangeVertices(
 			z
 		)
 	];
+}
+
+const minus = (a: Point3, b: Point3) => point3(a.x - b.x, a.y - b.y, a.z - b.z);
+const dot = (a: Point3, b: Point3) => a.x * b.x + a.y * b.y + a.z * b.z;
+const crossed = (a: Point3, b: Point3) =>
+	point3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+const normalized = (a: Point3): Point3 | null => {
+	const length = Math.hypot(a.x, a.y, a.z);
+	return length > 1e-9 ? point3(a.x / length, a.y / length, a.z / length) : null;
+};
+
+/**
+ * A `sheet` shape from a planar outline and holes given in 3D. The frame is
+ * fixed by the outline's first, second, and last vertices; `null` when those
+ * do not span a plane, which is how a collapsed face is skipped.
+ */
+export function sheetShape(
+	outline: readonly Point3[],
+	holes: readonly (readonly Point3[])[],
+	thickness: number
+): SheetPart | null {
+	const origin = outline[0];
+	const second = outline[1];
+	const last = outline.at(-1);
+	if (!origin || !second || !last || outline.length < 3) return null;
+	const u = normalized(minus(second, origin));
+	const normal = u && normalized(crossed(u, minus(last, origin)));
+	if (!u || !normal) return null;
+	const v = crossed(normal, u);
+	const flatten = (p: Point3): Point => ({
+		x: dot(minus(p, origin), u),
+		y: dot(minus(p, origin), v)
+	});
+	return {
+		form: 'sheet',
+		outline: outline.map(flatten),
+		holes: holes.filter((hole) => hole.length >= 3).map((hole) => hole.map(flatten)),
+		frame: { origin, u, v },
+		thickness
+	};
 }

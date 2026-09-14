@@ -35,6 +35,26 @@ test('the Cutout menu imports an SVG outline as a deck opening', async ({ page }
 	expect(pockets[0]).toMatchObject({ name: 'voisee-hub', shape: 'profile', w: 120, h: 80 });
 });
 
+test('an SVG imported onto a parts sheet is cut straight out of the stock', async ({ page }) => {
+	await gotoEditor(page);
+	await page.getByRole('button', { name: 'Add a sheet' }).click();
+	await page.getByRole('menuitem', { name: /Folded Packaging sheet/ }).click();
+
+	await page.getByRole('button', { name: 'Cutout' }).click();
+	const chooser = page.waitForEvent('filechooser');
+	await page.getByRole('menuitem', { name: /Import SVG/ }).click();
+	await (
+		await chooser
+	).setFiles({ name: 'voisee-hub.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(PRODUCT) });
+
+	await expect(page.locator('.status.ok')).toContainText('centred on the Parts 1 sheet.');
+	await expect(page.getByText('Cut into the Parts 1 stock')).toBeVisible();
+	const pockets = (await readPackagingDraft(page))!.pockets as { host: unknown }[];
+	expect(pockets[0]?.host).toMatchObject({ kind: 'stock' });
+	// It is drawn, and cut, on the sheet it was imported to.
+	await expect(page.locator('svg.drawing .cut').first()).toBeVisible();
+});
+
 /** Three letters, spaced for a router's web and bit: a logo, in effect. */
 const LOGO = `<svg xmlns="http://www.w3.org/2000/svg" width="130mm" height="50mm" viewBox="0 0 130 50">
 	<rect x="0" y="0" width="30" height="50"/>

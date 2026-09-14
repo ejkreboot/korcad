@@ -180,6 +180,47 @@ export function supportDesign(): DesignState {
 	});
 }
 
+/**
+ * Openings cut into parts rather than the deck: a folded opening in a glued
+ * riser's top panel, and a round hole through a tray's floor. Each is an
+ * interior cut on the parts sheet, made before its part is released.
+ */
+export function partOpeningsDesign(): DesignState {
+	const base = supportDesign();
+	const supports = packagingData(base).supports.map((support) =>
+		support.kind === 'riser' ? { ...support, cornerClosure: 'glue' as const, h: 36 } : support
+	);
+	return patchDesign(base, {
+		supports,
+		pockets: [
+			...packagingData(base).pockets,
+			createPocket({
+				id: 'riser-opening',
+				name: 'Riser recess',
+				host: { kind: 'support', supportId: 'riser-1' },
+				x: 320,
+				y: 75,
+				w: 50,
+				h: 40,
+				wallDepth: 12,
+				relief: 3,
+				sides: { top: true, right: true, bottom: true, left: true }
+			}),
+			createPocket({
+				id: 'tray-hole',
+				name: 'Push-through hole',
+				host: { kind: 'support', supportId: 'tray-1' },
+				purpose: 'ellipse',
+				shape: 'ellipse',
+				x: 95,
+				y: 80,
+				w: 40,
+				h: 30
+			})
+		]
+	});
+}
+
 /** Router work: openings and a deck perimeter, cut rather than folded. */
 export function routerDesign(): DesignState {
 	return withMachine(foldedDesign(), { fabricationMode: 'router' });
@@ -190,7 +231,8 @@ export const FIXTURE_DESIGNS: readonly (readonly [string, () => DesignState])[] 
 	['folded-pocket', foldedDesign],
 	['joist-perimeter', joistDesign],
 	['tray-and-riser', supportDesign],
-	['router-openings', routerDesign]
+	['router-openings', routerDesign],
+	['part-openings', partOpeningsDesign]
 ];
 
 /**

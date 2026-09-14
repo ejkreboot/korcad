@@ -292,3 +292,13 @@ export function pocketPaths(nominalPocket: Pocket, settings: FoldSettings): Desi
 		path.points.every((pt) => Number.isFinite(pt.x) && Number.isFinite(pt.y))
 	);
 }
+
+/** The outline an opening removes from its board: its full box, finger pulls included. */
+export function openingOutline(pocket: Pocket): Point[] {
+	return pocket.shape !== 'rectangle'
+		? cutoutPoints(pocket)
+		: openingCutPoints(
+				{ left: pocket.x, right: pocket.x + pocket.w, bottom: pocket.y, top: pocket.y + pocket.h },
+				{ ...pocket, sides: { top: false, right: false, bottom: false, left: false } }
+			);
+}

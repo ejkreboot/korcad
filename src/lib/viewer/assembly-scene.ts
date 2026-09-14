@@ -8,6 +8,7 @@ import type {
 	PlatePart,
 	FootprintPart,
 	PanelPart,
+	SheetPart,
 	WallPart
 } from '$lib/core/assembly/model.js';
 
@@ -219,6 +220,43 @@ function wallGeometry(part: WallPart): THREE.BufferGeometry | null {
 	return geometry;
 }
 
+/**
+ * A board face in any plane: the outline and holes are extruded in the face's
+ * own frame, centred on its thickness, then turned into place.
+ */
+function sheetGeometry(part: SheetPart): THREE.BufferGeometry | null {
+	const [start, ...rest] = part.outline;
+	if (!start || rest.length < 2) return null;
+	const shape = new THREE.Shape();
+	shape.moveTo(start.x, start.y);
+	for (const p of rest) shape.lineTo(p.x, p.y);
+	shape.closePath();
+	for (const hole of part.holes) {
+		const [holeStart, ...holeRest] = hole;
+		if (!holeStart) continue;
+		const path = new THREE.Path();
+		path.moveTo(holeStart.x, holeStart.y);
+		for (const p of holeRest) path.lineTo(p.x, p.y);
+		path.closePath();
+		shape.holes.push(path);
+	}
+	const thickness = Math.max(MIN_EXTENT, part.thickness);
+	const geometry = new THREE.ExtrudeGeometry(shape, {
+		depth: thickness,
+		bevelEnabled: false,
+		curveSegments: 1
+	});
+	geometry.translate(0, 0, -thickness / 2);
+	const { origin, u, v } = part.frame;
+	const axisU = new THREE.Vector3(u.x, u.y, u.z);
+	const axisV = new THREE.Vector3(v.x, v.y, v.z);
+	const normal = new THREE.Vector3().crossVectors(axisU, axisV);
+	geometry.applyMatrix4(
+		new THREE.Matrix4().makeBasis(axisU, axisV, normal).setPosition(origin.x, origin.y, origin.z)
+	);
+	return geometry;
+}
+
 function plateGeometry(part: PlatePart): THREE.BufferGeometry | null {
 	const [start, ...rest] = part.outline;
 	if (!start) return null;
@@ -288,7 +326,9 @@ function addPart(
 				? panelGeometry(part)
 				: part.form === 'wall'
 					? wallGeometry(part)
-					: plateGeometry(part);
+					: part.form === 'sheet'
+						? sheetGeometry(part)
+						: plateGeometry(part);
 	if (!geometry) return [];
 
 	const mesh = new THREE.Mesh(geometry, board(part.material, selected));

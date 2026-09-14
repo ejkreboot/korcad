@@ -16,7 +16,7 @@ import type { PackagingView } from './view.js';
 
 export type SupportSettings = FoldSettings & Pick<PackagingView, 'material'>;
 
-function flatSupport(support: Support, settings: FoldSettings): Support {
+export function flatSupport(support: Support, settings: FoldSettings): Support {
 	if (!bendDeduction(settings)) return support;
 	return {
 		...support,

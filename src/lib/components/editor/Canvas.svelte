@@ -90,6 +90,9 @@
 			return;
 		}
 		if (event.button !== 0) return;
+		// preventDefault below keeps focus where it was, so a field edited last
+		// would otherwise swallow the keyboard shortcuts meant for the drawing.
+		if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 
 		if (!drawing) {
 			const active = controller.press(event.target as Element, pointerToStock(event));
@@ -172,6 +175,9 @@
 
 <svelte:window
 	onkeydown={(event) => {
+		const typing = Boolean(
+			(event.target as HTMLElement)?.closest('input, select, textarea, [contenteditable]')
+		);
 		if (
 			event.code === 'Space' &&
 			!event.repeat &&
@@ -181,6 +187,12 @@
 			event.preventDefault();
 		}
 		if (event.key === 'Escape') tools.select();
+		if ((event.key === 'Delete' || event.key === 'Backspace') && !typing && !gesture) {
+			const selection = editor.selection;
+			if (!selection) return;
+			event.preventDefault();
+			editor.update((design) => editor.workspace.removeSelection(design, selection));
+		}
 	}}
 	onkeyup={(event) => event.code === 'Space' && tools.armPan(false)}
 	onblur={() => tools.armPan(false)}

@@ -73,6 +73,9 @@
         "foldDirections": {},
         "pockets": [
           {
+            "host": {
+              "kind": "deck"
+            },
             "purpose": "product",
             "shape": "rectangle",
             "cornerRadius": 6.35,

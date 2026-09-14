@@ -226,10 +226,10 @@ describe('importing an SVG as deck openings', () => {
 		expect(read.pockets.map((pocket) => pocket.groupId === null)).toEqual([true, false]);
 	});
 
-	it('imports only onto the deck sheet', () => {
+	it('imports only onto a packaging sheet', () => {
 		const design = flatPartsDesign();
 		expect(() => importSvgOpenings(design, 'sheet', PRODUCT, 'hub.svg')).toThrow(
-			'Openings are cut from the deck; switch to the Deck sheet to import them.'
+			'Openings are cut from a packaging sheet; switch to one to import them.'
 		);
 	});
 

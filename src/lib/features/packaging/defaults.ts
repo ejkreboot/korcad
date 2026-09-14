@@ -58,6 +58,7 @@ export function pocketDefaults(): Pick<
 /** Field defaults for a newly drawn pocket, matching the cutout presets. */
 export function createPocket(values: Partial<Pocket> & Pick<Pocket, 'id' | 'name'>): Pocket {
 	return {
+		host: { kind: 'deck' },
 		purpose: 'product',
 		shape: 'rectangle',
 		cornerRadius: 6.35,

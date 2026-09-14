@@ -79,32 +79,28 @@ test('fades the deck without hiding the supports inside it', async ({ page }) =>
 	expect(await renderBytes(page)).toBeGreaterThan(15_000);
 });
 
-test('drags a support to reposition it, as one undo step', async ({ page }) => {
+test('pressing a tray orbits the camera instead of moving the tray', async ({ page }) => {
 	await gotoEditor(page);
 	await addCentredTray(page);
 	await openViewer(page);
 
 	// The camera is fitted on the deck centre, so the tray drawn there sits at
-	// the centre of the canvas, under its translucent placement pad.
+	// the centre of the canvas.
 	const box = (await viewer(page).boundingBox())!;
 	const cx = box.x + box.width / 2;
 	const cy = box.y + box.height / 2;
-
 	await expect(readout(page)).toContainText('Recessed tray 1');
 	const before = (await readout(page).textContent())!;
+	const rendered = await renderBytes(page);
 
 	await page.mouse.move(cx, cy);
 	await page.mouse.down();
 	await page.mouse.move(cx + 90, cy - 40, { steps: 12 });
 	await page.mouse.up();
 
-	const after = (await readout(page).textContent())!;
-	expect(after).not.toBe(before);
-	expect(after).toContain('Recessed tray 1');
-
-	// The whole gesture collapses into a single undo step.
-	await page.getByRole('button', { name: 'Undo' }).click();
-	await expect(readout(page)).toHaveText(before);
+	// The camera moved, and the tray did not.
+	expect(await readout(page).textContent()).toBe(before);
+	expect(await renderBytes(page)).not.toBe(rendered);
 });
 
 test('orbits without moving the support', async ({ page }) => {

@@ -106,7 +106,7 @@ export function applyDeckDrag(
 			deckY: round(y),
 			pockets: design.pockets.map((pocket) => {
 				const position = moved.get(pocket.id);
-				if (!position) return pocket;
+				if (!position || pocket.host.kind !== 'deck') return pocket;
 				return { ...pocket, x: round(position.x + shiftX), y: round(position.y + shiftY) };
 			})
 		};
@@ -141,9 +141,17 @@ export type RectOriginal = {
 	readonly h: number;
 };
 
+export type Area = {
+	readonly left: number;
+	readonly right: number;
+	readonly bottom: number;
+	readonly top: number;
+};
+
 /**
- * Applies an opening drag. Openings stay inside the finished top deck, because
- * a cutout crossing the deck edge is not manufacturable.
+ * Applies an opening drag. Openings stay inside the area of board they are cut
+ * into — the finished top deck unless another is given — because a cutout
+ * crossing the edge of its board is not manufacturable.
  */
 export function applyPocketDrag(
 	design: DragView,
@@ -151,13 +159,19 @@ export function applyPocketDrag(
 	handle: Corner | null,
 	original: RectOriginal,
 	start: Point,
-	current: Point
+	current: Point,
+	area: Area = {
+		left: design.deckX,
+		right: design.deckX + design.deckW,
+		bottom: design.deckY,
+		top: design.deckY + design.deckH
+	}
 ): Pick<Pocket, 'x' | 'y' | 'w' | 'h'> {
 	const snapping = design.snapEnabled;
-	const deckLeft = design.deckX;
-	const deckBottom = design.deckY;
-	const deckRight = design.deckX + design.deckW;
-	const deckTop = design.deckY + design.deckH;
+	const deckLeft = area.left;
+	const deckBottom = area.bottom;
+	const deckRight = area.right;
+	const deckTop = area.top;
 
 	if (type === 'move') {
 		return {

@@ -2,7 +2,14 @@ import { DEFAULT_MACHINE_PROFILE_ID } from '$lib/core/design/defaults.js';
 import { finite, groupIdOf, isRecord, normalizeGroups } from '$lib/core/design/normalize.js';
 import type { DesignState, FoldDirection, SideFlags } from '$lib/core/design/types.js';
 import { createDefaultPackaging, pocketDefaults, supportDefaults } from './defaults.js';
-import type { PackagingData, Pocket, PocketPurpose, Support, SupportMount } from './types.js';
+import type {
+	PackagingData,
+	Pocket,
+	PocketPurpose,
+	RegionRef,
+	Support,
+	SupportMount
+} from './types.js';
 
 /** Reads the packaging workspace out of an untrusted saved document. */
 
@@ -56,13 +63,23 @@ function labelOffset(value: unknown): { labelOffset?: { x: number; y: number } }
 
 /**
  * Openings and the imported groups they belong to. A group with no member is
- * dropped, and an opening naming a group the file does not have stands alone.
+ * dropped, an opening naming a group the file does not have stands alone, and
+ * one naming a support or sheet the file does not have is dropped.
  */
 function pocketsAndGroups(
 	savedPockets: unknown,
-	savedGroups: unknown
+	savedGroups: unknown,
+	supports: readonly Support[],
+	sheetIds: ReadonlySet<string>
 ): Pick<PackagingData, 'pockets' | 'pocketGroups'> {
-	const pockets = Array.isArray(savedPockets) ? savedPockets.map(normalizePocket) : [];
+	// An opening cut into a support or sheet the file does not have has nothing to be cut from.
+	const pockets = (Array.isArray(savedPockets) ? savedPockets.map(normalizePocket) : []).filter(
+		({ host }) =>
+			host.kind === 'deck' ||
+			(host.kind === 'support'
+				? supports.some((support) => support.id === host.supportId)
+				: sheetIds.has(host.sheetId))
+	);
 	const memberOf = new Set(pockets.flatMap((pocket) => pocket.groupId ?? []));
 	const pocketGroups = normalizeGroups(savedGroups, memberOf, new Set());
 	const kept = new Set(pocketGroups.map((group) => group.id));
@@ -72,6 +89,16 @@ function pocketsAndGroups(
 		),
 		pocketGroups
 	};
+}
+
+function regionRef(value: unknown): RegionRef {
+	if (isRecord(value) && value.kind === 'support' && typeof value.supportId === 'string') {
+		return { kind: 'support', supportId: value.supportId };
+	}
+	if (isRecord(value) && value.kind === 'stock' && typeof value.sheetId === 'string') {
+		return { kind: 'stock', sheetId: value.sheetId };
+	}
+	return { kind: 'deck' };
 }
 
 function normalizePocket(value: unknown, index: number): Pocket {
@@ -86,6 +113,7 @@ function normalizePocket(value: unknown, index: number): Pocket {
 			: base.shape;
 	return {
 		id: typeof source.id === 'string' ? source.id : `pocket-${index + 1}`,
+		host: regionRef(source.host),
 		name: typeof source.name === 'string' ? source.name : `Cutout ${index + 1}`,
 		purpose: POCKET_PURPOSES.includes(source.purpose as PocketPurpose)
 			? (source.purpose as PocketPurpose)
@@ -202,6 +230,9 @@ export function normalizePackaging(raw: unknown, document: DesignState): DesignS
 			? saved.deckSheetId
 			: defaults.deckSheetId;
 
+	const supports = Array.isArray(saved.supports)
+		? saved.supports.map((support, index) => normalizeSupport(support, index, deckSheetId))
+		: [];
 	const packaging: PackagingData = {
 		deckSheetId,
 		deckX: number('deckX', defaults.deckX),
@@ -232,10 +263,13 @@ export function normalizePackaging(raw: unknown, document: DesignState): DesignS
 		foldKFactor: number('foldKFactor', defaults.foldKFactor),
 		foldDeduction: number('foldDeduction', defaults.foldDeduction),
 		foldDirections: foldDirections(saved.foldDirections),
-		...pocketsAndGroups(saved.pockets, saved.pocketGroups),
-		supports: Array.isArray(saved.supports)
-			? saved.supports.map((support, index) => normalizeSupport(support, index, deckSheetId))
-			: []
+		...pocketsAndGroups(
+			saved.pockets,
+			saved.pocketGroups,
+			supports,
+			new Set([deckSheetId, ...document.sheets.map((sheet) => sheet.id)])
+		),
+		supports
 	};
 
 	const sheets = document.sheets.some((sheet) => sheet.id === deckSheetId)

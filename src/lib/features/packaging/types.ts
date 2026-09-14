@@ -22,8 +22,20 @@ export type PocketShape = 'rectangle' | 'rounded' | 'ellipse' | 'profile';
 export type PocketPurpose =
 	'product' | 'rounded' | 'ellipse' | 'slot' | 'cable' | 'registration' | 'imported';
 
+/**
+ * What an opening is cut into: the deck blank, one support's net, or the bare
+ * stock of a sheet. An opening keeps sheet coordinates. One lying wholly on a
+ * part belongs to it and moves with it; anything else — clear of every part, or
+ * straddling one — is just a path cut out of its sheet, and stays put.
+ */
+export type RegionRef =
+	| { readonly kind: 'deck' }
+	| { readonly kind: 'support'; readonly supportId: string }
+	| { readonly kind: 'stock'; readonly sheetId: string };
+
 export type Pocket = {
 	readonly id: string;
+	readonly host: RegionRef;
 	readonly name: string;
 	readonly purpose: PocketPurpose;
 	readonly shape: PocketShape;

@@ -15,10 +15,14 @@ import {
 	applySupportDrag,
 	applySupportPlacement,
 	MIN_COMPONENT,
+	type Area,
 	type Corner,
 	type DeckAction
 } from '$lib/features/packaging/manipulation.js';
 import { supportAssemblyOrigin } from '$lib/features/packaging/mounting.js';
+import { hostFor } from '$lib/features/packaging/regions.js';
+import { openingOutline } from '$lib/features/packaging/geometry.js';
+import { SHEET } from '$lib/core/constants.js';
 import {
 	createPocketFromPreset,
 	createSupportFromPreset,
@@ -43,14 +47,24 @@ export function createPackagingCanvas(editor: EditorState, tools: ToolState): Ca
 	const supportById = (id: string | undefined) =>
 		actions.view.supports.find((support) => support.id === id);
 
-	/** Clamped to the finished top deck, for anything that must live on it. */
-	function toDeck(stock: Point): Point {
+	const deckArea = (): Area => {
 		const view = actions.view;
-		return point(
-			clamp(stock.x, view.deckX, view.deckX + view.deckW),
-			clamp(stock.y, view.deckY, view.deckY + view.deckH)
-		);
-	}
+		return {
+			left: view.deckX,
+			right: view.deckX + view.deckW,
+			bottom: view.deckY,
+			top: view.deckY + view.deckH
+		};
+	};
+
+	/** An opening may go anywhere on the stock: it is only a path the knife cuts. */
+	const SHEET_AREA: Area = { left: 0, right: SHEET, bottom: 0, top: SHEET };
+
+	const inArea = (stock: Point, area: Area): Point =>
+		point(clamp(stock.x, area.left, area.right), clamp(stock.y, area.bottom, area.top));
+
+	/** Clamped to the finished top deck, for anything that must live on it. */
+	const toDeck = (stock: Point): Point => inArea(stock, deckArea());
 
 	/**
 	 * A press on a group of imported openings, or one of its handles. The group
@@ -63,7 +77,8 @@ export function createPackagingCanvas(editor: EditorState, tools: ToolState): Ca
 		if (!original) return null;
 		actions.selectPocketGroup(id);
 		const members = pocketGroupMembers(editor.design, id);
-		const start = toDeck(stock);
+		const area = SHEET_AREA;
+		const start = inArea(stock, area);
 		return {
 			move(current: Point) {
 				const dragged = applyPocketDrag(
@@ -72,7 +87,8 @@ export function createPackagingCanvas(editor: EditorState, tools: ToolState): Ca
 					handle ?? null,
 					original,
 					start,
-					toDeck(current)
+					inArea(current, area),
+					area
 				);
 				if (handle) {
 					const { factor, anchor } = proportionalResize(original, dragged, handle);
@@ -85,10 +101,15 @@ export function createPackagingCanvas(editor: EditorState, tools: ToolState): Ca
 		};
 	}
 
-	/** An opening, and a tray's deck opening, are drawn on the deck; other supports on the sheet. */
+	/** A tray's deck opening is drawn on the deck; other supports on the sheet. */
 	const drawsOnDeck = () =>
-		tools.tool === 'cutout' ||
-		(tools.tool === 'support' && isSupportPreset(tools.preset) && presetDrawsOnDeck(tools.preset));
+		tools.tool === 'support' && isSupportPreset(tools.preset) && presetDrawsOnDeck(tools.preset);
+
+	/** Where a draft corner may go: a tray's opening stays on the deck, anything else on the sheet. */
+	function draftPoint(stock: Point): Point {
+		if (drawsOnDeck()) return toDeck(stock);
+		return tools.tool === 'cutout' ? inArea(stock, SHEET_AREA) : stock;
+	}
 
 	function press(target: Element, stock: Point): CanvasGesture | null {
 		const deckTarget = target.closest<HTMLElement>('[data-deck-action]');
@@ -155,12 +176,13 @@ export function createPackagingCanvas(editor: EditorState, tools: ToolState): Ca
 			const type = pocketTarget.dataset.handle ? 'resize' : 'move';
 			const handle = (pocketTarget.dataset.handle as Corner | undefined) ?? null;
 			const original = { x: pocket.x, y: pocket.y, w: pocket.w, h: pocket.h };
-			const start = toDeck(stock);
+			const area = SHEET_AREA;
+			const start = inArea(stock, area);
 			return {
 				move(current) {
 					actions.previewPocket(
 						pocket.id,
-						applyPocketDrag(dragView(), type, handle, original, start, toDeck(current))
+						applyPocketDrag(dragView(), type, handle, original, start, inArea(current, area), area)
 					);
 				}
 			};
@@ -188,14 +210,20 @@ export function createPackagingCanvas(editor: EditorState, tools: ToolState): Ca
 
 	return {
 		press,
-		draftPoint: (stock) => (drawsOnDeck() ? toDeck(stock) : stock),
+		draftPoint,
 		finishDraft(rect) {
 			if (rect.w < MIN_COMPONENT || rect.h < MIN_COMPONENT) return;
 			const view = actions.view;
 			if (tools.tool === 'cutout' && isCutoutPreset(tools.preset)) {
-				actions.addPocket(
-					createPocketFromPreset(tools.preset, rect, crypto.randomUUID(), view.pockets.length + 1)
+				// An opening belongs to the part it lies wholly on, or else to the sheet's stock.
+				const drawn = createPocketFromPreset(
+					tools.preset,
+					rect,
+					crypto.randomUUID(),
+					view.pockets.length + 1
 				);
+				const host = hostFor(view, editor.design.activeSheetId, [openingOutline(drawn)]);
+				actions.addPocket({ ...drawn, host });
 			} else if (tools.tool === 'support' && isSupportPreset(tools.preset)) {
 				actions.addSupport(
 					createSupportFromPreset(

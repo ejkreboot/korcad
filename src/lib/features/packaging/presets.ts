@@ -2,7 +2,7 @@ import type { IconName } from '$lib/components/icons/paths.js';
 import type { PackagingView } from './view.js';
 import { round } from '$lib/core/units.js';
 import { supportDefaults } from './defaults.js';
-import type { Pocket, PocketPurpose, Support } from './types.js';
+import type { Pocket, PocketPurpose, RegionRef, Support } from './types.js';
 
 /**
  * Semantic opening types. The preset chooses shape, purpose, and construction
@@ -100,7 +100,8 @@ export function createPocketFromPreset(
 	preset: CutoutPreset,
 	rect: { x: number; y: number; w: number; h: number },
 	id: string,
-	index: number
+	index: number,
+	host: RegionRef = { kind: 'deck' }
 ): Pocket {
 	let { x, y, w, h } = rect;
 	if (preset === 'registration') {
@@ -113,6 +114,7 @@ export function createPocketFromPreset(
 	const folded = preset === 'folded';
 	return {
 		id,
+		host,
 		name: `${CUTOUT_NAMES[preset]} ${index}`,
 		purpose: presetPurpose(preset),
 		shape: presetShape(preset),

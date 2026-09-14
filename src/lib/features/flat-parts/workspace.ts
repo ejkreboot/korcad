@@ -6,6 +6,8 @@ import {
 	findGroup,
 	groupBox,
 	releaseFlatPartsSheet,
+	removeEntity,
+	removeGroup,
 	rotateEntity,
 	rotateGroup
 } from './actions.js';
@@ -109,6 +111,10 @@ export const FLAT_PARTS_WORKSPACE: Workspace<'flatParts'> = {
 		selection.kind === 'group'
 			? rotateGroup(design, selection.id, degrees)
 			: rotateEntity(design, selection.id, degrees),
+	removeSelection: (design, selection) =>
+		selection.kind === 'group'
+			? removeGroup(design, selection.id)
+			: removeEntity(design, selection.id),
 	selectionBounds: (design, selection, sheetId) => {
 		if (selection.kind === 'group') {
 			const box =

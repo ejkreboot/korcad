@@ -56,3 +56,31 @@
 # router-openings / sheet deck
   1x cut closed role=router-deck-perimeter owner=- stage=4
   1x cut closed role=router-opening owner=pocket stage=1
+
+# part-openings / sheet deck
+  1x cut closed role=central-cutout owner=pocket stage=1
+  4x cut closed role=corner-relief owner=pocket stage=1
+  1x cut closed role=tray-opening owner=riser stage=2
+  12x cut open role=exterior owner=- stage=4
+  8x cut open role=perimeter-corner-clearance owner=- stage=4
+  8x cut open role=perimeter-flange-chamfer owner=- stage=4
+  8x cut open role=perimeter-side owner=- stage=4
+  4x score open role=flange-fold owner=pocket stage=0
+  4x score open role=perimeter-deck-fold owner=- stage=0
+  4x score open role=perimeter-flange-fold owner=- stage=0
+  4x score open role=top-fold owner=pocket stage=0
+
+# part-openings / sheet parts
+  2x cut closed role=central-cutout owner=pocket stage=1
+  4x cut closed role=corner-relief owner=pocket stage=1
+  12x cut open role=riser-bottom-flange owner=riser stage=2
+  12x cut open role=riser-corner-tab owner=riser stage=2
+  4x cut open role=riser-wall-edge owner=riser stage=2
+  12x cut open role=tray-flange-edge owner=riser stage=2
+  8x cut open role=tray-wall-edge owner=riser stage=2
+  4x score open role=riser-bottom-flange-fold owner=riser stage=0
+  4x score open role=riser-corner-tab-fold owner=riser stage=0
+  4x score open role=riser-top-fold owner=riser stage=0
+  4x score open role=top-fold owner=pocket stage=0
+  4x score open role=tray-flange-fold owner=riser stage=0
+  4x score open role=tray-wall-fold owner=riser stage=0

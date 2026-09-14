@@ -140,13 +140,29 @@ describe('support flanges', () => {
 		expect(bottom?.extension).toEqual({ x: 0, y: 10 });
 	});
 
-	it('folds a riser flange outward by default', () => {
+	// Walls and flanges both fold away from the printed face by default, so the
+	// second fold keeps curling the net and turns the flange under the footprint.
+	it('folds a riser flange inward by default, as the walls fold', () => {
 		const support = riser({ flange: 10 });
 		const flanges = supportFlangeDescriptors(support, view(design({ supports: [support] })));
 		expect(flanges.find((flange) => flange.side === 'bottom')?.extension).toEqual({
 			x: 0,
-			y: -10
+			y: 10
 		});
+	});
+
+	it('folds a riser flange outward when it folds against the walls', () => {
+		const support = riser({ flange: 10 });
+		const settings = view(
+			design({
+				supports: [support],
+				foldDirections: { 'riser:riser-1:riser-bottom-flange-fold': 'up' }
+			})
+		);
+		expect(
+			supportFlangeDescriptors(support, settings).find((flange) => flange.side === 'bottom')
+				?.extension
+		).toEqual({ x: 0, y: -10 });
 	});
 
 	it('describes one flange per side', () => {
@@ -291,6 +307,15 @@ describe('buildAssembly', () => {
 		);
 		expect(group?.origin).toEqual({ x: 40, y: 25 });
 		expect(group?.id).toBe('riser:riser-1');
+	});
+
+	it('leaves a tray fixed in the viewer, since its deck opening places it', () => {
+		const tray = riser({ kind: 'tray' });
+		const group = buildAssembly(design({ supports: [tray] })).groups.find(
+			(candidate) => candidate.id === 'riser:riser-1'
+		);
+		expect(group).toBeDefined();
+		expect(group?.draggableId).toBeNull();
 	});
 
 	it('accumulates a stacked support origin through its parent', () => {

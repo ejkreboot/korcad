@@ -7,9 +7,10 @@ import type { DocumentHost } from '../workspaces.js';
 
 export type { DocumentHost };
 import { constrainSupportFlat, placeSupport } from './placement.js';
-import type { PackagingData, Pocket, Support } from './types.js';
-import { cutoutPoints } from './geometry.js';
-import { packagingSheetView, withPackaging, type PackagingView } from './view.js';
+import type { PackagingData, Pocket, RegionRef, Support } from './types.js';
+import { hostFor, pocketSheetId, sameRegion } from './regions.js';
+import { cutoutPoints, openingOutline } from './geometry.js';
+import { packagingSheetView, packagingView, withPackaging, type PackagingView } from './view.js';
 
 /**
  * Packaging's verbs. Each is a pure change to the document; `packagingActions`
@@ -29,14 +30,97 @@ const mapPockets = (design: DesignState, id: string, values: Partial<Pocket>) =>
 		)
 	}));
 
+/** Fields that decide where an opening's outline lies on its sheet. */
+const PLACEMENT_KEYS: readonly (keyof Pocket)[] = [
+	'x',
+	'y',
+	'w',
+	'h',
+	'shape',
+	'profile',
+	'cornerRadius',
+	'pulls',
+	'pullDiameter'
+];
+
+/**
+ * The openings `ids` name, each given to what it now lies on: a part when it
+ * lies wholly on that part's net, the sheet's stock otherwise. An imported
+ * group is one drawing, so it goes to one owner as a whole.
+ */
+function rehost(design: DesignState, ids: ReadonlySet<string>): DesignState {
+	const view = packagingView(design);
+	const moved = view.pockets.filter((pocket) => ids.has(pocket.id));
+	const hosts = new Map<string, RegionRef>();
+	const units = new Map<string, Pocket[]>();
+	for (const pocket of moved) {
+		const unit = pocket.groupId ? `group:${pocket.groupId}` : `pocket:${pocket.id}`;
+		units.set(unit, [...(units.get(unit) ?? []), pocket]);
+	}
+	for (const members of units.values()) {
+		const sheetId = pocketSheetId(view, members[0]!);
+		if (!sheetId) continue;
+		const group = members[0]!.groupId;
+		const all = group ? view.pockets.filter((pocket) => pocket.groupId === group) : members;
+		const host = hostFor(view, sheetId, all.map(openingOutline));
+		for (const pocket of all) hosts.set(pocket.id, host);
+	}
+	return withPackaging(design, (data) => ({
+		...data,
+		pockets: data.pockets.map((pocket) => {
+			const host = hosts.get(pocket.id);
+			return host && !sameRegion(host, pocket.host) ? { ...pocket, host } : pocket;
+		})
+	}));
+}
+
+const movesOutline = (values: Partial<Pocket>) => PLACEMENT_KEYS.some((key) => key in values);
+
 /** Packaging data without the groups that no longer have a member. */
 const pruneGroups = (data: PackagingData): PackagingData => {
 	const used = new Set(data.pockets.map((pocket) => pocket.groupId));
 	return { ...data, pocketGroups: data.pocketGroups.filter((group) => used.has(group.id)) };
 };
 
+/**
+ * Supports changed by `update`, with the openings cut into each carried by
+ * however far its net moved on the sheet, so an opening stays where it was
+ * drawn on the part.
+ */
 const mapSupports = (design: DesignState, update: (support: Support) => Support) =>
-	withPackaging(design, (data) => ({ ...data, supports: data.supports.map(update) }));
+	withPackaging(design, (data) => {
+		const supports = data.supports.map(update);
+		const shifts = new Map<string, Point>();
+		supports.forEach((next, index) => {
+			const before = data.supports[index]!;
+			const dx = next.flatX - before.flatX;
+			const dy = next.flatY - before.flatY;
+			if (dx || dy) shifts.set(next.id, point(dx, dy));
+		});
+		if (!shifts.size) return { ...data, supports };
+		return {
+			...data,
+			supports,
+			pockets: data.pockets.map((pocket) => {
+				const shift = pocket.host.kind === 'support' ? shifts.get(pocket.host.supportId) : null;
+				return shift
+					? { ...pocket, x: round(pocket.x + shift.x), y: round(pocket.y + shift.y) }
+					: pocket;
+			})
+		};
+	});
+
+/** Packaging data without the supports `gone` names, or the openings cut into them. */
+const dropSupports = (data: PackagingData, gone: (support: Support) => boolean): PackagingData => {
+	const removed = new Set(data.supports.filter(gone).map((support) => support.id));
+	return pruneGroups({
+		...data,
+		supports: data.supports.filter((support) => !removed.has(support.id)),
+		pockets: data.pockets.filter(
+			({ host }) => host.kind !== 'support' || !removed.has(host.supportId)
+		)
+	});
+};
 
 export function setPackagingValues(
 	design: DesignState,
@@ -54,7 +138,8 @@ export function updatePocket(
 	id: string,
 	values: Partial<Pocket>
 ): DesignState {
-	return mapPockets(design, id, values);
+	const next = mapPockets(design, id, values);
+	return movesOutline(values) ? rehost(next, new Set([id])) : next;
 }
 
 export function removePocket(design: DesignState, id: string): DesignState {
@@ -68,7 +153,9 @@ export function removePocket(design: DesignState, id: string): DesignState {
 export type PocketChange = { readonly id: string; readonly values: Partial<Pocket> };
 
 export function updatePockets(design: DesignState, changes: readonly PocketChange[]): DesignState {
-	return changes.reduce((next, { id, values }) => mapPockets(next, id, values), design);
+	const next = changes.reduce((current, { id, values }) => mapPockets(current, id, values), design);
+	const moved = changes.filter(({ values }) => movesOutline(values)).map(({ id }) => id);
+	return moved.length ? rehost(next, new Set(moved)) : next;
 }
 
 export function findPocketGroup(design: DesignState, id: string): EntityGroup | null {
@@ -242,19 +329,20 @@ export function resizeSupport(
 	});
 }
 
+/** Deletes a support with the openings cut into it. */
 export function removeSupport(design: DesignState, id: string): DesignState {
-	return withPackaging(design, (data) => ({
-		...data,
-		supports: data.supports.filter((support) => support.id !== id)
-	}));
+	return withPackaging(design, (data) => dropSupports(data, (support) => support.id === id));
 }
 
-/** The supports cut from a sheet go with it. */
+/** The supports cut from a sheet go with it, and so do their openings and its stock cuts. */
 export function releaseSheet(design: DesignState, sheetId: string): DesignState {
-	return withPackaging(design, (data) => ({
-		...data,
-		supports: data.supports.filter((support) => support.sheetId !== sheetId)
-	}));
+	return withPackaging(design, (data) => {
+		const kept = dropSupports(data, (support) => support.sheetId === sheetId);
+		return pruneGroups({
+			...kept,
+			pockets: kept.pockets.filter(({ host }) => host.kind !== 'stock' || host.sheetId !== sheetId)
+		});
+	});
 }
 
 const selectedId = (host: DocumentHost, kind: PackagingSelectionKind): string | null =>

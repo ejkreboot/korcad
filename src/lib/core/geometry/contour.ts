@@ -125,3 +125,57 @@ export function outlineBounds(outline: readonly Point[]) {
 		top: Math.max(...outline.map((p) => p.y))
 	};
 }
+
+/** Twice the signed area: positive for a counter-clockwise outline. */
+function signedArea(outline: readonly Point[]): number {
+	let sum = 0;
+	for (const [a, b] of edges(outline)) sum += a.x * b.y - b.x * a.y;
+	return sum;
+}
+
+/**
+ * Whether a point lies in a convex outline of either winding, its boundary
+ * included to within `tolerance`, so a point on a shared fold line belongs to
+ * both faces it separates.
+ */
+export function pointInConvex(p: Point, outline: readonly Point[], tolerance = 1e-6): boolean {
+	const sign = signedArea(outline) < 0 ? -1 : 1;
+	return edges(outline).every(([a, b]) => {
+		const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+		return (sign * cross(a, b, p)) / length >= -tolerance;
+	});
+}
+
+/**
+ * The part of `subject` inside the convex outline `clip` (Sutherland–Hodgman).
+ * A concave subject may come back with zero-width bridges along the clip
+ * boundary, which is harmless for filling but not for machining. Empty when
+ * nothing of the subject is inside.
+ */
+export function clipToConvex(subject: readonly Point[], clip: readonly Point[]): Point[] {
+	const sign = signedArea(clip) < 0 ? -1 : 1;
+	let output: Point[] = [...subject];
+	for (const [a, b] of edges(clip)) {
+		if (!output.length) break;
+		const input = output;
+		output = [];
+		const inside = (p: Point) => sign * cross(a, b, p) >= 0;
+		const crossing = (p: Point, q: Point): Point => {
+			const dp = sign * cross(a, b, p);
+			const dq = sign * cross(a, b, q);
+			const t = dp / (dp - dq);
+			return { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t };
+		};
+		for (let i = 0; i < input.length; i++) {
+			const current = input[i]!;
+			const previous = input[(i + input.length - 1) % input.length]!;
+			if (inside(current)) {
+				if (!inside(previous)) output.push(crossing(previous, current));
+				output.push(current);
+			} else if (inside(previous)) {
+				output.push(crossing(previous, current));
+			}
+		}
+	}
+	return output.length >= 3 ? output : [];
+}

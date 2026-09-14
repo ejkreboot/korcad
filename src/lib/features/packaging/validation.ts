@@ -8,6 +8,8 @@ import { machineProfileFor } from '$lib/core/design/machine.js';
 import { packagingView } from './view.js';
 import { cutoutPoints } from './geometry.js';
 import type { Pocket } from './types.js';
+import type { Point } from '$lib/core/geometry/primitives.js';
+import { onRegion, regionOf, sameRegion } from './regions.js';
 import { outlineDistance, outlineInside } from '$lib/core/geometry/contour.js';
 
 const NO_SIDES: SideFlags = { top: false, right: false, bottom: false, left: false };
@@ -121,6 +123,18 @@ export function validate(document: DesignState): string[] {
 	}
 
 	for (const p of design.pockets) {
+		const region = regionOf(design, p.host);
+		if (!region) {
+			errors.push(`${p.name}: the part it is cut into is missing`);
+			continue;
+		}
+		// An opening may go anywhere on its region's net; the knife does not care
+		// what the board it cuts becomes. The deck keeps its own wording.
+		const onNet = (outline: readonly Point[]) => onRegion(region, outline);
+		const offNet =
+			p.host.kind === 'deck'
+				? `${p.name}: pocket crosses the finished top deck`
+				: `${p.name}: opening runs off ${region.name}`;
 		const sides = router ? NO_SIDES : p.sides;
 		const f = !router && p.flangeEnabled ? p.flange : 0;
 		const il = p.x + (sides.left ? p.wallDepth + f : 0);
@@ -133,8 +147,23 @@ export function validate(document: DesignState): string[] {
 		if (router && (p.w <= design.bitWidth || p.h <= design.bitWidth)) {
 			errors.push(`${p.name}: opening is too small for the router bit`);
 		}
-		if (p.x < deck.left || p.y < deck.bottom || p.x + p.w > deck.right || p.y + p.h > deck.top) {
-			errors.push(`${p.name}: pocket crosses the finished top deck`);
+		const onDeckPanel =
+			p.host.kind === 'deck' &&
+			p.x >= deck.left &&
+			p.y >= deck.bottom &&
+			p.x + p.w <= deck.right &&
+			p.y + p.h <= deck.top;
+		if (!onDeckPanel && !onNet(boxOutline(p.x, p.y, p.x + p.w, p.y + p.h))) errors.push(offNet);
+		const hostSupport =
+			p.host.kind === 'support' ? design.supports.find((item) => item.id === hostId(p)) : null;
+		// Walls folded from a riser's top panel hang inside it and must clear its floor.
+		if (
+			hostSupport &&
+			hostSupport.kind !== 'tray' &&
+			SIDES.some((side) => sides[side]) &&
+			p.wallDepth >= hostSupport.h
+		) {
+			errors.push(`${p.name}: folded walls reach past the floor of ${hostSupport.name}`);
 		}
 		if (ir <= il || it <= ib) errors.push(`${p.name}: walls and flanges consume the entire pocket`);
 		if (p.wallDepth <= 0 && SIDES.some((side) => sides[side])) {
@@ -163,13 +192,26 @@ export function validate(document: DesignState): string[] {
 				errors.push(`${p.name}: ${side} finger pull reaches the flange fold`);
 			}
 			const radius = p.pullDiameter / 2;
-			if (
-				(side === 'top' && p.y + p.h + radius > deck.top) ||
-				(side === 'right' && p.x + p.w + radius > deck.right) ||
-				(side === 'bottom' && p.y - radius < deck.bottom) ||
-				(side === 'left' && p.x - radius < deck.left)
-			) {
-				errors.push(`${p.name}: ${side} finger pull crosses the finished top deck`);
+			const reach = {
+				top: boxOutline(p.x, p.y + p.h, p.x + p.w, p.y + p.h + radius),
+				right: boxOutline(p.x + p.w, p.y, p.x + p.w + radius, p.y + p.h),
+				bottom: boxOutline(p.x, p.y - radius, p.x + p.w, p.y),
+				left: boxOutline(p.x - radius, p.y, p.x, p.y + p.h)
+			}[side];
+			const withinDeck =
+				p.host.kind === 'deck' &&
+				!(
+					(side === 'top' && p.y + p.h + radius > deck.top) ||
+					(side === 'right' && p.x + p.w + radius > deck.right) ||
+					(side === 'bottom' && p.y - radius < deck.bottom) ||
+					(side === 'left' && p.x - radius < deck.left)
+				);
+			if (!withinDeck && !onNet(reach)) {
+				errors.push(
+					p.host.kind === 'deck'
+						? `${p.name}: ${side} finger pull crosses the finished top deck`
+						: `${p.name}: ${side} finger pull runs off ${region.name}`
+				);
 			}
 		}
 	}
@@ -178,6 +220,7 @@ export function validate(document: DesignState): string[] {
 		for (let j = i + 1; j < design.pockets.length; j++) {
 			const a = design.pockets[i]!;
 			const b = design.pockets[j]!;
+			if (!sameRegion(a.host, b.host)) continue;
 			const boxesOverlap = a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 			if (boxesOverlap && openingsOverlap(a, b)) errors.push(`${a.name} overlaps ${b.name}`);
 		}
@@ -197,6 +240,7 @@ export function validate(document: DesignState): string[] {
 			errors.push(`${tray.item.name}: opening is too small for the router bit`);
 		}
 		for (const pocket of design.pockets) {
+			if (pocket.host.kind !== 'deck') continue;
 			if (
 				tray.x < pocket.x + pocket.w &&
 				tray.x + tray.w > pocket.x &&
@@ -350,6 +394,14 @@ export function validate(document: DesignState): string[] {
 
 	return [...new Set(errors)];
 }
+
+const hostId = (pocket: Pocket) => (pocket.host.kind === 'support' ? pocket.host.supportId : null);
+const boxOutline = (left: number, bottom: number, right: number, top: number): Point[] => [
+	{ x: left, y: bottom },
+	{ x: right, y: bottom },
+	{ x: right, y: top },
+	{ x: left, y: top }
+];
 
 /**
  * Whether two openings whose boxes overlap really do. Imported outlines are

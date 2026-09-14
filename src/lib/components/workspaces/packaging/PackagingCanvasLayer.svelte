@@ -5,6 +5,7 @@
 	import { supportAssemblyOrigin } from '$lib/features/packaging/mounting.js';
 	import { perimeterBounds } from '$lib/features/packaging/perimeter.js';
 	import { pocketLabels } from '$lib/features/packaging/workspace.js';
+	import { pocketSheetId } from '$lib/features/packaging/regions.js';
 	import { riserFlatBounds } from '$lib/features/packaging/supports.js';
 	import type { CanvasLayerProps } from '../index.js';
 
@@ -23,8 +24,15 @@
 	 */
 	const packaging = $derived(actions.view);
 	const isDeckSheet = $derived(design.activeSheetId === packaging.deckSheetId);
-	const selectedPocket = $derived(packaging.pockets.find((p) => p.id === actions.selectedPocketId));
-	const pocketGroup = $derived(actions.selectedPocketGroup);
+	/** Openings cut into a region of this sheet: the deck's, or a support's net here. */
+	const sheetPockets = $derived(
+		packaging.pockets.filter((pocket) => pocketSheetId(packaging, pocket) === design.activeSheetId)
+	);
+	const selectedPocket = $derived(sheetPockets.find((p) => p.id === actions.selectedPocketId));
+	const selectedGroup = $derived(actions.selectedPocketGroup);
+	const pocketGroup = $derived(
+		selectedGroup?.members.some((member) => sheetPockets.includes(member)) ? selectedGroup : null
+	);
 	const selectedSupport = $derived(
 		packaging.supports.find((r) => r.id === actions.selectedSupportId)
 	);
@@ -119,7 +127,7 @@
 	);
 
 	const labels = $derived([
-		...(isDeckSheet ? pocketLabels(design) : []),
+		...pocketLabels(design, design.activeSheetId),
 		...(packaging.fabricationMode === 'knife'
 			? sheetSupports.map((support) => {
 					const bounds = riserFlatBounds(support, packaging);
@@ -158,18 +166,6 @@
 	{/if}
 
 	{#if isDeckSheet && !drawing}
-		{#each packaging.pockets as pocket (pocket.id)}
-			<rect
-				class="hit-target"
-				class:selected={pocket.id === actions.selectedPocketId ||
-					(pocketGroup !== null && pocket.groupId === pocketGroup.group.id)}
-				data-pocket={pocket.id}
-				x={pocket.x}
-				y={pocket.y}
-				width={pocket.w}
-				height={pocket.h}
-			/>
-		{/each}
 		{#each trays as tray (tray.id)}
 			{@const origin = supportAssemblyOrigin(tray, packaging.supports)}
 			<rect
@@ -198,6 +194,22 @@
 		{/each}
 	{/if}
 
+	{#if !drawing}
+		<!-- Openings sit above the regions they are cut into, so they win the hit test. -->
+		{#each sheetPockets as pocket (pocket.id)}
+			<rect
+				class="hit-target"
+				class:selected={pocket.id === actions.selectedPocketId ||
+					(pocketGroup !== null && pocket.groupId === pocketGroup.group.id)}
+				data-pocket={pocket.id}
+				x={pocket.x}
+				y={pocket.y}
+				width={pocket.w}
+				height={pocket.h}
+			/>
+		{/each}
+	{/if}
+
 	{#if isDeckSheet && !drawing}
 		{#each deckEdges as edge (edge.action + edge.x1 + edge.y1 + edge.x2 + edge.y2)}
 			<line
@@ -222,7 +234,7 @@
 		{/each}
 	{/if}
 
-	{#if selectedPocket && isDeckSheet && !drawing}
+	{#if selectedPocket && !drawing}
 		<rect
 			class="selection-box"
 			x={selectedPocket.x}
@@ -244,7 +256,7 @@
 		{/each}
 	{/if}
 
-	{#if pocketGroup && isDeckSheet && !drawing}
+	{#if pocketGroup && !drawing}
 		{@const box = pocketGroup.box}
 		<rect class="selection-box" x={box.x} y={box.y} width={box.w} height={box.h} />
 		{#each corners( { left: box.x, right: box.x + box.w, bottom: box.y, top: box.y + box.h } ) as handle (handle.name)}

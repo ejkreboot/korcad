@@ -123,6 +123,8 @@ export type Workspace<Id extends WorkspaceId = WorkspaceId> = WorkspaceReader & 
 	canRotate(design: DesignState, selection: Selection): boolean;
 	/** The document with the selection turned `degrees` counter-clockwise about the centre of its box. */
 	rotateSelection(design: DesignState, selection: Selection, degrees: number): DesignState;
+	/** The document without the selection, as its inspector's Delete removes it. */
+	removeSelection(design: DesignState, selection: Selection): DesignState;
 	/** Whether a sheet is one the workspace cannot do without, so it may not be renamed or removed. */
 	protectsSheet(design: DesignState, sheetId: string): boolean;
 	/** The document with this workspace's parts cut from a sheet removed, ahead of removing the sheet. */

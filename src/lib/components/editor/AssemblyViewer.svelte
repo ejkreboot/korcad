@@ -259,9 +259,10 @@
 				const controls = new controlsModule.OrbitControls(camera, canvas);
 				controls.enableDamping = false;
 				controls.screenSpacePanning = true;
-				// Stop just short of the horizon so the model never turns edge-on.
+				// Orbit over the top and on underneath to see the underside, stopping
+				// short of the poles where the Z-up camera would flip about its axis.
 				controls.minPolarAngle = 0.18;
-				controls.maxPolarAngle = Math.PI / 2.04;
+				controls.maxPolarAngle = Math.PI - 0.18;
 				controls.addEventListener('change', () => renderer.render(scene, camera));
 
 				scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa5ad, 2.15));

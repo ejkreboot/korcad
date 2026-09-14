@@ -1,6 +1,6 @@
 import { point } from '$lib/core/geometry/primitives.js';
 import type { DesignPath, DesignState, Geometry } from '$lib/core/design/types.js';
-import type { Support } from './types.js';
+import type { Pocket, Support } from './types.js';
 import type { PackagingView } from './view.js';
 import {
 	DECK_OUTLINE,
@@ -17,6 +17,8 @@ import { exteriorPaths } from './perimeter.js';
 import { riserPaths } from './supports.js';
 
 const NO_SIDES = { top: false, right: false, bottom: false, left: false } as const;
+
+const onDeck = (pocket: Pocket) => pocket.host.kind === 'deck';
 
 /**
  * The deck opening a tray drops through. It is placed by the tray's assembly
@@ -65,6 +67,9 @@ export function allGeometry(document: DesignState, sheetId = document.activeShee
 	// the geometry of one sheet is answered against that sheet's profile.
 	const design = packagingSheetView(document, sheetId);
 	const isDeckSheet = design.activeSheetId === design.deckSheetId;
+	const onDeckSheet = (pocket: Pocket) =>
+		onDeck(pocket) ||
+		(pocket.host.kind === 'stock' && pocket.host.sheetId === design.activeSheetId);
 	const trayOpenings = design.supports
 		.filter((support) => support.kind === 'tray')
 		.map((tray) => trayOpeningPath(tray, design));
@@ -72,7 +77,7 @@ export function allGeometry(document: DesignState, sheetId = document.activeShee
 	if (design.fabricationMode === 'router') {
 		// A router cuts openings and releases the deck; it never folds.
 		if (!isDeckSheet) return { paths: [], tabs: [] };
-		const openings = design.pockets.map((pocket) => {
+		const openings = design.pockets.filter(onDeckSheet).map((pocket) => {
 			const points =
 				pocket.shape === 'rectangle'
 					? openingCutPoints(
@@ -113,9 +118,26 @@ export function allGeometry(document: DesignState, sheetId = document.activeShee
 		};
 	}
 
-	const interior = isDeckSheet
-		? [...design.pockets.flatMap((pocket) => pocketPaths(pocket, design)), ...trayOpenings]
-		: [];
+	// Every region cut from this sheet takes its openings with it: the deck's
+	// when this is the deck sheet, and those of each support whose net is here.
+	const sheetSupportIds = new Set(
+		design.supports
+			.filter((support) => support.sheetId === design.activeSheetId)
+			.map((support) => support.id)
+	);
+	// A cut into bare stock, or across a part's edge, is cut on its sheet all the same.
+	const cutOnThisSheet = (pocket: Pocket) =>
+		(pocket.host.kind === 'support' && sheetSupportIds.has(pocket.host.supportId)) ||
+		(pocket.host.kind === 'stock' && pocket.host.sheetId === design.activeSheetId);
+	const interior = [
+		...(isDeckSheet
+			? [
+					...design.pockets.filter(onDeck).flatMap((pocket) => pocketPaths(pocket, design)),
+					...trayOpenings
+				]
+			: []),
+		...design.pockets.filter(cutOnThisSheet).flatMap((pocket) => pocketPaths(pocket, design))
+	];
 	const exterior: PackagingGeometry = isDeckSheet ? exteriorPaths(design) : { paths: [], tabs: [] };
 	const supports = design.supports
 		.filter((support) => support.sheetId === design.activeSheetId)
