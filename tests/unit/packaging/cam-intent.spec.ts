@@ -68,12 +68,11 @@ const VOCABULARY: Readonly<Record<string, readonly [MachiningStage, OffsetSide]>
 	// The deck opening a tray drops through is owned by the tray.
 	'cut:tray-opening': ['part-release', 'inside'],
 
-	// Perimeter framing inside the blank outline.
-	'cut:perimeter-side': ['frame', 'inside'],
-	'cut:perimeter-corner-clearance': ['frame', 'inside'],
-	'cut:perimeter-flange-chamfer': ['frame', 'inside'],
-
-	// The outline that frees the blank, last of all.
+	// The outline that frees the blank, last of all: a folded perimeter's notched
+	// corners are stretches of it.
+	'cut:perimeter-side': ['sheet-release', 'inside'],
+	'cut:perimeter-corner-clearance': ['sheet-release', 'inside'],
+	'cut:perimeter-flange-chamfer': ['sheet-release', 'inside'],
 	'cut:exterior': ['sheet-release', 'inside'],
 	'cut:joist-end': ['sheet-release', 'inside'],
 	'cut:joist-lock-tab': ['sheet-release', 'inside'],

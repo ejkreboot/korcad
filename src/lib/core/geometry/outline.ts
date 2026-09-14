@@ -268,3 +268,30 @@ export function proportionalResize(
 	);
 	return { factor, anchor };
 }
+
+/**
+ * Whole quarter turns in `degrees`, from 0 to 3, or `null` when it is not a
+ * whole number of them. A quarter turn maps a box to a box, so a shape drawn
+ * from its box can turn without being redrawn as a free outline.
+ */
+export function quarterTurns(degrees: number): number | null {
+	const turns = degrees / 90;
+	return Number.isInteger(turns) ? ((turns % 4) + 4) % 4 : null;
+}
+
+/**
+ * Points turned `degrees` counter-clockwise about `pivot`, in the Y-up sheet
+ * frame. Quarter turns use exact sines, so turning a drawing four times over
+ * lands every vertex back where it began rather than a float's width away.
+ */
+export function rotatePoints(points: readonly Point[], pivot: Point, degrees: number): Point[] {
+	const turns = quarterTurns(degrees);
+	const radians = (degrees * Math.PI) / 180;
+	const cos = turns === null ? Math.cos(radians) : [1, 0, -1, 0][turns]!;
+	const sin = turns === null ? Math.sin(radians) : [0, 1, 0, -1][turns]!;
+	return points.map((vertex) => {
+		const dx = vertex.x - pivot.x;
+		const dy = vertex.y - pivot.y;
+		return point(pivot.x + dx * cos - dy * sin, pivot.y + dx * sin + dy * cos);
+	});
+}

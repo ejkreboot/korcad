@@ -20,9 +20,10 @@ import type { Pocket, Support } from './types.js';
  *   riser owns it, so it is cut before the riser is freed around it.
  * - Everything that frees a support's net — including the deck opening a tray
  *   drops through — is `part-release`, chained per support.
- * - Perimeter framing inside the blank outline is `frame`.
- * - The outline that frees the blank is `sheet-release`, last of all. Only the
- *   routed deck perimeter is a part outline cut outside the line.
+ * - The outline that frees the blank is `sheet-release`, last of all, and all of
+ *   it: a folded perimeter's notched corners too, which are stretches of that
+ *   outline, so the tool goes round it once. Only the routed deck perimeter is a
+ *   part outline cut outside the line.
  */
 
 export type PathOwner = NonNullable<DesignPath['owner']>;
@@ -89,13 +90,6 @@ export const partReleaseIntent = (support: Support, closed: boolean): CamIntent 
 	offsetSide: 'inside',
 	stage: 'part-release',
 	chainKey: closed ? null : `${ownerGroup(supportOwner(support))}:release`
-});
-
-/** Perimeter framing inside the blank outline, chained across the sheet. */
-export const frameIntent = (sheetId: string): CamIntent => ({
-	offsetSide: 'inside',
-	stage: 'frame',
-	chainKey: `${pathGroup(undefined, sheetId)}:perimeter:frame`
 });
 
 /** The open runs of the blank outline, chained across the sheet and cut last. */

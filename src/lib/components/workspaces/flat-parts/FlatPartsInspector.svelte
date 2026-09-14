@@ -1,4 +1,5 @@
 <script lang="ts">
+	import RotateControl from '$lib/components/editor/RotateControl.svelte';
 	import { display, parseDisplay } from '$lib/core/units.js';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
 	import { flatPartsActions } from '$lib/features/flat-parts/actions.js';
@@ -148,6 +149,7 @@
 					onchange={(e) => scaleGroupTo('h', e.currentTarget.value)}
 				/>
 			</label>
+			<RotateControl onrotate={(degrees) => actions.rotateGroup(group.group.id, degrees)} />
 			<label class="field">
 				Holding tabs
 				<input
@@ -161,8 +163,9 @@
 			</label>
 		</div>
 		<p class="help">
-			An imported drawing moves, scales, and is deleted as one. A new width or height scales every
-			part and hole in it together, keeping its proportions. Holding tabs apply to each part.
+			An imported drawing moves, scales, rotates, and is deleted as one. A new width or height
+			scales every part and hole in it together, keeping its proportions, and a rotation turns it
+			about the centre of its box. Holding tabs apply to each part.
 		</p>
 	</section>
 {:else if entity}

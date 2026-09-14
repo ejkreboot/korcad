@@ -10,6 +10,7 @@ import {
 	groupBox,
 	moveGroup,
 	removeGroup,
+	rotateGroup,
 	scaleEntity,
 	scaleGroup,
 	setGroupTabs,
@@ -18,6 +19,7 @@ import {
 import { createFlatPartsEntity } from '$lib/features/flat-parts/defaults.js';
 import { entityOutline, flatPartsGeometry } from '$lib/features/flat-parts/geometry.js';
 import { importSvg } from '$lib/features/flat-parts/import.js';
+import type { FlatPartsEntity } from '$lib/features/flat-parts/types.js';
 import { validateFlatParts } from '$lib/features/flat-parts/validation.js';
 import { flatPartsSheetView, withFlatPartsSheet } from '$lib/features/flat-parts/view.js';
 import { FLAT_PARTS_WORKSPACE } from '$lib/features/workspaces.js';
@@ -258,6 +260,100 @@ describe('importing a drawing of several parts as a group', () => {
 		expect(entities(gone)).toEqual([]);
 		expect(flatPartsSheetView(gone, 'sheet').groups).toEqual([]);
 		expect(FLAT_PARTS_WORKSPACE.selectionExists(gone, selection!)).toBe(false);
+	});
+
+	it('rotates every member about the centre of the group, and turns back to where it began', () => {
+		const { design, selection } = imported();
+		const id = selection!.id;
+		const before = entities(design);
+		const outlines = (d: DesignState) => entities(d).map((entity) => entityOutline(entity));
+
+		const turned = rotateGroup(design, id, 90);
+		// 130 x 50 about its centre (77.7, 37.7) becomes 50 x 130.
+		expect(groupBox(turned, id)).toEqual({ x: 52.7, y: -27.3, w: 50, h: 130 });
+		// The first letter, at the left, is now at the bottom.
+		const first = outlineBounds(entityOutline(entities(turned)[0]!));
+		[52.7, -27.3, 102.7, 2.7].forEach((edge, index) =>
+			expect([first.left, first.bottom, first.right, first.top][index]).toBeCloseTo(edge, 6)
+		);
+		expect(entities(turned).map((entity) => [entity.kind, entity.groupId, entity.shape])).toEqual(
+			before.map((entity) => [entity.kind, id, 'path'])
+		);
+
+		const placed = moveGroup(turned, id, 12.7, 12.7);
+		expect(validateFlatParts(placed)).toEqual([]);
+
+		const around = [90, 90, 90].reduce((next, degrees) => rotateGroup(next, id, degrees), turned);
+		expect(groupBox(around, id)).toEqual(groupBox(design, id));
+		outlines(around).forEach((outline, index) =>
+			outline.forEach((vertex, at) => {
+				expect(vertex.x).toBeCloseTo(outlines(design)[index]![at]!.x, 6);
+				expect(vertex.y).toBeCloseTo(outlines(design)[index]![at]!.y, 6);
+			})
+		);
+		expect(rotateGroup(design, id, 360)).toBe(design);
+		expect(rotateGroup(design, id, Number.NaN)).toBe(design);
+	});
+
+	it('turns by any angle, keeping each outline wound counter-clockwise', () => {
+		const { design, selection } = imported();
+		const id = selection!.id;
+		const turned = rotateGroup(design, id, 30);
+		const box = groupBox(design, id)!;
+		const after = groupBox(turned, id)!;
+		expect(after.x + after.w / 2).toBeCloseTo(box.x + box.w / 2, 2);
+		expect(after.y + after.h / 2).toBeCloseTo(box.y + box.h / 2, 2);
+		// A 130 x 50 box turned 30 degrees spans 130 cos 30 + 50 sin 30 across.
+		expect(after.w).toBeCloseTo(130 * Math.cos(Math.PI / 6) + 50 * 0.5, 2);
+		for (const entity of entities(turned)) {
+			const outline = entityOutline(entity);
+			const area = outline.reduce((sum, p, index) => {
+				const q = outline[(index + 1) % outline.length]!;
+				return sum + p.x * q.y - q.x * p.y;
+			}, 0);
+			expect(area).toBeGreaterThan(0);
+		}
+		const moved = moveGroup(turned, id, 20, 20);
+		expect(validateFlatParts(moved)).toEqual([]);
+		expect(flatPartsGeometry(moved, 'sheet').paths).toHaveLength(4);
+	});
+
+	it('turns a hole drawn through a part, keeping its shape while a box can hold it', () => {
+		const { design, selection } = imported();
+		const id = selection!.id;
+		const hole = (values: Partial<FlatPartsEntity> & Pick<FlatPartsEntity, 'id' | 'shape'>) =>
+			createFlatPartsEntity({
+				name: values.id,
+				kind: 'hole',
+				x: 20,
+				y: 40,
+				w: 10,
+				h: 10,
+				...values
+			});
+		const drilled = [
+			hole({ id: 'drill', shape: 'ellipse', y: 45 }),
+			hole({ id: 'slot', shape: 'slot', x: 23, y: 24, w: 4, h: 12 }),
+			hole({ id: 'hex', shape: 'polygon', x: 120, y: 30, sides: 6 })
+		].reduce((next, entity) => addEntity(next, 'sheet', entity), design);
+		const find = (d: DesignState, key: string) => entities(d).find((entity) => entity.id === key)!;
+
+		const quarter = rotateGroup(drilled, id, 90);
+		// The drill's centre (25, 50) turns about (77.7, 37.7) to (65.4, -15).
+		expect(find(quarter, 'drill')).toMatchObject({
+			shape: 'ellipse',
+			x: 60.4,
+			y: -20,
+			w: 10,
+			h: 10
+		});
+		expect(find(quarter, 'slot')).toMatchObject({ shape: 'slot', w: 12, h: 4 });
+		expect(find(quarter, 'hex').shape).toBe('path');
+
+		const slanted = rotateGroup(drilled, id, 30);
+		expect(find(slanted, 'drill').shape).toBe('ellipse');
+		expect(find(slanted, 'slot').shape).toBe('path');
+		expect(validateFlatParts(moveGroup(slanted, id, 20, 20))).toEqual([]);
 	});
 
 	it('gives every part the same tabs, and never moves an entity out of its group', () => {

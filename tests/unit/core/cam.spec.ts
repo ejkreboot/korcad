@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { packagingData } from '$lib/features/packaging/view.js';
 import { point } from '$lib/core/geometry/primitives.js';
+import { shapeOutline } from '$lib/core/geometry/outline.js';
 import { round } from '$lib/core/units.js';
 import { createDefaultDesign } from '$lib/features/document.js';
 import type { DesignPath, DesignState } from '$lib/core/design/types.js';
@@ -175,6 +176,35 @@ describe('routing', () => {
 			plan.paths[1]!.pts[0]!.y - plan.paths[0]!.pts.at(-1)!.y
 		);
 		expect(gap).toBe(2);
+	});
+
+	it('routes a sheet of parts well inside each stage, holes before any release', () => {
+		// Parts drawn in reading order, each with two holes, as a nesting would leave them.
+		const square = (x: number, y: number, size: number) =>
+			shapeOutline('rectangle', { x, y, w: size, h: size });
+		const paths: DesignPath[] = [];
+		for (let row = 0; row < 4; row++) {
+			for (let column = 0; column < 4; column++) {
+				const x = 20 + (((row % 2 ? 3 - column : column) * 130 + row * 37) % 520);
+				const y = 20 + row * 130;
+				paths.push(
+					{
+						points: square(x, y, 90),
+						type: 'cut',
+						closed: true,
+						cam: intent('cut', { stage: 'part-release', offsetSide: 'outside' })
+					},
+					{ points: square(x + 15, y + 15, 12), type: 'cut', closed: true, cam: intent('cut') },
+					{ points: square(x + 60, y + 60, 12), type: 'cut', closed: true, cam: intent('cut') }
+				);
+			}
+		}
+		const plan = plannedToolpaths(paths, view(design));
+		const stages = plan.paths.map((entry) => machiningStage(entry.path));
+		expect(stages).toEqual([...stages].sort((a, b) => a - b));
+		expect(plan.paths).toHaveLength(paths.length);
+		expect(plan.travel).toBeLessThan(plan.greedyTravel);
+		expect(plan.travel).toBeLessThan(plan.baselineTravel * 0.8);
 	});
 
 	it('continues adjacent score edges around a shared corner', () => {

@@ -8,7 +8,9 @@ import {
 import {
 	boxAround,
 	proportionalResize,
+	quarterTurns,
 	regularPolygon,
+	rotatePoints,
 	scaleBox,
 	shapeOutline,
 	splitClosedContour
@@ -141,5 +143,29 @@ describe('scaling boxes together', () => {
 		// Dragged the south-west corner mostly down: height halved.
 		const low = proportionalResize(original, { x: 15, y: 35, w: 95, h: 25 }, 'sw');
 		expect(low).toEqual({ factor: 0.5, anchor: point(110, 60) });
+	});
+});
+
+describe('turning outlines', () => {
+	it('counts whole quarter turns, either way round', () => {
+		expect([0, 90, 180, -90, 450, 45].map(quarterTurns)).toEqual([0, 1, 2, 3, 1, null]);
+	});
+
+	it('turns counter-clockwise about a pivot, exactly on quarter turns', () => {
+		const pivot = point(10, 10);
+		expect(rotatePoints([point(20, 10)], pivot, 90)).toEqual([point(10, 20)]);
+		expect(rotatePoints([point(20, 10)], pivot, -90)).toEqual([point(10, 0)]);
+		const [turned] = rotatePoints([point(20, 10)], pivot, 45);
+		expect(turned!.x).toBeCloseTo(10 + Math.SQRT1_2 * 10, 9);
+		expect(turned!.y).toBeCloseTo(10 + Math.SQRT1_2 * 10, 9);
+		const back = [90, 90, 90, 90].reduce(
+			(points, degrees) => rotatePoints(points, pivot, degrees),
+			square
+		);
+		expect(back).toEqual(square);
+	});
+
+	it('keeps an outline wound as it was', () => {
+		expect(signedArea(rotatePoints(square, point(3, 7), 30))).toBeCloseTo(signedArea(square), 6);
 	});
 });

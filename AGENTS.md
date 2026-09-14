@@ -140,6 +140,10 @@ type DesignState = {
   `pocket-group`; a press on any member starts a group gesture. Group moves and scales go
   through `groupChanges` / `pocketGroupChanges`, computed from the members at the press, and a
   corner drag becomes one factor through `proportionalResize` (`core/geometry/outline.ts`).
+  `rotateGroup` / `rotatePocketGroup` turn about the group box's centre and bake the turn into
+  each member (`rotatePoints`, then `boxedOutline`); no angle is stored. Outlines become `path` /
+  `profile`, except that a carried circle only moves, and a box-drawn hole (rectangle, rounded,
+  ellipse, slot) keeps its shape on quarter turns. `RotateControl.svelte` is the shared UI.
   Normalization drops memberless groups and dangling `groupId`s.
 - Selection is one generic `{ kind, id }` slot in `editor/state.svelte.ts`, and snap lives in
   `tools.svelte.ts`. Neither is saved. Drafts are full design files.
@@ -174,6 +178,19 @@ Never mutate inputs along the way.
   deduction, stays in packaging.
 - **Stage order:** score, interior, part-release, frame, sheet-release. Interior cuts always
   come before release cuts.
+- **Route order.** `plannedToolpaths` (`core/cam/routing.ts`) builds route units (a chain, or a
+  path with its legal directions or closed-contour start points) and hands them to
+  `sequenceStops` (`core/cam/sequencing.ts`), which never moves a unit out of its stage. The search
+  is 2-opt and Or-opt over nearest-neighbour lists, with don't-look bits, then 100 seeded
+  double-bridge kicks (iterated local search), then an exact dynamic-programming choice of start
+  points. It is deterministic: no `Math.random`, and ties break by index. It is searched from
+  both the design order and the greedy order, and the design order is kept unless a route beats
+  it on both motion time and travel. On small jobs it matches brute force (`sequencing.spec.ts`).
+- **Stages and chains are route constraints, so state no more than the process needs.** A chain
+  is routed as one unit, and a stage is cut whole before the next. Splitting one outline across
+  two stages made the tool go round a folded deck twice; a fold chain spanning opposite deck
+  edges made it cross the deck between them. One outline is one stage, and folds on different
+  edges chain per edge. No workspace uses `frame` any more.
 - **Holding tabs.** On a knife a tab is a gap, and the release cut splits into open runs. On a
   router the contour stays closed and carries `holdingTabs`. `bridgeTabbedContour`
   (`core/cam/tabs.ts`) raises the bit over each tab, for `tabWidth + bitWidth`, to
@@ -235,9 +252,14 @@ Next directions:
 - Ramped or helical plunges for routers, a choice of climb or conventional milling, and a
   finishing pass.
 - Postprocessor profiles (GRBL, LinuxCNC, Mach3), including optional G2/G3 arc output.
+- Route order by part: cut a part's holes, then release it, then move to the next, rather than
+  every interior cut on the sheet first. A prototype measured a further 15–20% less travel on
+  multi-part sheets. `sequenceStops` would take it as a precedence constraint in place of stage
+  blocks. It relaxes the stage-order rule above, so decide it per tool first.
 - Import DXF profiles into Flat Parts (SVG import is in). Parts nested in another part's hole,
   which needs release ordering by depth. Export a multi-sheet job as a zip.
-- Rotate, copy, paste, and keyboard nudge for the selection.
+- Rotate (imported groups can), copy, paste, and keyboard nudge for the selection. A canvas
+  rotation handle for groups.
 - A first-run choice of workspace. File > New … project already starts a project in either
   workspace, but a fresh browser still opens a packaging deck.
 - Move `stock.boardFinish` into `PackagingData`: only the packaging 3D preview reads it (a

@@ -2,6 +2,7 @@ import { point, type Point } from '$lib/core/geometry/primitives.js';
 import { round } from '$lib/core/units.js';
 import type { DesignPath, DesignState, MachineSettings } from '$lib/core/design/types.js';
 import { toolpathPoints, type CompensationSettings, type Operation } from './compensation.js';
+import { sequenceStops } from './sequencing.js';
 import { STAGE_COUNT, stageIndex } from './stages.js';
 
 export type RoutingSettings = CompensationSettings &
@@ -416,55 +417,16 @@ function greedyStageOrder(stages: readonly (readonly RouteUnit[])[]): RouteUnit[
 }
 
 /**
- * Improves unit order by relocating single units, never across a machining
- * stage boundary. Pass and candidate caps keep large sheets interactive.
+ * Units reordered by the travel search, which never moves a unit across a
+ * machining stage: `units` lists each stage's units contiguously, in stage order.
  */
-function improveConstrainedRoute(
-	seed: readonly RouteUnit[],
-	stageSizes: readonly number[]
-): RouteUnit[] {
-	let best = [...seed];
-	let bestTravel = routeTravel(best);
-	const ranges: { start: number; end: number }[] = [];
-	let cursor = 0;
-	stageSizes.forEach((size) => {
-		ranges.push({ start: cursor, end: cursor + size });
-		cursor += size;
-	});
-	// `plannedToolpaths` only ever seeds this with variant-carrying units, so
-	// the original's variant-aware caps are the ones that apply.
-	const maxPasses = 3;
-	const maxCandidates = 400;
-
-	for (let pass = 0; pass < maxPasses; pass++) {
-		let improved: RouteUnit[] | null = null;
-		let improvedTravel = bestTravel;
-		let candidates = 0;
-		for (const { start, end } of ranges) {
-			if (end - start < 2) continue;
-			for (let from = start; from < end; from++) {
-				for (let to = start; to < end; to++) {
-					if (from === to) continue;
-					const candidate = [...best];
-					const [entry] = candidate.splice(from, 1);
-					candidate.splice(to, 0, entry!);
-					const travel = routeTravel(candidate);
-					candidates++;
-					if (travel < improvedTravel - 0.000001) {
-						improved = candidate;
-						improvedTravel = travel;
-					}
-					if (candidates >= maxCandidates) break;
-				}
-				if (candidates >= maxCandidates) break;
-			}
-			if (candidates >= maxCandidates) break;
-		}
-		if (!improved) break;
-		best = improved;
-		bestTravel = improvedTravel;
-	}
-	return best;
+function searchedRoute(units: readonly RouteUnit[], stageSizes: readonly number[]): RouteUnit[] {
+	const { order } = sequenceStops(
+		units,
+		stageSizes,
+		units.map((_, index) => index)
+	);
+	return order.map((index) => units[index]!);
 }
 
 /**
@@ -498,9 +460,10 @@ export function plannedToolpaths(
 
 	const topologyCandidates = [
 		designUnits,
-		improveConstrainedRoute(designUnits, stageSizes),
 		greedyUnits,
-		improveConstrainedRoute(greedyUnits, stageSizes)
+		searchedRoute(greedyUnits, stageSizes),
+		// Searched from both seeds: they settle in different local optima.
+		searchedRoute(designUnits, stageSizes)
 	];
 	const bestUnits = topologyCandidates.reduce((best, candidate) =>
 		routeMotionCost(candidate, settings) < routeMotionCost(best, settings) ? candidate : best

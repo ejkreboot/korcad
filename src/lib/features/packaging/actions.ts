@@ -1,5 +1,6 @@
-import { boxAround, scaleBox, type ShapeBox } from '$lib/core/geometry/outline.js';
-import type { Point } from '$lib/core/geometry/primitives.js';
+import { boxAround, rotatePoints, scaleBox, type ShapeBox } from '$lib/core/geometry/outline.js';
+import { point, type Point } from '$lib/core/geometry/primitives.js';
+import { boxedOutline } from '$lib/core/import/outlines.js';
 import { round } from '$lib/core/units.js';
 import type { DesignState, EntityGroup } from '$lib/core/design/types.js';
 import type { DocumentHost } from '../workspaces.js';
@@ -7,6 +8,7 @@ import type { DocumentHost } from '../workspaces.js';
 export type { DocumentHost };
 import { constrainSupportFlat, placeSupport } from './placement.js';
 import type { PackagingData, Pocket, Support } from './types.js';
+import { cutoutPoints } from './geometry.js';
 import { packagingSheetView, withPackaging, type PackagingView } from './view.js';
 
 /**
@@ -128,6 +130,33 @@ export function movePocketGroup(
 	return updatePockets(
 		design,
 		pocketGroupChanges(pocketGroupMembers(design, id), box, 1, { x: x - box.x, y: y - box.y })
+	);
+}
+
+/**
+ * Where each opening goes when its group turns `degrees` counter-clockwise
+ * about `pivot`: its outline turns vertex by vertex and is boxed again, so the
+ * group's box is read afresh from its openings.
+ */
+export function pocketGroupRotationChanges(
+	members: readonly Pocket[],
+	pivot: Point,
+	degrees: number
+): PocketChange[] {
+	return members.map((pocket) => {
+		const { fractions, ...box } = boxedOutline(rotatePoints(cutoutPoints(pocket), pivot, degrees));
+		return { id: pocket.id, values: { ...box, shape: 'profile', profile: fractions } };
+	});
+}
+
+/** Turns a group of openings `degrees` counter-clockwise about the centre of its box. */
+export function rotatePocketGroup(design: DesignState, id: string, degrees: number): DesignState {
+	const box = pocketGroupBox(design, id);
+	if (!box || !Number.isFinite(degrees) || degrees % 360 === 0) return design;
+	const pivot = point(box.x + box.w / 2, box.y + box.h / 2);
+	return updatePockets(
+		design,
+		pocketGroupRotationChanges(pocketGroupMembers(design, id), pivot, degrees)
 	);
 }
 
@@ -257,6 +286,9 @@ export function packagingActions(host: DocumentHost) {
 		},
 		movePocketGroup(id: string, x: number, y: number) {
 			host.update((design) => movePocketGroup(design, id, x, y));
+		},
+		rotatePocketGroup(id: string, degrees: number) {
+			host.update((design) => rotatePocketGroup(design, id, degrees));
 		},
 		renamePocketGroup(id: string, name: string) {
 			host.update((design) => renamePocketGroup(design, id, name));

@@ -2,9 +2,9 @@
   1x cut closed role=central-cutout owner=pocket stage=1
   4x cut closed role=corner-relief owner=pocket stage=1
   12x cut open role=exterior owner=- stage=4
-  8x cut open role=perimeter-corner-clearance owner=- stage=3
-  8x cut open role=perimeter-flange-chamfer owner=- stage=3
-  8x cut open role=perimeter-side owner=- stage=3
+  8x cut open role=perimeter-corner-clearance owner=- stage=4
+  8x cut open role=perimeter-flange-chamfer owner=- stage=4
+  8x cut open role=perimeter-side owner=- stage=4
   4x score open role=flange-fold owner=pocket stage=0
   4x score open role=perimeter-deck-fold owner=- stage=0
   4x score open role=perimeter-flange-fold owner=- stage=0
@@ -31,9 +31,9 @@
   4x cut closed role=corner-relief owner=pocket stage=1
   1x cut closed role=tray-opening owner=riser stage=2
   12x cut open role=exterior owner=- stage=4
-  8x cut open role=perimeter-corner-clearance owner=- stage=3
-  8x cut open role=perimeter-flange-chamfer owner=- stage=3
-  8x cut open role=perimeter-side owner=- stage=3
+  8x cut open role=perimeter-corner-clearance owner=- stage=4
+  8x cut open role=perimeter-flange-chamfer owner=- stage=4
+  8x cut open role=perimeter-side owner=- stage=4
   4x score open role=flange-fold owner=pocket stage=0
   4x score open role=perimeter-deck-fold owner=- stage=0
   4x score open role=perimeter-flange-fold owner=- stage=0

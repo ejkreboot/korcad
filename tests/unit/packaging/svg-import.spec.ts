@@ -9,6 +9,7 @@ import {
 	movePocketGroup,
 	pocketGroupBox,
 	removePocketGroup,
+	rotatePocketGroup,
 	scalePocketGroup
 } from '$lib/features/packaging/actions.js';
 import { importSvgOpenings } from '$lib/features/packaging/import.js';
@@ -127,6 +128,33 @@ describe('importing an SVG as deck openings', () => {
 		expect(packagingView(gone).pockets).toEqual([]);
 		expect(packagingView(gone).pocketGroups).toEqual([]);
 		expect(PACKAGING_WORKSPACE.selectionExists(gone, selection!)).toBe(false);
+	});
+
+	it('rotates a group of openings about its centre, and turns back to where it began', () => {
+		const { design, selection } = importSvgOpenings(
+			createDefaultDesign(),
+			'deck',
+			svg('<rect width="40" height="40"/><circle cx="100" cy="20" r="20"/>'),
+			'kit.svg'
+		);
+		const id = selection!.id;
+		const box = pocketGroupBox(design, id)!;
+		const turned = rotatePocketGroup(design, id, -90);
+		const after = pocketGroupBox(turned, id)!;
+		expect(after).toMatchObject({ w: 40, h: 120 });
+		expect(after.x + after.w / 2).toBeCloseTo(box.x + box.w / 2, 2);
+		expect(after.y + after.h / 2).toBeCloseTo(box.y + box.h / 2, 2);
+		// Turned clockwise, the square at the left of the drawing is now at its top.
+		const square = packagingView(turned).pockets[0]!;
+		expect(square.y + square.h).toBeCloseTo(after.y + after.h, 3);
+		expect(packagingView(turned).pockets.every((pocket) => pocket.shape === 'profile')).toBe(true);
+		expect(validateDocument(turned)).toEqual([]);
+
+		const back = rotatePocketGroup(turned, id, 90);
+		expect(pocketGroupBox(back, id)).toEqual(box);
+		const slanted = rotatePocketGroup(design, id, 15);
+		expect(validateDocument(slanted)).toEqual([]);
+		expect(rotatePocketGroup(design, id, 0)).toBe(design);
 	});
 
 	it('judges imported openings by their outlines, so a kerned pair does not overlap', () => {

@@ -83,6 +83,15 @@ test('a logo imported to the deck scales as one group', async ({ page }) => {
 		[15, 25],
 		[15, 25]
 	]);
+
+	// A quarter turn stands the halved logo on end, and one typed angle turns it back.
+	await page.getByRole('button', { name: 'Rotate 90° counter-clockwise' }).click();
+	await expect(page.getByLabel(/^Height/)).toHaveValue(String(Number((65 / 25.4).toFixed(3))));
+	const angle = page.getByLabel('Rotate', { exact: true });
+	await angle.fill('-90');
+	await angle.press('Enter');
+	await expect(angle).toHaveValue('');
+	await expect(page.getByLabel(/^Width/)).toHaveValue(String(Number((65 / 25.4).toFixed(3))));
 });
 
 test('a logo imported to Flat Parts moves and scales as one group', async ({ page }) => {

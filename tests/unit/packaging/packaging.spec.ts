@@ -248,7 +248,9 @@ describe('dependency stages', () => {
 		expect(ordered.filter((entry) => entry.path.role === 'riser-lock-slot')).toHaveLength(4);
 		expect(new Set(ordered.flatMap((entry) => entry.sourcePaths)).size).toBe(paths.length);
 		expect(ordered.length).toBeLessThan(paths.length);
-		expect(ordered.at(-1)?.path.role).toBe('exterior');
+		// The blank outline comes last; its runs may be merged with the corners they meet.
+		expect(ordered.at(-1)?.path.cam.stage).toBe('sheet-release');
+		expect(ordered.at(-1)?.sourcePaths.map((path) => path.role)).toContain('exterior');
 	});
 });
 

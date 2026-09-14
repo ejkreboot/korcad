@@ -17,100 +17,100 @@ G1 Z-0.9 F250
 G1 X44.45 Y533.65 F1000
 G0 Z3
 
-; 2: score [down] joist-fold-4
-G0 X565.15 Y533.15
-G1 Z-0.9 F250
-G1 X565.15 Y75.95 F1000
-G0 Z3
-
-; 3: score [down] joist-fold-3
-G0 X552.45 Y76.45
-G1 Z-0.9 F250
-G1 X552.45 Y533.65 F1000
-G0 Z3
-
-; 4: score [down] joist-fold-3
+; 2: score [down] joist-fold-3
 G0 X57.15 Y533.15
 G1 Z-0.9 F250
 G1 X57.15 Y75.95 F1000
 G0 Z3
 
-; 5: score [down] joist-fold-2
+; 3: score [down] joist-fold-2
 G0 X63.5 Y76.45
 G1 Z-0.9 F250
 G1 X63.5 Y533.65 F1000
 G0 Z3
 
-; 6: score [down] joist-fold-2
-G0 X546.1 Y533.15
-G1 Z-0.9 F250
-G1 X546.1 Y75.95 F1000
-G0 Z3
-
-; 7: score [down] joist-fold-1
-G0 X533.4 Y76.45
-G1 Z-0.9 F250
-G1 X533.4 Y533.65 F1000
-G0 Z3
-
-; 8: score [down] joist-fold-1
+; 4: score [down] joist-fold-1
 G0 X76.2 Y533.15
 G1 Z-0.9 F250
 G1 X76.2 Y75.95 F1000
 G0 Z3
 
-; 9: score [down] top-fold (Folded pocket 1)
+; 5: score [down] top-fold (Folded pocket 1)
 G0 X135.6 Y122.05
 G1 Z-0.9 F250
 G1 X135.6 Y265.85 F1000
 G0 Z3
 
-; 10: score [down] top-fold (Folded pocket 1)
+; 6: score [down] top-fold (Folded pocket 1)
 G0 X138.65 Y268.4
 G1 Z-0.9 F250
 G1 X387.75 Y268.4 F1000
 G0 Z3
 
-; 11: score [down] top-fold (Folded pocket 1)
+; 7: score [down] top-fold (Folded pocket 1)
 G0 X390.3 Y265.35
 G1 Z-0.9 F250
 G1 X390.3 Y121.55 F1000
 G0 Z3
 
-; 12: score [down] top-fold (Folded pocket 1)
+; 8: score [down] top-fold (Folded pocket 1)
 G0 X387.25 Y119
 G1 Z-0.9 F250
 G1 X138.15 Y119 F1000
 G0 Z3
 
-; 13: score [down] flange-fold (Folded pocket 1)
+; 9: score [down] flange-fold (Folded pocket 1)
 G0 X164.05 Y144.4
 G1 Z-0.9 F250
 G1 X362.35 Y144.4 F1000
 G0 Z3
 
-; 14: score [down] flange-fold (Folded pocket 1)
+; 10: score [down] flange-fold (Folded pocket 1)
 G0 X364.9 Y147.45
 G1 Z-0.9 F250
 G1 X364.9 Y240.45 F1000
 G0 Z3
 
-; 15: score [down] flange-fold (Folded pocket 1)
+; 11: score [down] flange-fold (Folded pocket 1)
 G0 X361.85 Y243
 G1 Z-0.9 F250
 G1 X163.55 Y243 F1000
 G0 Z3
 
-; 16: score [down] flange-fold (Folded pocket 1)
+; 12: score [down] flange-fold (Folded pocket 1)
 G0 X161 Y239.95
 G1 Z-0.9 F250
 G1 X161 Y146.95 F1000
 G0 Z3
 
-; 17: score [down] joist-fold-5
+; 13: score [down] joist-fold-5
 G0 X38.1 Y292.35
 G1 Z-0.9 F250
 G1 X38.1 Y317.75 F1000
+G0 Z3
+
+; 14: score [down] joist-fold-1
+G0 X533.4 Y533.15
+G1 Z-0.9 F250
+G1 X533.4 Y75.95 F1000
+G0 Z3
+
+; 15: score [down] joist-fold-2
+G0 X546.1 Y76.45
+G1 Z-0.9 F250
+G1 X546.1 Y533.65 F1000
+G0 Z3
+
+; 16: score [down] joist-fold-3
+G0 X552.45 Y533.15
+G1 Z-0.9 F250
+G1 X552.45 Y75.95 F1000
+G0 Z3
+
+; 17: score [down] joist-fold-4
+G0 X565.15 Y76.45
+G1 Z-0.9 F250
+G1 X565.15 Y533.65 F1000
 G0 Z3
 
 ; 18: score [down] joist-fold-5

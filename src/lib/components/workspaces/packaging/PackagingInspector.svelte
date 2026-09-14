@@ -1,4 +1,5 @@
 <script lang="ts">
+	import RotateControl from '$lib/components/editor/RotateControl.svelte';
 	import { display, parseDisplay } from '$lib/core/units.js';
 	import type { Side } from '$lib/core/design/types.js';
 	import type {
@@ -205,10 +206,14 @@
 					onchange={(e) => scalePocketGroupTo('h', e.currentTarget.value)}
 				/>
 			</label>
+			<RotateControl
+				onrotate={(degrees) => actions.rotatePocketGroup(pocketGroup.group.id, degrees)}
+			/>
 		</div>
 		<p class="help">
-			An imported drawing moves, scales, and is deleted as one. A new width or height scales every
-			opening in it together, keeping its proportions.
+			An imported drawing moves, scales, rotates, and is deleted as one. A new width or height
+			scales every opening in it together, keeping its proportions, and a rotation turns it about
+			the centre of its box.
 		</p>
 	</section>
 {:else if pocket}

@@ -1,6 +1,13 @@
 import { outlineInside } from '$lib/core/geometry/contour.js';
-import { boxAround, scaleBox, type ShapeBox } from '$lib/core/geometry/outline.js';
-import type { Point } from '$lib/core/geometry/primitives.js';
+import {
+	boxAround,
+	quarterTurns,
+	rotatePoints,
+	scaleBox,
+	type ShapeBox
+} from '$lib/core/geometry/outline.js';
+import { point, type Point } from '$lib/core/geometry/primitives.js';
+import { boxedOutline } from '$lib/core/import/outlines.js';
 import { round } from '$lib/core/units.js';
 import type { DesignState, EntityGroup } from '$lib/core/design/types.js';
 import type { Selection } from '$lib/core/design/workspace.js';
@@ -203,6 +210,56 @@ export function moveGroup(design: DesignState, id: string, x: number, y: number)
 	);
 }
 
+/** Shapes a quarter turn leaves drawable from their box, with width and height swapped. */
+const BOX_SYMMETRIC: ReadonlySet<FlatPartsEntity['shape']> = new Set([
+	'rectangle',
+	'rounded',
+	'ellipse',
+	'slot'
+]);
+
+/**
+ * Where each carried entity goes when its group turns `degrees`
+ * counter-clockwise about `pivot`. An outline turns vertex by vertex and is
+ * boxed again, so the group's box is read afresh from its members. A circle
+ * only moves its centre, and a rectangle, rounded rectangle, ellipse, or slot
+ * turned by quarter turns keeps its shape with its box turned, so a hole drawn
+ * through a part stays editable; any other shape becomes the outline it cut.
+ */
+export function groupRotationChanges(
+	carried: readonly FlatPartsEntity[],
+	pivot: Point,
+	degrees: number
+): EntityChange[] {
+	const turns = quarterTurns(degrees);
+	return carried.map((entity) => {
+		const circle = entity.shape === 'ellipse' && entity.w === entity.h;
+		if (circle || (turns !== null && BOX_SYMMETRIC.has(entity.shape))) {
+			const [centre] = rotatePoints(
+				[point(entity.x + entity.w / 2, entity.y + entity.h / 2)],
+				pivot,
+				degrees
+			);
+			const [w, h] =
+				turns !== null && turns % 2 === 1 ? [entity.h, entity.w] : [entity.w, entity.h];
+			return {
+				id: entity.id,
+				values: { x: round(centre!.x - w / 2), y: round(centre!.y - h / 2), w, h }
+			};
+		}
+		const { fractions, ...box } = boxedOutline(rotatePoints(entityOutline(entity), pivot, degrees));
+		return { id: entity.id, values: { ...box, shape: 'path', outline: fractions } };
+	});
+}
+
+/** Turns a group `degrees` counter-clockwise about the centre of its box. */
+export function rotateGroup(design: DesignState, id: string, degrees: number): DesignState {
+	const box = groupBox(design, id);
+	if (!box || !Number.isFinite(degrees) || degrees % 360 === 0) return design;
+	const pivot = point(box.x + box.w / 2, box.y + box.h / 2);
+	return updateEntities(design, groupRotationChanges(groupCarried(design, id), pivot, degrees));
+}
+
 /** Gives every part in a group the same number of holding tabs. */
 export function setGroupTabs(design: DesignState, id: string, tabCount: number): DesignState {
 	return updateEntities(
@@ -289,6 +346,9 @@ export function flatPartsActions(host: DocumentHost) {
 		},
 		moveGroup(id: string, x: number, y: number) {
 			host.update((design) => moveGroup(design, id, x, y));
+		},
+		rotateGroup(id: string, degrees: number) {
+			host.update((design) => rotateGroup(design, id, degrees));
 		},
 		setGroupTabs(id: string, tabCount: number) {
 			host.update((design) => setGroupTabs(design, id, tabCount));
