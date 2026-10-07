@@ -12,7 +12,16 @@ import { gotoEditor, readDraft } from './helpers.js';
  */
 
 type Draft = {
-	machineProfiles?: { id: string; name: string; cutDepth: number; passDepth: number }[];
+	machineProfiles?: {
+		id: string;
+		name: string;
+		cutDepth: number;
+		passDepth: number;
+		cutFeed: number;
+		knifePasses: number;
+		swivelDepth: number;
+		spindleSpeed: number;
+	}[];
 	sheets?: { id: string; name: string; machineProfileId: string }[];
 } & Record<string, unknown>;
 
@@ -126,4 +135,32 @@ test('sets a router profile’s depth per pass, and blocks export without one', 
 		'Router: depth per pass must be positive'
 	);
 	await expect(page.getByRole('button', { name: 'G-code' })).toBeDisabled();
+});
+
+test('sets feeds in display units and a knife’s passes and swivel', async ({ page }) => {
+	await gotoEditor(page);
+	await openMachinePanel(page);
+
+	// The document opens in inches, so a feed is typed in inches per minute.
+	await page.getByLabel(/Cut feed/).fill('40');
+	await expect
+		.poll(async () => (await draft(page)).machineProfiles?.[0]?.cutFeed)
+		.toBeCloseTo(1016, 3);
+
+	await page.getByLabel('Passes').fill('2');
+	await expect.poll(async () => (await draft(page)).machineProfiles?.[0]?.knifePasses).toBe(2);
+	await page.getByLabel(/Swivel depth/).fill('0');
+	await expect.poll(async () => (await draft(page)).machineProfiles?.[0]?.swivelDepth).toBe(0);
+
+	await page.getByLabel('Passes').fill('1.5');
+	await expect(page.locator('.status.error')).toContainText(
+		'Drag knife: passes must be a whole number, 1 or more'
+	);
+
+	// A router has no blade: its passes are measured, and it shows a spindle speed instead.
+	await page.getByLabel('Fabrication').selectOption('router');
+	await expect(page.getByLabel('Passes')).toHaveCount(0);
+	await expect(page.getByLabel(/Swivel depth/)).toHaveCount(0);
+	await page.getByLabel(/Spindle speed/).fill('16000');
+	await expect.poll(async () => (await draft(page)).machineProfiles?.[0]?.spindleSpeed).toBe(16000);
 });

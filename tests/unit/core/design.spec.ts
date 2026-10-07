@@ -184,6 +184,9 @@ describe('machine profiles in a saved document', () => {
 			saved({}, { machineProfiles: [{ id: 'partial', name: 'Partial', cutFeed: 'fast' }] })
 		);
 		expect(design.machineProfiles[0]?.cutFeed).toBe(800);
+		// A knife takes one pass and swivels unless the profile says otherwise.
+		expect(design.machineProfiles[0]?.knifePasses).toBe(1);
+		expect(design.machineProfiles[0]?.swivelDepth).toBe(0.3);
 	});
 });
 

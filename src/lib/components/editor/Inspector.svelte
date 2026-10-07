@@ -60,10 +60,18 @@
 		// If nothing changed, put the select back on the profile actually in use.
 		select.value = machine.id;
 	}
-	/** Writes a machine setting onto the profile the active sheet is cut on. */
-	function setMachine(key: keyof MachineSettings, raw: string): void {
+	/**
+	 * Writes a length, or a feed in length per minute, onto the profile the
+	 * active sheet is cut on, converting from the display units.
+	 */
+	function setMachine(key: NumericKey<MachineSettings>, raw: string): void {
 		const value = parseDisplay(raw, units);
-		if (Number.isFinite(value)) editor.setMachineSetting(key, value as never);
+		if (Number.isFinite(value)) editor.setMachineSetting(key, value);
+	}
+	/** Writes a count, speed, or angle, which has no units to convert. */
+	function setMachineCount(key: NumericKey<MachineSettings>, raw: string): void {
+		const value = Number(raw);
+		if (raw.trim() !== '' && Number.isFinite(value)) editor.setMachineSetting(key, value);
 	}
 </script>
 
@@ -236,24 +244,88 @@
 				/>
 			</label>
 			<label class="field">
-				Blade offset ({unitLabel})
+				Cut feed ({unitLabel}/min)
 				<input
 					type="number"
+					min="0"
 					step="0.001"
-					value={mm(machine.bladeOffset)}
-					oninput={(e) => setMachine('bladeOffset', e.currentTarget.value)}
+					value={mm(machine.cutFeed)}
+					oninput={(e) => setMachine('cutFeed', e.currentTarget.value)}
 				/>
 			</label>
 			<label class="field">
-				Overcut ({unitLabel})
+				Score feed ({unitLabel}/min)
 				<input
 					type="number"
+					min="0"
 					step="0.001"
-					value={mm(machine.overcut)}
-					oninput={(e) => setMachine('overcut', e.currentTarget.value)}
+					value={mm(machine.scoreFeed)}
+					oninput={(e) => setMachine('scoreFeed', e.currentTarget.value)}
 				/>
 			</label>
-			{#if machine.fabricationMode === 'router'}
+			<label class="field" title="How fast the tool moves down into the material">
+				Plunge feed ({unitLabel}/min)
+				<input
+					type="number"
+					min="0"
+					step="0.001"
+					value={mm(machine.plungeFeed)}
+					oninput={(e) => setMachine('plungeFeed', e.currentTarget.value)}
+				/>
+			</label>
+			{#if machine.fabricationMode === 'knife'}
+				<label class="field">
+					Blade offset ({unitLabel})
+					<input
+						type="number"
+						step="0.001"
+						value={mm(machine.bladeOffset)}
+						oninput={(e) => setMachine('bladeOffset', e.currentTarget.value)}
+					/>
+				</label>
+				<label class="field">
+					Overcut ({unitLabel})
+					<input
+						type="number"
+						step="0.001"
+						value={mm(machine.overcut)}
+						oninput={(e) => setMachine('overcut', e.currentTarget.value)}
+					/>
+				</label>
+				<label class="field" title="Cuts are split into this many equal passes; scores take one">
+					Passes
+					<input
+						type="number"
+						min="1"
+						step="1"
+						value={machine.knifePasses}
+						oninput={(e) => setMachineCount('knifePasses', e.currentTarget.value)}
+					/>
+				</label>
+				<label
+					class="field"
+					title="The blade turns to face each cut this deep before plunging; 0 plunges straight in"
+				>
+					Swivel depth ({unitLabel})
+					<input
+						type="number"
+						min="0"
+						step="0.001"
+						value={mm(machine.swivelDepth)}
+						oninput={(e) => setMachine('swivelDepth', e.currentTarget.value)}
+					/>
+				</label>
+				<label class="field" title="Largest step the blade turns at a corner or swivel">
+					Corner step (°)
+					<input
+						type="number"
+						min="1"
+						step="1"
+						value={machine.cornerStep}
+						oninput={(e) => setMachineCount('cornerStep', e.currentTarget.value)}
+					/>
+				</label>
+			{:else}
 				<label class="field">
 					Bit diameter ({unitLabel})
 					<input
@@ -270,6 +342,16 @@
 						step="0.001"
 						value={mm(machine.passDepth)}
 						oninput={(e) => setMachine('passDepth', e.currentTarget.value)}
+					/>
+				</label>
+				<label class="field">
+					Spindle speed (rpm)
+					<input
+						type="number"
+						min="0"
+						step="100"
+						value={machine.spindleSpeed}
+						oninput={(e) => setMachineCount('spindleSpeed', e.currentTarget.value)}
 					/>
 				</label>
 			{/if}

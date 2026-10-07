@@ -57,6 +57,31 @@ function profileErrors(profile: MachineProfile): string[] {
 		for (const [key, label] of ROUTER_POSITIVE) {
 			if (!positive(profile[key])) errors.push(named(label, 'positive'));
 		}
+	} else {
+		errors.push(...knifeErrors(profile, named));
+	}
+	return errors;
+}
+
+/**
+ * A knife's passes are counted, not measured, so a fraction is a typo. Its
+ * swivel only spares the board if the blade turns shallower than it then
+ * cuts, so a swivel as deep as the first pass is refused rather than run.
+ */
+function knifeErrors(
+	profile: MachineProfile,
+	named: (label: string, rule: string) => string
+): string[] {
+	const errors: string[] = [];
+	const passes = profile.knifePasses;
+	if (!(Number.isInteger(passes) && passes >= 1)) {
+		errors.push(named('passes', 'a whole number, 1 or more'));
+	}
+	const swivel = profile.swivelDepth;
+	if (!(Number.isFinite(swivel) && swivel >= 0)) {
+		errors.push(named('swivel depth', 'zero or more'));
+	} else if (Number.isInteger(passes) && passes >= 1 && swivel >= profile.cutDepth / passes) {
+		errors.push(named('swivel depth', 'shallower than one pass of the cut depth'));
 	}
 	return errors;
 }

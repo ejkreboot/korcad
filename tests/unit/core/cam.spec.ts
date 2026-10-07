@@ -48,14 +48,22 @@ describe('knife program', () => {
 		expect(moves.some((move) => move.b.z === -view(design).cutDepth)).toBe(true);
 	});
 
-	it('reports rapid travel that agrees with the routing plan', () => {
-		const program = gcodeFor(design);
-		const travelled = simulationMoves(program, view(design))
+	const travelled = (subject: DesignState) =>
+		simulationMoves(gcodeFor(subject), view(subject))
 			.filter((move) => move.type === 'travel')
 			.reduce((sum, move) => sum + Math.hypot(move.b.x - move.a.x, move.b.y - move.a.y), 0);
-		expect(
-			Math.abs(travelled - plannedToolpaths(allGeometry(design).paths, view(design)).travel)
-		).toBeLessThan(1e-8);
+
+	it('reports rapid travel that agrees with the routing plan', () => {
+		const unswivelled = withMachine(design, { swivelDepth: 0 });
+		const planned = plannedToolpaths(allGeometry(unswivelled).paths, view(unswivelled)).travel;
+		expect(Math.abs(travelled(unswivelled) - planned)).toBeLessThan(1e-8);
+	});
+
+	it('travels to each swivel within two blade offsets of the planned start', () => {
+		const plan = plannedToolpaths(allGeometry(design).paths, view(design));
+		// An approach lands the tip, not the axis, on the start: up to two offsets from it.
+		const slack = 2 * view(design).bladeOffset * plan.paths.length;
+		expect(Math.abs(travelled(design) - plan.travel)).toBeLessThanOrEqual(slack);
 	});
 });
 

@@ -58,6 +58,30 @@ describe('machine settings validation', () => {
 		]);
 	});
 
+	it('checks a knife takes a whole number of passes', () => {
+		for (const knifePasses of [0, 1.5, Number.NaN]) {
+			expect(
+				validateMachineSettings(partsOnOwnProfile({ fabricationMode: 'knife', knifePasses }))
+			).toEqual(['Parts router: passes must be a whole number, 1 or more']);
+		}
+		expect(validateMachineSettings(partsOnOwnProfile({ knifePasses: 0 }))).toEqual([]);
+	});
+
+	it('refuses a knife swivel as deep as its first pass, which would tear as before', () => {
+		const knife = (settings: Partial<MachineSettings>) =>
+			validateMachineSettings(partsOnOwnProfile({ fabricationMode: 'knife', ...settings }));
+		expect(knife({ cutDepth: 3, knifePasses: 2, swivelDepth: 1.4 })).toEqual([]);
+		expect(knife({ cutDepth: 3, knifePasses: 2, swivelDepth: 1.5 })).toEqual([
+			'Parts router: swivel depth must be shallower than one pass of the cut depth'
+		]);
+		expect(knife({ swivelDepth: -0.1 })).toEqual([
+			'Parts router: swivel depth must be zero or more'
+		]);
+		expect(knife({ swivelDepth: 0 })).toEqual([]);
+		// A router has no blade to swivel.
+		expect(validateMachineSettings(partsOnOwnProfile({ swivelDepth: 10 }))).toEqual([]);
+	});
+
 	it('ignores a profile no sheet is cut on', () => {
 		const design = partsOnOwnProfile({ safeZ: -2 });
 		const unused = {

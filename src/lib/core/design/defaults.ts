@@ -12,7 +12,8 @@ export const DEFAULT_MACHINE_PROFILE_ID = 'default';
 /**
  * The stock drag-knife setup. These values are part of the manufactured result,
  * so do not "clean them up" without updated fixtures. A 3 mm `passDepth` suits a
- * 6.35 mm bit in wood or board, a little under its radius.
+ * 6.35 mm bit in wood or board, a little under its radius. A 0.3 mm swivel
+ * grips a board's top liner without reaching far into it.
  */
 export function createDefaultMachineProfile(
 	id: string = DEFAULT_MACHINE_PROFILE_ID,
@@ -25,6 +26,8 @@ export function createDefaultMachineProfile(
 		safeZ: 3,
 		cutDepth: 3.2,
 		passDepth: 3,
+		knifePasses: 1,
+		swivelDepth: 0.3,
 		scoreDepth: 0.9,
 		scoreTool: 'knife',
 		cutFeed: 800,

@@ -22,6 +22,8 @@
         "safeZ": 3,
         "cutDepth": 3.2,
         "passDepth": 3,
+        "knifePasses": 1,
+        "swivelDepth": 0.3,
         "scoreDepth": 0.9,
         "scoreTool": "knife",
         "cutFeed": 800,

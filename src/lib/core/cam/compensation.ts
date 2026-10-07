@@ -124,23 +124,64 @@ export function compensatedPoints(path: DesignPath, settings: CompensationSettin
 			const next = unit(vertex, desired[i + 1]!);
 			const startAngle = Math.atan2(direction.y, direction.x);
 			const delta = normalizeAngle(Math.atan2(next.y, next.x) - startAngle);
-			const steps = Math.max(
-				1,
-				Math.ceil(Math.abs(delta) / ((settings.cornerStep * Math.PI) / 180))
-			);
-			for (let step = 1; step <= steps; step++) {
-				const angle = startAngle + (delta * step) / steps;
-				result.push(
-					point(vertex.x + Math.cos(angle) * offset, vertex.y + Math.sin(angle) * offset)
-				);
-			}
+			result.push(...swingPoints(vertex, startAngle, delta, offset, settings.cornerStep));
 			direction = next;
 		}
 	}
 	return result;
 }
 
+/**
+ * Axis positions that turn a trailing blade about its tip at `tip`, from
+ * heading `startAngle` through `delta` radians, in equal steps no larger than
+ * `cornerStep` degrees. The axis stays `offset` from the tip throughout, so the
+ * tip pivots in place. The position at `startAngle` itself is not included.
+ */
+export function swingPoints(
+	tip: Point,
+	startAngle: number,
+	delta: number,
+	offset: number,
+	cornerStep: number
+): Point[] {
+	const steps = Math.max(1, Math.ceil(Math.abs(delta) / ((cornerStep * Math.PI) / 180)));
+	const result: Point[] = [];
+	for (let step = 1; step <= steps; step++) {
+		const angle = startAngle + (delta * step) / steps;
+		result.push(point(tip.x + Math.cos(angle) * offset, tip.y + Math.sin(angle) * offset));
+	}
+	return result;
+}
+
 export type Operation = 'all' | 'cut' | 'crease';
+
+/** A creasing wheel has no trailing offset, so it runs up-folds on the nominal line. */
+function creasedOnLine(
+	path: DesignPath,
+	settings: CompensationSettings,
+	operation: Operation
+): boolean {
+	return (
+		path.type === 'score' &&
+		path.foldDirection === 'up' &&
+		settings.scoreTool === 'crease' &&
+		(operation === 'crease' || operation === 'all')
+	);
+}
+
+/**
+ * How far the tool's cutting point trails the axis on this path: the blade
+ * offset of a drag knife, and zero for a router bit or creasing wheel, which
+ * cut under the axis and have no heading to swivel.
+ */
+export function trailingOffset(
+	path: DesignPath,
+	settings: CompensationSettings,
+	operation: Operation = 'all'
+): number {
+	if (settings.fabricationMode === 'router' || creasedOnLine(path, settings, operation)) return 0;
+	return Math.max(0, path.bladeOffset ?? settings.bladeOffset);
+}
 
 /**
  * The programmed axis path for one design path. A creasing wheel has no
@@ -153,13 +194,6 @@ export function toolpathPoints(
 	operation: Operation = 'all'
 ): Point[] {
 	if (settings.fabricationMode === 'router') return routerCompensatedPoints(path, settings);
-	if (
-		path.type === 'score' &&
-		path.foldDirection === 'up' &&
-		settings.scoreTool === 'crease' &&
-		(operation === 'crease' || operation === 'all')
-	) {
-		return path.points.map((p) => point(p.x, p.y));
-	}
+	if (creasedOnLine(path, settings, operation)) return path.points.map((p) => point(p.x, p.y));
 	return compensatedPoints(path, settings);
 }

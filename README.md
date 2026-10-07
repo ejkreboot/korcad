@@ -65,7 +65,7 @@ UPDATE_GOLDEN=1 npm run test:unit
   SVG import that turns closed outlines into parts and holes by how they nest
 - manufacturability validation, including every tool a sheet uses
 - drag-knife and router compensation, machining stages, route planning, router
-  passes, and bridge tabs
+  and knife passes, blade swivel before each plunge, and bridge tabs
 - G-code export and a toolpath simulator that plays the emitted program, pass by
   pass, with tool-change stops
 - design-file and SVG export
@@ -144,7 +144,12 @@ quarter-inch grid. One drag is one undo step.
 
 Exported programs assume a 24 x 24 inch sheet, origin at the lower left, and Z
 zero at the material surface. The spindle stays off for knife and creasing work.
-A router cuts in equal passes no deeper than the tool's depth per pass. A
+A router cuts in equal passes no deeper than the tool's depth per pass; a drag
+knife cuts in the tool's number of passes and scores in one. Before a knife
+plunges, it lowers its blade to the swivel depth and turns it about the start of
+the cut to face along it, so it does not tear round at full depth (a swivel depth
+of 0 turns this off). Feeds, plunge feed, and spindle speed are set in the Tool
+panel, in the document's units per minute. A
 sheet gets a separate crease program only when something on it is creased from
 the back. Export is blocked while validation reports a problem, including an
 unsafe setting on any tool a sheet uses. A preview is not proof

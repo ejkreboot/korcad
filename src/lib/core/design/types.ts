@@ -113,6 +113,18 @@ export type MachineSettings = {
 	 * passes, none deeper than this; a knife always cuts in one.
 	 */
 	readonly passDepth: number;
+	/**
+	 * How many equal passes a knife takes to reach cut depth, each retracing the
+	 * kerf the last one left. A knife scores in one pass whatever this says.
+	 */
+	readonly knifePasses: number;
+	/**
+	 * How deep a drag knife's blade is lowered to swivel about the start of a cut
+	 * before plunging to depth, so it turns to face the cut while it is only
+	 * gripping the surface rather than tearing round through the full thickness.
+	 * Zero plunges straight in, unswivelled.
+	 */
+	readonly swivelDepth: number;
 	readonly scoreDepth: number;
 	readonly scoreTool: ScoreTool;
 	readonly cutFeed: number;

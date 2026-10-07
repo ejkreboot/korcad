@@ -203,7 +203,15 @@ Never mutate inputs along the way.
 - **Router passes.** A router cuts each path in the fewest equal passes no deeper than the
   profile's `passDepth` (`passDepths` in `core/cam/gcode.ts`). A closed contour plunges to its
   next pass where it started; an open path retracts and returns first. A pass above a tab's top
-  runs straight over it. A knife and every crease cut in one pass.
+  runs straight over it. A creasing wheel and every score cut in one pass.
+- **Knife passes and swivel.** A knife cuts in `knifePasses` equal passes (`knifePassDepths`),
+  a count rather than a depth so that existing knife profiles keep cutting in one. Before each
+  plunge whose start heading differs from the heading the blade was left on, `knifeMoves`
+  lowers it to `swivelDepth` with the tip on the start point and swings the axis about it
+  (`swingPoints`, shared with corner swings), then plunges. The blade is assumed to keep its
+  heading while lifted; the first cut of a program has none, so it turns a full circle.
+  Validation refuses a swivel as deep as one pass. The approach lands the tip, not the axis,
+  on the start, so emitted travel differs from the plan by up to two blade offsets per path.
 - **Export requires validation.** Validation returns structured diagnostics, and nothing is
   silently clamped or dropped. The simulator uses the same gate. `validateDocument` checks
   every profile a sheet uses (`core/design/validation.ts`) before asking each workspace, so
