@@ -122,9 +122,23 @@ export type MachineSettings = {
 	 * How deep a drag knife's blade is lowered to swivel about the start of a cut
 	 * before plunging to depth, so it turns to face the cut while it is only
 	 * gripping the surface rather than tearing round through the full thickness.
-	 * Zero plunges straight in, unswivelled.
+	 * Zero plunges straight in, unswivelled, which validation allows only for a
+	 * blade with no offset: a trailing blade must turn before it plunges.
 	 */
 	readonly swivelDepth: number;
+	/**
+	 * Turns a drag knife makes lifted to `swivelDepth` rather than at depth. The
+	 * blade never turns more than `liftAngle` degrees at depth within
+	 * `liftRadius × liftAngle` of cut, and never within two blade offsets: a
+	 * sharper corner, a turn too close behind another, or a curve tighter than
+	 * `liftRadius` is turned lifted, which on a tight curve rocks the blade up
+	 * and down like a slow oscillating knife. `liftAngle` is at most 90, so an
+	 * acute corner is always lifted. A swivel depth of zero never lifts, since a
+	 * blade turned out of the board does not turn, so validation refuses it for
+	 * a blade with an offset.
+	 */
+	readonly liftAngle: number;
+	readonly liftRadius: number;
 	readonly scoreDepth: number;
 	readonly scoreTool: ScoreTool;
 	readonly cutFeed: number;

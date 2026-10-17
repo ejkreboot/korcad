@@ -1,7 +1,14 @@
 import { round } from '$lib/core/units.js';
 import type { DesignPath, SheetView } from '$lib/core/design/types.js';
 import { normalizeAngle, point, type Point } from '$lib/core/geometry/primitives.js';
-import { swingPoints, trailingOffset, type Operation } from './compensation.js';
+import {
+	knifeToolpath,
+	liftWindow,
+	swingPoints,
+	trailingOffset,
+	type LiftedTurn,
+	type Operation
+} from './compensation.js';
 import { plannedToolpaths, type RoutingSettings } from './routing.js';
 import { bridgeTabbedContour, type ToolpathPoint } from './tabs.js';
 
@@ -103,6 +110,11 @@ export function pathsForOperation(
  *   from the heading the last cut left it on; at the start of a program that
  *   heading is unknown, so the first swivel is a full turn, which draws the
  *   tip in to the start point whichever way it faced.
+ * - A knife never turns more than `liftAngle` at depth within `liftWindow`
+ *   of cut: `liftRadius × liftAngle`, but never under two blade offsets. A
+ *   sharper corner, a second turn too close behind the first, or a turn on a
+ *   curve tighter than the window allows is swung with the blade raised to
+ *   swivel depth and then plunged back, with no change to the path in XY.
  * - A routed outline with holding tabs is cut at depth except over each tab,
  *   where the bit rises vertically to leave a bridge `tabHeight` above the
  *   underside of the board, then drops back vertically at plunge feed. A pass
@@ -132,6 +144,16 @@ export function generateGcode(
 		!router &&
 		settings.swivelDepth > 0 &&
 		geometry.some(({ path }) => trailingOffset(path, settings, operation) > 0);
+	// Lifting never moves the axis, so these are the routed points with the lifts marked.
+	const lifts = geometry.map(({ path, pts }) => {
+		if (router) return [];
+		const toolpath = knifeToolpath(path, settings, operation);
+		if (toolpath.points.length !== pts.length) {
+			throw new Error('Knife lifts do not match the planned toolpath');
+		}
+		return toolpath.lifts;
+	});
+	const lifted = swivelled && lifts.some((turns) => turns.length > 0);
 
 	const sheetName =
 		options.sheetLabel ??
@@ -155,6 +177,11 @@ export function generateGcode(
 		...(swivelled
 			? [
 					`; Blade swivels at Z-${round(settings.swivelDepth)} to face each cut before plunging; the first turns a full circle`
+				]
+			: []),
+		...(lifted
+			? [
+					`; Blade lifts to Z-${round(settings.swivelDepth)} to turn more than ${round(settings.liftAngle)} deg, and round curves tighter than ${round(liftedRadius(settings))} mm radius`
 				]
 			: []),
 		...(bridged
@@ -198,7 +225,7 @@ export function generateGcode(
 		} else {
 			const passes = path.type === 'cut' ? knifePassDepths(depth, settings.knifePasses) : [depth];
 			const trail = trailingOffset(path, settings, operation);
-			const knife = knifeMoves(pts, passes, feed, trail, heading, settings);
+			const knife = knifeMoves(pts, lifts[index]!, passes, feed, trail, heading, settings);
 			lines.push(...knife.lines);
 			heading = knife.heading;
 		}
@@ -256,6 +283,13 @@ function passMoves(
 	return lines;
 }
 
+/** The radius below which a knife turns lifted round a curve: its lift window spread over the lift angle. */
+function liftedRadius(
+	settings: Pick<SheetView, 'liftAngle' | 'liftRadius' | 'bladeOffset'>
+): number {
+	return liftWindow(settings, settings.bladeOffset) / ((settings.liftAngle * Math.PI) / 180);
+}
+
 /** Below this a change of heading is rounding in the output, not a turn to swivel. */
 const SWIVEL_TOLERANCE = Math.PI / 180;
 
@@ -288,6 +322,7 @@ function arrivingHeading(pts: readonly Point[]): number | null {
  */
 function knifeMoves(
 	pts: readonly Point[],
+	lifts: readonly LiftedTurn[],
 	passes: readonly number[],
 	feed: number,
 	trail: number,
@@ -331,9 +366,23 @@ function knifeMoves(
 			if (pass === 0 || !closed) lines.push(`G0 X${round(start.x)} Y${round(start.y)}`);
 			lines.push(`G1 Z-${round(depth)} F${round(settings.plungeFeed)}`);
 		}
-		for (const move of pts.slice(1)) {
+		// A lift no shallower than the pass would only swing at depth, as unlifted.
+		const liftDepth = Math.min(settings.swivelDepth, depth);
+		const liftEnds = new Map(
+			liftDepth < depth ? lifts.map((turn) => [turn.from, turn.to] as const) : []
+		);
+		let liftEnd: number | undefined;
+		pts.forEach((move, index) => {
+			if (index === 0) return;
 			lines.push(`G1 X${round(move.x)} Y${round(move.y)} F${round(feed)}`);
-		}
+			if (liftEnds.has(index)) {
+				lines.push(`G1 Z-${round(liftDepth)} F${round(settings.plungeFeed)} ; lift`);
+				liftEnd = liftEnds.get(index);
+			} else if (index === liftEnd) {
+				lines.push(`G1 Z-${round(depth)} F${round(settings.plungeFeed)} ; end of lift`);
+				liftEnd = undefined;
+			}
+		});
 		// A creasing wheel has no blade heading to carry into the next cut.
 		current = trail > 0 ? (arriving ?? current) : null;
 	});

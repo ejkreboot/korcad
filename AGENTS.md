@@ -210,7 +210,16 @@ Never mutate inputs along the way.
   lowers it to `swivelDepth` with the tip on the start point and swings the axis about it
   (`swingPoints`, shared with corner swings), then plunges. The blade is assumed to keep its
   heading while lifted; the first cut of a program has none, so it turns a full circle.
-  Validation refuses a swivel as deep as one pass. The approach lands the tip, not the axis,
+  Validation refuses a swivel as deep as one pass, and a swivel depth of zero on a blade with
+  an offset, which would plunge at an unknown heading and have nowhere to lift to.
+- **Knife lifts.** `compensatedToolpath` (`knifeToolpath` from outside) marks the corner swings
+  made lifted to `swivelDepth`: the blade may turn at most `liftAngle` at depth within
+  `liftWindow` of cut, `liftRadius × liftAngle` but never under two blade offsets, so a
+  sharper corner, a turn too close behind another, or a curve tighter than the window allows
+  is turned lifted, and a lifted turn resets the count. Validation caps `liftAngle` at 90°, so
+  every acute corner is lifted. XY is unchanged, so routing never sees
+  lifts; `generateGcode` recomputes them from the routed path and checks they line up with its
+  points. Emitted as `; lift` and `; end of lift`, never shallower than the pass. The approach lands the tip, not the axis,
   on the start, so emitted travel differs from the plan by up to two blade offsets per path.
 - **Export requires validation.** Validation returns structured diagnostics, and nothing is
   silently clamped or dropped. The simulator uses the same gate. `validateDocument` checks

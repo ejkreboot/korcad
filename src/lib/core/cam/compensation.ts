@@ -4,7 +4,15 @@ import type { DesignPath, MachineSettings } from '$lib/core/design/types.js';
 /** The machine settings compensation depends on. */
 export type CompensationSettings = Pick<
 	MachineSettings,
-	'fabricationMode' | 'bitWidth' | 'bladeOffset' | 'overcut' | 'cornerStep' | 'scoreTool'
+	| 'fabricationMode'
+	| 'bitWidth'
+	| 'bladeOffset'
+	| 'overcut'
+	| 'cornerStep'
+	| 'scoreTool'
+	| 'swivelDepth'
+	| 'liftAngle'
+	| 'liftRadius'
 >;
 
 /**
@@ -100,6 +108,33 @@ export function routerCompensatedPoints(path: DesignPath, settings: Compensation
  * start point so the final corner releases cleanly.
  */
 export function compensatedPoints(path: DesignPath, settings: CompensationSettings): Point[] {
+	return compensatedToolpath(path, settings).points;
+}
+
+/**
+ * A swing about a corner that the blade makes lifted to swivel depth: it
+ * reaches `points[from]` at depth, rises, swings through to `points[to]`, and
+ * plunges back.
+ */
+export type LiftedTurn = { readonly from: number; readonly to: number };
+
+/** A knife's programmed axis path, and the turns on it made lifted. */
+export type KnifeToolpath = {
+	readonly points: Point[];
+	readonly lifts: readonly LiftedTurn[];
+};
+
+/**
+ * `compensatedPoints`, marking the swings to make lifted. Lifting never moves
+ * the axis in XY, so the points are the same whatever the lift settings.
+ *
+ * The blade may turn at most `liftAngle` at depth within a window of cut,
+ * `liftWindow`. A curve of radius r turns the blade `window / r` over that
+ * window, which passes `liftAngle` exactly when r is under `window /
+ * liftAngle`; a single corner passes it when it is sharper than `liftAngle`.
+ * Turns made lifted do not count against the blade afterwards.
+ */
+function compensatedToolpath(path: DesignPath, settings: CompensationSettings): KnifeToolpath {
 	const desired: Point[] = path.points.map((p) => point(p.x, p.y));
 	if (path.closed) {
 		desired.push(point(desired[0]!.x, desired[0]!.y));
@@ -112,23 +147,58 @@ export function compensatedPoints(path: DesignPath, settings: CompensationSettin
 		}
 	}
 	const offset = path.bladeOffset ?? settings.bladeOffset;
-	if (offset <= 0 || desired.length < 2) return desired;
+	if (offset <= 0 || desired.length < 2) return { points: desired, lifts: [] };
 
+	const lifting = settings.swivelDepth > 0;
+	const limit = (settings.liftAngle * Math.PI) / 180;
+	const window = liftWindow(settings, offset);
+	const lifts: LiftedTurn[] = [];
+	// Turns made at depth inside the window: where along the cut, and how far.
+	let recent: { readonly at: number; readonly angle: number }[] = [];
+	let along = 0;
 	const result: Point[] = [];
 	let direction = unit(desired[0]!, desired[1]!);
 	result.push(point(desired[0]!.x + direction.x * offset, desired[0]!.y + direction.y * offset));
 	for (let i = 1; i < desired.length; i++) {
 		const vertex = desired[i]!;
+		along += Math.hypot(vertex.x - desired[i - 1]!.x, vertex.y - desired[i - 1]!.y);
 		result.push(point(vertex.x + direction.x * offset, vertex.y + direction.y * offset));
 		if (i < desired.length - 1) {
 			const next = unit(vertex, desired[i + 1]!);
 			const startAngle = Math.atan2(direction.y, direction.x);
 			const delta = normalizeAngle(Math.atan2(next.y, next.x) - startAngle);
+			const from = result.length - 1;
 			result.push(...swingPoints(vertex, startAngle, delta, offset, settings.cornerStep));
+			if (lifting) {
+				recent = recent.filter((turn) => along - turn.at < window);
+				const atDepth = recent.reduce((sum, turn) => sum + turn.angle, Math.abs(delta));
+				// The tolerance keeps a corner of exactly the lift angle at depth.
+				if (atDepth > limit + 1e-9) {
+					lifts.push({ from, to: result.length - 1 });
+					recent = [];
+				} else {
+					recent.push({ at: along, angle: Math.abs(delta) });
+				}
+			}
 			direction = next;
 		}
 	}
-	return result;
+	return { points: result, lifts };
+}
+
+/**
+ * The length of cut over which a knife's turns at depth add up against
+ * `liftAngle`: `liftRadius × liftAngle`, so curves tighter than `liftRadius`
+ * are turned lifted, but never less than two blade offsets. The blade swings
+ * about a tip that trails the axis by one offset, so two turns closer than
+ * twice that leave it no straight cut to settle on between them, and they
+ * count as one turn.
+ */
+export function liftWindow(
+	settings: Pick<CompensationSettings, 'liftAngle' | 'liftRadius'>,
+	offset: number
+): number {
+	return Math.max(settings.liftRadius * ((settings.liftAngle * Math.PI) / 180), 2 * offset);
 }
 
 /**
@@ -184,16 +254,27 @@ export function trailingOffset(
 }
 
 /**
- * The programmed axis path for one design path. A creasing wheel has no
- * trailing offset, so up-folds run on the nominal line when the crease
- * program is being generated.
+ * A knife or creasing wheel's programmed axis path, with the turns it makes
+ * lifted. A creasing wheel has no trailing offset, so up-folds run on the
+ * nominal line, unlifted, when the crease program is being generated.
  */
+export function knifeToolpath(
+	path: DesignPath,
+	settings: CompensationSettings,
+	operation: Operation = 'all'
+): KnifeToolpath {
+	if (creasedOnLine(path, settings, operation)) {
+		return { points: path.points.map((p) => point(p.x, p.y)), lifts: [] };
+	}
+	return compensatedToolpath(path, settings);
+}
+
+/** The programmed axis path for one design path. */
 export function toolpathPoints(
 	path: DesignPath,
 	settings: CompensationSettings,
 	operation: Operation = 'all'
 ): Point[] {
 	if (settings.fabricationMode === 'router') return routerCompensatedPoints(path, settings);
-	if (creasedOnLine(path, settings, operation)) return path.points.map((p) => point(p.x, p.y));
-	return compensatedPoints(path, settings);
+	return knifeToolpath(path, settings, operation).points;
 }

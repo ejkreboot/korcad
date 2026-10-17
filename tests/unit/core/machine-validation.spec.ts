@@ -77,7 +77,7 @@ describe('machine settings validation', () => {
 		expect(knife({ swivelDepth: -0.1 })).toEqual([
 			'Parts router: swivel depth must be zero or more'
 		]);
-		expect(knife({ swivelDepth: 0 })).toEqual([]);
+		expect(knife({ swivelDepth: 0, bladeOffset: 0 })).toEqual([]);
 		// A router has no blade to swivel.
 		expect(validateMachineSettings(partsOnOwnProfile({ swivelDepth: 10 }))).toEqual([]);
 	});

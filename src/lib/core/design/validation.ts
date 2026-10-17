@@ -67,6 +67,11 @@ function profileErrors(profile: MachineProfile): string[] {
  * A knife's passes are counted, not measured, so a fraction is a typo. Its
  * swivel only spares the board if the blade turns shallower than it then
  * cuts, so a swivel as deep as the first pass is refused rather than run.
+ * A blade that trails the axis needs some swivel depth: without it the blade
+ * plunges at whatever heading it was left on, unknown at the start of every
+ * program, and is dragged round at full depth, and it has nowhere to lift to
+ * at a sharp corner. Its lift angle is at most 90°, so an acute corner is always turned lifted,
+ * never torn round at depth.
  */
 function knifeErrors(
 	profile: MachineProfile,
@@ -80,8 +85,18 @@ function knifeErrors(
 	const swivel = profile.swivelDepth;
 	if (!(Number.isFinite(swivel) && swivel >= 0)) {
 		errors.push(named('swivel depth', 'zero or more'));
+	} else if (swivel === 0 && profile.bladeOffset > 0) {
+		errors.push(named('swivel depth', 'more than zero for a blade with an offset'));
 	} else if (Number.isInteger(passes) && passes >= 1 && swivel >= profile.cutDepth / passes) {
 		errors.push(named('swivel depth', 'shallower than one pass of the cut depth'));
+	}
+	const angle = profile.liftAngle;
+	if (!(Number.isFinite(angle) && angle > 0 && angle <= 90)) {
+		errors.push(named('lift angle', 'more than 0° and at most 90°'));
+	}
+	const radius = profile.liftRadius;
+	if (!(Number.isFinite(radius) && radius >= 0)) {
+		errors.push(named('lift radius', 'zero or more'));
 	}
 	return errors;
 }

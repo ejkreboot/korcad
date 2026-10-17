@@ -58,6 +58,8 @@ function machineProfiles(value: unknown): MachineProfile[] {
 				passDepth: number('passDepth', base.passDepth),
 				knifePasses: number('knifePasses', base.knifePasses),
 				swivelDepth: number('swivelDepth', base.swivelDepth),
+				liftAngle: number('liftAngle', base.liftAngle),
+				liftRadius: number('liftRadius', base.liftRadius),
 				scoreDepth: number('scoreDepth', base.scoreDepth),
 				scoreTool: entry.scoreTool === 'crease' ? 'crease' : base.scoreTool,
 				cutFeed: number('cutFeed', base.cutFeed),

@@ -20,6 +20,8 @@ type Draft = {
 		cutFeed: number;
 		knifePasses: number;
 		swivelDepth: number;
+		liftAngle: number;
+		liftRadius: number;
 		spindleSpeed: number;
 	}[];
 	sheets?: { id: string; name: string; machineProfileId: string }[];
@@ -137,7 +139,7 @@ test('sets a router profile’s depth per pass, and blocks export without one', 
 	await expect(page.getByRole('button', { name: 'G-code' })).toBeDisabled();
 });
 
-test('sets feeds in display units and a knife’s passes and swivel', async ({ page }) => {
+test('sets feeds in display units and a knife’s passes, swivel, and lifts', async ({ page }) => {
 	await gotoEditor(page);
 	await openMachinePanel(page);
 
@@ -150,7 +152,20 @@ test('sets feeds in display units and a knife’s passes and swivel', async ({ p
 	await page.getByLabel('Passes').fill('2');
 	await expect.poll(async () => (await draft(page)).machineProfiles?.[0]?.knifePasses).toBe(2);
 	await page.getByLabel(/Swivel depth/).fill('0');
-	await expect.poll(async () => (await draft(page)).machineProfiles?.[0]?.swivelDepth).toBe(0);
+	await expect(page.locator('.status.error')).toContainText(
+		'Drag knife: swivel depth must be more than zero for a blade with an offset'
+	);
+	await page.getByLabel(/Swivel depth/).fill('0.01');
+	await expect
+		.poll(async () => (await draft(page)).machineProfiles?.[0]?.swivelDepth)
+		.toBeCloseTo(0.254, 3);
+
+	await page.getByLabel(/Lift at turns over/).fill('45');
+	await expect.poll(async () => (await draft(page)).machineProfiles?.[0]?.liftAngle).toBe(45);
+	await page.getByLabel(/Lift on radii under/).fill('0.25');
+	await expect
+		.poll(async () => (await draft(page)).machineProfiles?.[0]?.liftRadius)
+		.toBeCloseTo(6.35, 3);
 
 	await page.getByLabel('Passes').fill('1.5');
 	await expect(page.locator('.status.error')).toContainText(
@@ -161,6 +176,7 @@ test('sets feeds in display units and a knife’s passes and swivel', async ({ p
 	await page.getByLabel('Fabrication').selectOption('router');
 	await expect(page.getByLabel('Passes')).toHaveCount(0);
 	await expect(page.getByLabel(/Swivel depth/)).toHaveCount(0);
+	await expect(page.getByLabel(/Lift at turns over/)).toHaveCount(0);
 	await page.getByLabel(/Spindle speed/).fill('16000');
 	await expect.poll(async () => (await draft(page)).machineProfiles?.[0]?.spindleSpeed).toBe(16000);
 });

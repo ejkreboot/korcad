@@ -304,7 +304,7 @@
 				</label>
 				<label
 					class="field"
-					title="The blade turns to face each cut this deep before plunging; 0 plunges straight in"
+					title="The blade turns to face each cut this deep before plunging, and lifts to this depth at sharp turns; 0 only for a blade with no offset"
 				>
 					Swivel depth ({unitLabel})
 					<input
@@ -313,6 +313,33 @@
 						step="0.001"
 						value={mm(machine.swivelDepth)}
 						oninput={(e) => setMachine('swivelDepth', e.currentTarget.value)}
+					/>
+				</label>
+				<label
+					class="field"
+					title="Sharper turns, and turns closer together than twice the blade offset, are made with the blade raised to swivel depth; at most 90, so acute corners always lift"
+				>
+					Lift at turns over (°)
+					<input
+						type="number"
+						min="1"
+						max="90"
+						step="1"
+						value={machine.liftAngle}
+						oninput={(e) => setMachineCount('liftAngle', e.currentTarget.value)}
+					/>
+				</label>
+				<label
+					class="field"
+					title="Tighter curves are cut rocking the blade up to turn, like an oscillating knife; 0 follows any curve at depth"
+				>
+					Lift on radii under ({unitLabel})
+					<input
+						type="number"
+						min="0"
+						step="0.001"
+						value={mm(machine.liftRadius)}
+						oninput={(e) => setMachine('liftRadius', e.currentTarget.value)}
 					/>
 				</label>
 				<label class="field" title="Largest step the blade turns at a corner or swivel">
