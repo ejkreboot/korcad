@@ -54,7 +54,7 @@ function machineProfiles(value: unknown): MachineProfile[] {
 				name: typeof entry.name === 'string' && entry.name ? entry.name : id,
 				fabricationMode: entry.fabricationMode === 'router' ? 'router' : base.fabricationMode,
 				safeZ: number('safeZ', base.safeZ),
-				cutDepth: number('cutDepth', base.cutDepth),
+				cutPast: number('cutPast', base.cutPast),
 				passDepth: number('passDepth', base.passDepth),
 				knifePasses: number('knifePasses', base.knifePasses),
 				swivelDepth: number('swivelDepth', base.swivelDepth),

@@ -160,7 +160,7 @@ describe('lifted turns in G-code', () => {
 	});
 
 	it('returns each pass to its own depth after a lift', () => {
-		const text = program({ knifePasses: 2, cutDepth: 3.2 });
+		const text = program({ knifePasses: 2, cutPast: 0.2 });
 		expect(text.split('\n').filter((line) => line.endsWith('; end of lift'))).toEqual([
 			'G1 Z-1.6 F250 ; end of lift',
 			'G1 Z-3.2 F250 ; end of lift'

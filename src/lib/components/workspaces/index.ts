@@ -48,6 +48,12 @@ export type CanvasController = {
 	draftPoint(stock: Point): Point;
 	/** Turns a finished draft rectangle into an entity of the armed tool. */
 	finishDraft(rect: { x: number; y: number; w: number; h: number }): void;
+	/**
+	 * Turns a closed outline, its vertices in drawing order and the first not
+	 * repeated at the end, into an entity of the armed tool. Present when one
+	 * of the workspace's presets is drawn as an outline.
+	 */
+	finishOutline?(points: readonly Point[]): void;
 };
 
 /** A group being dragged across the assembly's drag plane. */

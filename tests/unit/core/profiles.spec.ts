@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { machineProfileFor } from '$lib/core/design/machine.js';
+import { machineProfileFor, sheetView } from '$lib/core/design/machine.js';
 import {
 	addProfile,
 	addStockProfile,
@@ -79,12 +79,19 @@ describe('machine profiles', () => {
 		const base = supportDesign();
 		const tuned = {
 			...base,
-			machineProfiles: base.machineProfiles.map((profile) => ({ ...profile, cutDepth: 2.2 }))
+			machineProfiles: base.machineProfiles.map((profile) => ({ ...profile, cutPast: 0.5 }))
 		};
 		const design = duplicateProfile(tuned, 'parts', 'copy');
 		const copy = machineProfileFor(design, 'parts');
 		expect(copy).toEqual({ ...tuned.machineProfiles[0], id: 'copy', name: 'Drag knife copy' });
 		expect(machineProfileFor(design, 'deck').id).toBe('default');
+	});
+
+	it("cut through the material and on past it by the tool's cut past, whatever the material", () => {
+		const design = supportDesign();
+		expect(sheetView(design, 'deck').cutDepth).toBe(3.2);
+		const thin = { ...design, stock: { ...design.stock, material: 1.5 } };
+		expect(sheetView(thin, 'deck').cutDepth).toBeCloseTo(1.7, 12);
 	});
 
 	it('assign an existing profile, and ignore one that does not exist', () => {

@@ -15,7 +15,7 @@ type Draft = {
 	machineProfiles?: {
 		id: string;
 		name: string;
-		cutDepth: number;
+		cutPast: number;
 		passDepth: number;
 		cutFeed: number;
 		knifePasses: number;
@@ -47,7 +47,7 @@ test('names the profile the active sheet is cut on', async ({ page }) => {
 	expect(saved.machineProfiles).toHaveLength(1);
 	expect(saved.sheets?.[0]?.machineProfileId).toBe(saved.machineProfiles?.[0]?.id);
 	// The settings left the document when they moved into the profile.
-	for (const key of ['cutDepth', 'fabricationMode', 'bladeOffset', 'spindleSpeed']) {
+	for (const key of ['cutPast', 'fabricationMode', 'bladeOffset', 'spindleSpeed']) {
 		expect(saved, key).not.toHaveProperty(key);
 	}
 });
@@ -56,11 +56,11 @@ test('writes a machine setting to the profile, not the document', async ({ page 
 	await gotoEditor(page);
 	await openMachinePanel(page);
 
-	await page.getByLabel(/^Cut depth/).fill('0.2');
+	await page.getByLabel(/^Cut past material/).fill('0.01');
 	await expect
-		.poll(async () => (await draft(page)).machineProfiles?.[0]?.cutDepth)
-		.toBeCloseTo(5.08, 2);
-	expect(await draft(page)).not.toHaveProperty('cutDepth');
+		.poll(async () => (await draft(page)).machineProfiles?.[0]?.cutPast)
+		.toBeCloseTo(0.254, 3);
+	expect(await draft(page)).not.toHaveProperty('cutPast');
 });
 
 test('renames a profile without disturbing the sheets that use it', async ({ page }) => {

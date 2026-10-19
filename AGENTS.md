@@ -15,8 +15,9 @@ Each sheet is drawn in a **workspace** and cut with a named **tool** (drag knife
   walls, joists, trays and risers, fold allowance, and a 3D assembly preview. It stays a
   first-class workspace.
 
-Both workspaces share compensation, holding tabs, SVG and design-file export, G-code export, and
-toolpath simulation. Stock is a fixed 24 in square sheet with its origin at the lower left.
+Both workspaces share compensation, holding tabs, SVG and design-file export, G-code export,
+toolpath simulation, and running a sheet's programs on a GRBL machine over USB, with a stop for
+each tool change. Stock is a fixed 24 in square sheet with its origin at the lower left.
 
 ## Preferences
 
@@ -61,11 +62,15 @@ src/lib/
     geometry/    primitives, outline (shapes, holding-tab splitting), contour (distance, containment)
     design/      types, workspace (WorkspaceDataMap), machine (SheetView), profiles, defaults,
                  normalize, validation (tool settings)
-    cam/         stages, compensation, routing, tabs (router bridges), gcode, simulation
+    cam/         stages, compensation, routing, tabs (router bridges), gcode, simulation,
+                 surface (the table's surface map)
     export/      svg, design-file (envelope)
     import/      svg (a DOM-free SVG reader: outlines in mm, Y up), outlines (specks,
                  duplicates, winding, nesting depth)
     assembly/    model.ts: generic plates, walls, and draggable groups
+    grbl/        protocol (GRBL 1.1 lines in and out, streamable programs), probing (settings,
+                 order, readings), controller (the command queue, guards, moves, probes,
+                 streaming, and stop), job (a sheet's programs, when Z0 is set again)
   features/
     workspaces.ts  registry, plus reconcileDocument and validateDocument
     document.ts    createDefaultDesign, normalizeState, parseDesign
@@ -74,11 +79,15 @@ src/lib/
                    import (SVG outlines to deck openings)
     flat-parts/    types, view, actions, geometry, validation, manipulation, presets,
                    import (SVG outlines to parts and holes by nesting depth)
-  editor/        state.svelte.ts (sole owner of the document), tools, history, viewport, persistence
+  editor/        state.svelte.ts (sole owner of the document), tools, outline-draft, history,
+                 viewport, persistence,
+                 serial (the Web Serial link), machine-link.svelte.ts (the controller and job for
+                 the UI), programs (a sheet's programs, shared by export and Run)
   viewer/        assembly-scene.ts: the only module that imports Three.js
   components/
     editor/      the shell: Canvas, Inspector, Toolbar, SheetTabs, WorkspaceSwitcher,
-                 AssemblyViewer, SimulationDialog, CollapsiblePanel
+                 AssemblyViewer, SimulationDialog, CollapsiblePanel, MachinePanel,
+                 SurfaceMapPanel, RunPanel
     workspaces/  index.ts (UI registry), packaging/, flat-parts/: inspectors, canvas layers, controllers
     icons/       vendored Material Symbols path data, Icon.svelte, and MaskIcon.svelte
 routes/+page.svelte  the editor page
@@ -115,13 +124,17 @@ type DesignState = {
   `features/document.ts`.
 - **Machine settings belong to profiles, and each sheet picks a profile.** Anything that reads a
   machine setting takes a `SheetView` (`sheetView(design, sheetId)`), not a `DesignState`.
-  Programs are emitted one sheet at a time.
+  Programs are emitted one sheet at a time. Every cut goes through, so no profile stores a cut
+  depth: `SheetView.cutDepth` is the material's thickness plus the profile's `cutPast` (into
+  the mat or spoilboard), and a change of material keeps cuts through. `overcut` is unrelated:
+  how far a closed cut runs on past its start (Closing overcut in the UI).
 - **Packaging data covers the whole document.** The deck sheet is `deckSheetId` (never assume
   it is `'deck'`). Read it through `packagingView` or `packagingSheetView`, and write it with
   `withPackaging`. Every packaging sheet must use the same fabrication mode.
 - **Flat Parts data belongs to one sheet**, at `workspaces.flatParts.sheets[sheetId].entities`: parts
   (`profile`, cut outside) and holes (`hole`, cut inside). A `path` entity stores its `outline` as
-  fractions of its box, so moving and resizing work as for any shape. `holesInside` finds a
+  fractions of its box, so moving and resizing work as for any shape. A path comes from an import
+  or from the Freeform outline preset (`createEntityFromOutline`, wound counter-clockwise). `holesInside` finds a
   part's holes by containment; dragging a part and `scaleEntity` (uniform, about the part's
   lower-left corner) carry them.
 - **Workspace imports.** A `Workspace` lists `imports`, each naming the drawing tool whose menu
@@ -144,13 +157,17 @@ type DesignState = {
   each member (`rotatePoints`, then `boxedOutline`); no angle is stored. Outlines become `path` /
   `profile`, except that a carried circle only moves, and a box-drawn hole (rectangle, rounded,
   ellipse, slot) keeps its shape on quarter turns. `rotateEntity` / `rotatePocket` do the same for
-  one imported outline (`path` / `profile` only; drawn shapes keep their parameters), a part
+  one outline (`path` / `profile` only; box-drawn shapes keep their parameters), a part
   carrying its holes. The shell reaches them through `Workspace.canRotate` / `rotateSelection`: the
   toolbar's rotate buttons turn the selection 15° a press and are disabled when it cannot turn.
   There is deliberately no typed angle, since a baked-in turn has no original to be relative to.
   Normalization drops memberless groups and dangling `groupId`s.
 - Selection is one generic `{ kind, id }` slot in `editor/state.svelte.ts`, and snap lives in
   `tools.svelte.ts`. Neither is saved. Drafts are full design files.
+- The table's surface map (`SurfaceMap`, `core/cam/surface.ts`) belongs to the CNC, not the
+  design. The editor holds it beside the selection, outside the document and undo, and the
+  page saves it under its own key (`SURFACE_MAP_KEY`), so a shared design never carries one
+  table's shape to another.
 - A support's height is relational: it names an anchor (`box-floor`, `deck-top`,
   `deck-underside`, or `support-top`) plus an offset, and its height is `fixed` or `span`.
   `resolveSupportHeights` runs in packaging's `reconcile` on every mutation and on import. A drop
@@ -159,6 +176,12 @@ type DesignState = {
   allowing 0.5 mm of assembly slop.
 
 ### Editor state
+
+A `ToolPreset` is dragged as a box unless its `gesture` is `outline`: then the canvas clicks
+out vertices (`editor/outline-draft.ts`, held in `tools.outline`, cleared whenever the tool
+changes) and hands the closed outline to `CanvasController.finishOutline`. Nothing closes an
+outline automatically; a click within `CLOSE_RADIUS_PX` of the first vertex closes it, and
+Delete or Backspace takes back the last vertex.
 
 Every change goes through `editor.update` (one undo step) or `editor.preview` (mid-gesture), and
 then `editor.commit()`. That is where each workspace's `reconcile` runs. Workspace verbs are pure
@@ -231,6 +254,54 @@ Never mutate inputs along the way.
   through `gcodeOptions().headerNotes`. A sheet exports a crease program and a cut program only
   when something on it is creased from the back (`programOperations`); otherwise it exports
   one cut program.
+- **Surface map.** When it is on, `applySurfaceMap` bends the finished program to follow the
+  table, as the last step before export and simulation; off, it returns the program unchanged,
+  so goldens never see it. Every Z at or below zero is raised by the table's height there
+  relative to X0 Y0 (bilinear over an operator-entered grid standing `inset` in from the sheet's
+  edges, ½ in by default so the far corners stay off the limit switches; beyond the grid,
+  X0 Y0 included, the nearest edge's height holds), and cuts are
+  split into moves of at most `SURFACE_STEP`. Safe Z and travel are untouched. It relies on the
+  generator moving in XY or Z, never both, and never rapiding in the work, and throws on
+  anything else. The editor's diagnostics add `surfaceMapErrors`: a spread over
+  `MAX_SURFACE_SPREAD`, likelier a typo than a table, or a table reaching any tool's safe Z.
+- **Machine link.** The Machine panel drives a GRBL 1.1 controller over Web Serial
+  (Chromium only) to jog it, measure the table, and run jobs (below). Outside a job,
+  `createGrblController` sends one line at a time and waits for its `ok`, polls status with `?`, and works out the work position as MPos less the last WCO.
+  Before any move, reading, or zero it waits for every line to be answered and a fresh report
+  that is not mid-jog (`current`), so it never acts on a position from before the last nudge.
+  Nothing goes to a grid point until the operator confirms the origin, and a reset or an alarm
+  that may lose the position clears that. A typed Go to (`goTo`) needs no confirmed origin,
+  since it is how the tool is brought near one. A move rises to travel height before crossing,
+  never down to it, at the operator's pick of `JOG_SPEEDS` (GRBL caps it at `$110`–`$112`); Z
+  always jogs at `JOG_FEED_Z`, and no more than `MAX_Z_JOG` at a time. A probe seeks the plate fast (`PROBE_SEEK_FEED`), backs off
+  `PROBE_BACKOFF` (waiting out the jog, since GRBL refuses G-code mid-jog), and touches again
+  slowly (`PROBE_TOUCH_FEED`); the slow touch is the reading, and touches more than
+  `PROBE_AGREEMENT` apart are refused after rising. Both passes go no lower than
+  `PROBE_MARGIN` under the plate's top, so a lost clip ends in GRBL's alarm 5 rather than deep
+  in the table. The link keeps the points a `probeEach` run did not read (`unread`), across a
+  disconnect, and the panel offers to finish them while `pointsToResume` finds the grid
+  unchanged. Stop cancels a jog, holds, and
+  resets once at rest; Home and Unlock reset first, because answers cannot be paired with
+  lines after an alarm. The always-visible Stop button lives in the page shell, so no panel
+  folds it away. Real-time bytes such as jog cancel (0x85) are written one byte per
+  character; UTF-8 would split them.
+- **Running jobs.** The Run panel streams the active sheet's programs to GRBL: `sheetPrograms`
+  (`editor/programs.ts`), the text G-code export writes, surface map applied, captured when the
+  job is prepared. Each program stops first for setup: the operator loads the tool it names
+  (`programTool`) and sets Z0 on the work by touching off or with the plate (`probeZero`,
+  which searches no more than `PROBE_Z_SEARCH` below the tool, since a new tool's length is
+  unknown). Z0 is required before the first program and whenever the tool changes
+  (`needsZero`); otherwise, or if the operator says it holds, the program may start. With the
+  map on, Z0 set anywhere is worked out from it (`workTopAt`), so it stays the work's top at
+  X0 Y0. `streamLines` drops comments, refuses lines GRBL could not take, and requires the
+  closing M2, which GRBL answers only once motion ends. `run` counts characters, keeping the
+  lines sent and unanswered within `RX_BUFFER_SIZE`. A refused line holds and resets the
+  machine, since GRBL would carry on without it; that, an alarm, Stop, or a lost link fails
+  the job, and a failed job is started over, never resumed partway. Pause is a feed hold, so
+  the spindle keeps turning; feed and spindle overrides are GRBL's real-time bytes. Starting
+  a spindle program asks first, a screen wake lock is held while a program streams, and
+  leaving the page mid-program asks first. Before a machine is connected, the panel shows the
+  sheet's programs and every control, switched off, so the flow can be reviewed.
 - **The simulator parses the emitted program**, not the planned paths. The move type comes from
   the `; N: cut` and `; N: score [up|down]` comments, and a bare `G1` counts as travel. Playback
   is the pure function `simulationFrame(moves, seconds)`. It stops at the end of the crease pass
@@ -272,7 +343,10 @@ Next directions:
   24 in text.
 - Ramped or helical plunges for routers, a choice of climb or conventional milling, and a
   finishing pass.
-- Postprocessor profiles (GRBL, LinuxCNC, Mach3), including optional G2/G3 arc output.
+- Postprocessor profiles (GRBL, LinuxCNC, Mach3), including optional G2/G3 arc output. Running
+  jobs assumes GRBL 1.1 and its 128-byte receive buffer.
+- Jobs: restart a failed program from a chosen line, with a safe approach to it. Jog from a
+  physical gamepad (the Gamepad API).
 - Route order by part: cut a part's holes, then release it, then move to the next, rather than
   every interior cut on the sheet first. A prototype measured a further 15–20% less travel on
   multi-part sheets. `sequenceStops` would take it as a precedence constraint in place of stage

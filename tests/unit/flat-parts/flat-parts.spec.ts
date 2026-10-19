@@ -30,7 +30,10 @@ import {
 	MIN_FLAT_PARTS_DRAG,
 	resizeEntityBox
 } from '$lib/features/flat-parts/manipulation.js';
-import { createEntityFromPreset } from '$lib/features/flat-parts/presets.js';
+import {
+	createEntityFromOutline,
+	createEntityFromPreset
+} from '$lib/features/flat-parts/presets.js';
 import type { FlatPartsEntity } from '$lib/features/flat-parts/types.js';
 import { validateFlatParts } from '$lib/features/flat-parts/validation.js';
 import { flatPartsSheetView } from '$lib/features/flat-parts/view.js';
@@ -255,7 +258,8 @@ describe('flat parts validation', () => {
 		expect(validateFlatParts(stock({ tabHeight: 0 }))).toContain(
 			'Bracket: holding tabs must be thinner than the board'
 		);
-		expect(validateFlatParts(withMachine(stock({ tabHeight: 1 }), { cutDepth: 1.5 }))).toContain(
+		// Only a cut stopping short of the underside could; validation refuses that tool anyway.
+		expect(validateFlatParts(withMachine(stock({ tabHeight: 1 }), { cutPast: -1.5 }))).toContain(
 			'Bracket: the cut depth stops above the holding tabs'
 		);
 		expect(validateFlatParts(stock({ tabWidth: 0 }))).toContain(
@@ -428,6 +432,49 @@ describe('flat parts actions', () => {
 			name: 'Slot 1',
 			tabCount: 0
 		});
+	});
+
+	it('build a freeform part from a clicked outline, wound counter-clockwise', () => {
+		// An L, clicked clockwise.
+		const clicked = [
+			{ x: 100, y: 100 },
+			{ x: 100, y: 160 },
+			{ x: 130, y: 160 },
+			{ x: 130, y: 130 },
+			{ x: 160, y: 130 },
+			{ x: 160, y: 100 }
+		];
+		const part = createEntityFromOutline('profile', clicked, 'a', 2)!;
+		expect(part).toMatchObject({
+			name: 'Part 2',
+			kind: 'profile',
+			shape: 'path',
+			x: 100,
+			y: 100,
+			w: 60,
+			h: 60,
+			tabCount: 4
+		});
+		expect(entityOutline(part)).toEqual([...clicked].reverse());
+		expect(createEntityFromOutline('hole', clicked, 'b', 1)).toMatchObject({
+			name: 'Hole 1',
+			tabCount: 0
+		});
+	});
+
+	it('refuse a clicked outline too small or too flat to enclose anything', () => {
+		const sliver = [
+			{ x: 0, y: 0 },
+			{ x: 50, y: 0 },
+			{ x: 50, y: 4 }
+		];
+		const line = [
+			{ x: 0, y: 0 },
+			{ x: 50, y: 50 },
+			{ x: 100, y: 100 }
+		];
+		expect(createEntityFromOutline('profile', sliver, 'a', 1)).toBeNull();
+		expect(createEntityFromOutline('profile', line, 'a', 1)).toBeNull();
 	});
 });
 

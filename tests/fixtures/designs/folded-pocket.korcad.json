@@ -20,7 +20,7 @@
         "name": "Drag knife",
         "fabricationMode": "knife",
         "safeZ": 3,
-        "cutDepth": 3.2,
+        "cutPast": 0.2,
         "passDepth": 3,
         "knifePasses": 1,
         "swivelDepth": 0.3,

@@ -80,6 +80,51 @@ test('a part with a hole exports one cut program, the hole first', async ({ page
 	expect(program).not.toContain('crease');
 });
 
+test('a freeform part is clicked out a corner at a time and closes on its first', async ({
+	page
+}) => {
+	await gotoEditor(page);
+	await addFlatPartsSheet(page);
+	await page.getByRole('button', { name: 'Part', exact: true }).click();
+	await page.getByRole('menuitem', { name: /Freeform outline/ }).click();
+
+	const box = (await page.locator('svg.drawing').boundingBox())!;
+	const at = (x: number, y: number): [number, number] => [
+		box.x + box.width * x,
+		box.y + box.height * y
+	];
+	for (const corner of [at(0.3, 0.3), at(0.6, 0.3), at(0.6, 0.6), at(0.45, 0.7), at(0.3, 0.6)]) {
+		await page.mouse.click(...corner);
+	}
+	await expect(page.locator('.outline-vertex')).toHaveCount(5);
+	// Deleting takes back the last corner rather than anything selected.
+	await page.keyboard.press('Backspace');
+	await expect(page.locator('.outline-vertex')).toHaveCount(4);
+
+	// A few pixels off the first corner is close enough to close on it.
+	const [x, y] = at(0.3, 0.3);
+	await page.mouse.move(x + 4, y - 3);
+	await expect(page.locator('.outline-vertex.first.closing')).toHaveCount(1);
+	await page.mouse.click(x + 4, y - 3);
+
+	await expect(page.getByRole('heading', { name: 'Part 1' })).toBeVisible();
+	await expect(page.getByText('Part · Freeform outline')).toBeVisible();
+	await expect(page.locator('.outline-vertex')).toHaveCount(0);
+	await expect(page.locator('.status.ok')).toContainText('geometry valid');
+
+	const design = (await readDraft(page))!;
+	const flatParts = (
+		design.workspaces as {
+			flatParts: {
+				sheets: Record<string, { entities: { shape: string; outline: unknown[] }[] }>;
+			};
+		}
+	).flatParts;
+	const [part] = Object.values(flatParts.sheets)[0]!.entities;
+	expect(part!.shape).toBe('path');
+	expect(part!.outline).toHaveLength(4);
+});
+
 test('moving a part carries its hole, as one undo step', async ({ page }) => {
 	await gotoEditor(page);
 	await addFlatPartsSheet(page);
@@ -158,7 +203,7 @@ test('an imported SVG becomes a tabbed part with its holes', async ({ page }) =>
 	).setFiles({ name: 'plate.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(drawing) });
 
 	await expect(page.getByRole('heading', { name: 'Part 1' })).toBeVisible();
-	await expect(page.getByText('Part · Imported outline')).toBeVisible();
+	await expect(page.getByText('Part · Freeform outline')).toBeVisible();
 	await expect(page.getByLabel('Shape')).toHaveCount(0);
 	await expect(page.getByLabel('Holding tabs')).toHaveValue('4');
 	await expect(page.locator('.status.ok')).toContainText(

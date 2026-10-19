@@ -21,7 +21,7 @@
 		item.kind === 'profile' ? PROFILE_PRESETS : HOLE_PRESETS;
 	const shapeLabel = (item: FlatPartsEntity) =>
 		item.shape === 'path'
-			? 'Imported outline'
+			? 'Freeform outline'
 			: (shapes(item).find((preset) => preset.id === item.shape)?.label ?? item.shape);
 
 	function setLength(key: 'x' | 'y' | 'w' | 'h' | 'cornerRadius', raw: string): void {
@@ -182,7 +182,7 @@
 					oninput={(e) => actions.updateEntity(entity.id, { name: e.currentTarget.value })}
 				/>
 			</label>
-			<!-- An imported outline has no parameters to redraw it from, so it keeps its shape. -->
+			<!-- A freeform outline has no parameters to redraw it from, so it keeps its shape. -->
 			{#if entity.shape !== 'path'}
 				<label class="field wide">
 					Shape
@@ -191,7 +191,7 @@
 						onchange={(e) =>
 							actions.updateEntity(entity.id, { shape: e.currentTarget.value as FlatPartsShape })}
 					>
-						{#each shapes(entity) as preset (preset.id)}
+						{#each shapes(entity).filter((preset) => preset.gesture !== 'outline') as preset (preset.id)}
 							<option value={preset.id}>{preset.label}</option>
 						{/each}
 					</select>

@@ -67,6 +67,11 @@ UPDATE_GOLDEN=1 npm run test:unit
 - drag-knife and router compensation, machining stages, route planning, router
   and knife passes, blade swivel before each plunge, knife lifts at sharp corners
   and tight curves, and bridge tabs
+- a table surface map, entered by hand or probed over USB, which programs follow
+  so that cut depth stays true on a table that is not flat
+- a machine link to a GRBL controller over USB (Chrome or Edge), to jog, set the
+  origin, probe the table, and run a sheet's programs with a stop for each tool
+  change, with an always-visible Stop
 - G-code export and a toolpath simulator that plays the emitted program, pass by
   pass, with tool-change stops
 - design-file and SVG export
@@ -99,7 +104,10 @@ and supports with the Cutout and Support menus; the preset you pick sets the
 semantic type, not just the outline.
 
 On a Flat Parts sheet, draw parts with the Part menu and holes or slots inside them
-with the Hole menu. Moving a part carries its holes. With "Keep proportions and scale
+with the Hole menu. Both menus end with **Freeform outline**: click each corner in
+turn, and click the first again to close it (a click within 10 pixels of it snaps
+there, and its marker fills when it will). Nothing closes the outline for you;
+Backspace takes back the last corner and Escape abandons it. Moving a part carries its holes. With "Keep proportions and scale
 holes" ticked, a width or height typed into the inspector scales the part and every hole
 inside it about its lower-left corner; untick it to stretch the part alone. Each part keeps holding tabs
 (four by default): gaps in a knife cut, or on a router bridges the bit rises
@@ -130,7 +138,8 @@ box, and its corner handles and Width and Height fields scale it proportionally.
 The rotate buttons in the toolbar, beside Snap, turn it 15° at a time about the
 centre of its box; a turn that carries it off the sheet is flagged like any other,
 so move it back. They work on any imported drawing, a single outline or a group
-(a part turns with its holes), and stay disabled for shapes drawn in KorCad.
+(a part turns with its holes) or freeform outline, and stay disabled for the
+other shapes drawn in KorCad.
 Its members are named after the file (`logo part 3`), so a validation message says
 where to look. Groups are imported as they are: there is no ungrouping or editing
 of one member, so fix the drawing and import it again. Holding tabs on a Flat Parts
@@ -154,8 +163,58 @@ turn any corner sharper than its lift angle (30° by default, at most 90°, so
 every acute corner is lifted), to make a turn that follows another within two
 blade offsets when the two add up past the lift angle, and to rock up and down
 round curves tighter than its lift radius (3 mm), like a slow oscillating knife.
-The path in X and Y does not change. Feeds, plunge feed, and spindle speed are set in the Tool
-panel, in the document's units per minute. A
+The path in X and Y does not change.
+
+A table that is not flat can be measured into the Table surface panel: jog the
+tool to each point of a grid over the sheet, lower it until a slip of paper just
+drags, and enter the Z reading. The numbers along the grid's edges show where
+each column (X, across the top) and row (Y, down the side) stands. It stands half an inch in from the sheet's edges by default, so
+its far corners stay inside a machine whose travel is just the sheet; set the
+inset from 0 to 2 in, and programs hold the outer points' heights out to the
+edges. With the map on, every depth in an exported or
+simulated program follows the table relative to X0 Y0, so set Z zero there
+before cutting; cuts are split into short moves so their depth follows the table
+between points. The map is kept in the browser rather than in the design, and
+export is blocked if it spans more than 3 mm, which is likelier a typo than a
+table, or if the table rises into a tool's safe Z.
+
+In Chrome or Edge, the Machine panel can connect to a GRBL 1.1 controller over
+USB instead (disconnect your sender first; only one program can hold the port).
+Jog the tool, in steps up to 5 in (100 mm) across the table and 1 in (25.4 mm)
+up and down, at a speed you pick (the controller caps it at its own maximum
+rate; Z always moves gently), or type an X and Y and Go to it: the tool rises to
+the travel height first if it is lower, and this works before the origin is
+confirmed, to bring the tool near it. Set X0 Y0 at the sheet's lower-left corner
+and Z0 on the table, and confirm the origin. Then, for each point of the grid, Go to point, and
+either lower the tool to a slip of paper and Record Z, or put the touch plate
+under it and Probe; Probe every point does the whole grid when a foil sheet
+wired to the probe covers the table. If that run stops short (an alarm, Stop,
+or a lost connection), the points it missed are outlined, and Finish the …
+missed probes just those once the machine is ready again. Each probe seeks the plate at 200 mm/min,
+backs off 2 mm, and touches it again at 25 mm/min for the reading; if the two
+touches disagree by more than 0.1 mm, it rises and asks you to clear the plate
+and probe again. KorCad rises to the travel height before
+crossing the table, probes no more than 3 mm below the plate before GRBL gives
+up with an alarm, and shows a Stop button at all times while connected.
+
+The Run panel runs the active sheet's programs from there, the same ones G-code
+export writes, following the surface map if it is on. Prepare to run lists the
+programs and the tool each uses. Before each one, load its tool and set Z0 on
+the work: Touch off here with the tip just touching, or put the touch plate on
+the work, jog the tool to within 10 mm above it, and Probe Z0. Z0 must be set
+before the first program and after every change of tool; with the surface map
+on, it can be set anywhere and is worked out from the map. While a program runs
+you can pause (motion holds; the spindle keeps turning), resume, and nudge the
+feed and spindle overrides. A refused line, an alarm, Stop, or a lost
+connection ends the job; it is started over rather than resumed partway. Keep
+the tab open: the screen stays awake while a program runs, and leaving asks
+first. Export still works for running a job from another sender.
+
+Feeds, plunge feed, and spindle speed are set in the Tool
+panel, in the document's units per minute. Cuts go through the material: the
+Tool panel sets how far past it they reach (Cut past material, into the mat or
+spoilboard), so cut depth follows the material thickness set in the Material
+panel. A
 sheet gets a separate crease program only when something on it is creased from
 the back. Export is blocked while validation reports a problem, including an
 unsafe setting on any tool a sheet uses. A preview is not proof

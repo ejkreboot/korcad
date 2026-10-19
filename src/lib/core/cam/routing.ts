@@ -1,13 +1,13 @@
 import { point, type Point } from '$lib/core/geometry/primitives.js';
 import { round } from '$lib/core/units.js';
-import type { DesignPath, DesignState, MachineSettings } from '$lib/core/design/types.js';
+import type { DesignPath, DesignState, SheetView } from '$lib/core/design/types.js';
 import { toolpathPoints, type CompensationSettings, type Operation } from './compensation.js';
 import { sequenceStops } from './sequencing.js';
 import { STAGE_COUNT, stageIndex } from './stages.js';
 
 export type RoutingSettings = CompensationSettings &
 	Pick<DesignState, 'activeSheetId' | 'toolpathOrder'> &
-	Pick<MachineSettings, 'safeZ' | 'scoreDepth' | 'cutDepth' | 'plungeFeed'>;
+	Pick<SheetView, 'safeZ' | 'scoreDepth' | 'cutDepth' | 'plungeFeed'>;
 
 /** Rapid travel rate assumed when costing a route, in mm/min. */
 const RAPID_FEED = 3000;

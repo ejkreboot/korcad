@@ -167,9 +167,16 @@ button {
 
 .field {
 	display: grid;
+	/* A field beside a taller one, such as one with a note, keeps its input under its label. */
+	align-content: start;
 	gap: 5px;
 	font-size: 11px;
 	font-weight: 600;
+	color: var(--ink-soft);
+}
+
+.field-note {
+	font-weight: 400;
 	color: var(--ink-soft);
 }
 
@@ -371,6 +378,34 @@ input[type='number'] {
 	flex-direction: row;
 	flex-wrap: wrap;
 	gap: 6px;
+}
+
+/* ---- machine link ---- */
+
+/*
+ * Always in reach while a machine is connected, above everything but a dialog,
+ * and raised clear of the footer so it never hides the validation status.
+ */
+.machine-stop {
+	position: fixed;
+	right: 16px;
+	bottom: 84px;
+	z-index: 50;
+	min-width: 88px;
+	min-height: 48px;
+	padding: 8px 18px;
+	border: 2px solid var(--danger);
+	border-radius: var(--radius);
+	background: var(--danger);
+	color: #fff;
+	font-size: 15px;
+	font-weight: 750;
+	letter-spacing: 0.02em;
+	box-shadow: 0 6px 18px rgb(0 0 0 / 0.25);
+}
+
+.machine-stop:hover {
+	filter: brightness(1.08);
 }
 
 /* ---- workspace switcher ---- */
@@ -702,6 +737,33 @@ input[type='number'] {
 	stroke-dasharray: 4 3;
 	vector-effect: non-scaling-stroke;
 	pointer-events: none;
+}
+
+/* An outline being clicked out: its edges, its vertices, and the first vertex that closes it. */
+.drawing .draft-outline {
+	fill: none;
+	stroke: var(--accent);
+	stroke-width: 1.2;
+	stroke-dasharray: 4 3;
+	vector-effect: non-scaling-stroke;
+	pointer-events: none;
+}
+
+.drawing .outline-vertex {
+	fill: var(--accent);
+	stroke: none;
+	pointer-events: none;
+}
+
+.drawing .outline-vertex.first {
+	fill: var(--surface);
+	stroke: var(--accent);
+	stroke-width: 1.2;
+	vector-effect: non-scaling-stroke;
+}
+
+.drawing .outline-vertex.first.closing {
+	fill: var(--accent);
 }
 
 /* ---- status ---- */

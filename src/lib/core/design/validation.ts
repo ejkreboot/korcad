@@ -1,4 +1,4 @@
-import { referencedProfiles } from './machine.js';
+import { cutDepth, referencedProfiles } from './machine.js';
 import type { DesignState, MachineProfile, MachineSettings } from './types.js';
 
 type NumericSetting = {
@@ -8,7 +8,6 @@ type NumericSetting = {
 /** Settings every program moves by: a zero or negative one plunges, stalls, or travels in the work. */
 const POSITIVE: readonly (readonly [NumericSetting, string])[] = [
 	['safeZ', 'safe Z'],
-	['cutDepth', 'cut depth'],
 	['cutFeed', 'cut feed'],
 	['scoreFeed', 'score feed'],
 	['plungeFeed', 'plunge feed'],
@@ -16,6 +15,7 @@ const POSITIVE: readonly (readonly [NumericSetting, string])[] = [
 ];
 
 const NONNEGATIVE: readonly (readonly [NumericSetting, string])[] = [
+	['cutPast', 'cut past material'],
 	['scoreDepth', 'score depth'],
 	['bladeOffset', 'blade offset'],
 	['overcut', 'overcut']
@@ -38,11 +38,13 @@ const ROUTER_POSITIVE: readonly (readonly [NumericSetting, string])[] = [
 export function validateMachineSettings(design: DesignState): string[] {
 	const errors: string[] = [];
 	if (!positive(design.stock.material)) errors.push('Material thickness must be positive');
-	for (const profile of referencedProfiles(design)) errors.push(...profileErrors(profile));
+	for (const profile of referencedProfiles(design)) {
+		errors.push(...profileErrors(profile, design.stock.material));
+	}
 	return errors;
 }
 
-function profileErrors(profile: MachineProfile): string[] {
+function profileErrors(profile: MachineProfile, material: number): string[] {
 	const errors: string[] = [];
 	const named = (label: string, rule: string) => `${profile.name}: ${label} must be ${rule}`;
 	for (const [key, label] of POSITIVE) {
@@ -58,7 +60,7 @@ function profileErrors(profile: MachineProfile): string[] {
 			if (!positive(profile[key])) errors.push(named(label, 'positive'));
 		}
 	} else {
-		errors.push(...knifeErrors(profile, named));
+		errors.push(...knifeErrors(profile, cutDepth(material, profile.cutPast), named));
 	}
 	return errors;
 }
@@ -75,6 +77,7 @@ function profileErrors(profile: MachineProfile): string[] {
  */
 function knifeErrors(
 	profile: MachineProfile,
+	depth: number,
 	named: (label: string, rule: string) => string
 ): string[] {
 	const errors: string[] = [];
@@ -87,7 +90,7 @@ function knifeErrors(
 		errors.push(named('swivel depth', 'zero or more'));
 	} else if (swivel === 0 && profile.bladeOffset > 0) {
 		errors.push(named('swivel depth', 'more than zero for a blade with an offset'));
-	} else if (Number.isInteger(passes) && passes >= 1 && swivel >= profile.cutDepth / passes) {
+	} else if (Number.isInteger(passes) && passes >= 1 && swivel >= depth / passes) {
 		errors.push(named('swivel depth', 'shallower than one pass of the cut depth'));
 	}
 	const angle = profile.liftAngle;

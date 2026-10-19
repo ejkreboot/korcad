@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { generateGcode, programOperations } from '$lib/core/cam/gcode.js';
 	import { designSvg } from '$lib/core/export/svg.js';
 	import { createEditorState } from '$lib/editor/state.svelte.js';
+	import { createMachineLink } from '$lib/editor/machine-link.svelte.js';
+	import { sheetPrograms } from '$lib/editor/programs.js';
 	import { createToolState } from '$lib/editor/tools.svelte.js';
 	import { display } from '$lib/core/units.js';
 	import type { WorkspaceId } from '$lib/core/design/workspace.js';
@@ -11,8 +12,12 @@
 		designFileText,
 		download,
 		loadDraft,
+		loadProbeSettings,
+		loadSurfaceMap,
 		readDesignFile,
 		saveDraft,
+		saveProbeSettings,
+		saveSurfaceMap,
 		slugify
 	} from '$lib/editor/persistence.js';
 	import AssemblyViewer from '$lib/components/editor/AssemblyViewer.svelte';
@@ -25,6 +30,7 @@
 	import Toolbar from '$lib/components/editor/Toolbar.svelte';
 
 	const editor = createEditorState();
+	const link = createMachineLink(() => editor.design.stock.units);
 	const tools = createToolState();
 	let importInput = $state<HTMLInputElement>();
 	let workspaceImportInput = $state<HTMLInputElement>();
@@ -47,6 +53,10 @@
 	// Restoring runs once, outside the reactive graph, so it cannot re-enter
 	// the autosave effect below.
 	onMount(() => {
+		const surfaceMap = loadSurfaceMap();
+		if (surfaceMap) editor.setSurfaceMap(surfaceMap);
+		const probeSettings = loadProbeSettings();
+		if (probeSettings) link.setProbeSettings(probeSettings);
 		const draft = loadDraft();
 		if (draft) {
 			editor.setDesign(draft);
@@ -56,6 +66,14 @@
 
 	$effect(() => {
 		saveDraft(editor.design);
+	});
+
+	$effect(() => {
+		saveSurfaceMap(editor.surfaceMap);
+	});
+
+	$effect(() => {
+		saveProbeSettings(link.probeSettings);
 	});
 
 	// A tool belongs to a workspace, so one armed on another sheet's workspace
@@ -103,19 +121,18 @@
 			error = 'Resolve validation issues before generating machine output.';
 			return;
 		}
-		const paths = editor.geometry.paths;
-		const options = editor.workspace.gcodeOptions(editor.design, editor.design.activeSheetId);
-		const program = (operation: 'crease' | 'cut') =>
-			generateGcode(paths, editor.view, operation, options);
+		const programs = sheetPrograms(editor);
 		error = '';
-		if (programOperations(paths).length === 1) {
+		const [only] = programs;
+		if (programs.length === 1 && only) {
 			// Nothing is creased from the back, so one program does the whole sheet.
-			download(`${baseName}.nc`, program('cut'), 'text/plain');
+			download(`${baseName}.nc`, only.text, 'text/plain');
 			notice = 'Cut program exported.';
 			return;
 		}
-		download(`${baseName}-01-crease.nc`, program('crease'), 'text/plain');
-		download(`${baseName}-02-cut.nc`, program('cut'), 'text/plain');
+		programs.forEach((program, index) =>
+			download(`${baseName}-0${index + 1}-${program.operation}.nc`, program.text, 'text/plain')
+		);
 		notice = 'Crease and cut programs exported. Run the crease program first, spindle off.';
 	}
 
@@ -195,6 +212,14 @@
 	}
 </script>
 
+<svelte:window
+	onbeforeunload={(event) => {
+		// Leaving mid-program stops the stream, and GRBL finishes what it has
+		// buffered and waits there, spindle still on if it was.
+		if (link.job?.phase === 'running') event.preventDefault();
+	}}
+/>
+
 <svelte:head>
 	<title>KorCad</title>
 	<meta
@@ -204,7 +229,7 @@
 </svelte:head>
 
 <main class="app-shell">
-	<Inspector {editor} />
+	<Inspector {editor} {link} />
 
 	<section class="workspace">
 		<header class="workspace-bar">
@@ -321,4 +346,14 @@
 		onchange={importIntoSheet}
 	/>
 	<p aria-live="polite" class="sr-only">{notice}</p>
+
+	<!-- Moving a machine needs a way to stop it that no panel can fold away or scroll off. -->
+	{#if link.connected}
+		<button
+			class="machine-stop"
+			type="button"
+			title="Stop the machine: cancel any jog, hold, and reset the controller"
+			onclick={() => link.stop()}>Stop</button
+		>
+	{/if}
 </main>

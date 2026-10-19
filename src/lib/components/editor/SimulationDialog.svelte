@@ -2,6 +2,7 @@
 	import { SHEET } from '$lib/core/constants.js';
 	import { display } from '$lib/core/units.js';
 	import { generateGcode } from '$lib/core/cam/gcode.js';
+	import { applySurfaceMap } from '$lib/core/cam/surface.js';
 	import {
 		moveLabel,
 		simulationDuration,
@@ -50,7 +51,15 @@
 	 * toolpaths, so what is drawn is what the machine would be sent.
 	 */
 	const moves = $derived<readonly SimulationMove[]>(
-		phase ? simulationMoves(generateGcode(editor.geometry.paths, view, phase.operation), view) : []
+		phase
+			? simulationMoves(
+					applySurfaceMap(
+						generateGcode(editor.geometry.paths, view, phase.operation),
+						editor.surfaceMap
+					),
+					view
+				)
+			: []
 	);
 	const total = $derived(simulationDuration(moves));
 	const frame = $derived(simulationFrame(moves, time));

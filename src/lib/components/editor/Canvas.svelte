@@ -12,12 +12,18 @@
 	} from '$lib/editor/viewport.js';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
 	import type { ToolState } from '$lib/editor/tools.svelte.js';
+	import {
+		addOutlineVertex,
+		closesOutline,
+		CLOSE_RADIUS_PX,
+		outlineCursor
+	} from '$lib/editor/outline-draft.js';
 	import { workspaceUi, type CanvasGesture } from '$lib/components/workspaces/index.js';
 
 	/**
-	 * The 2D sheet: grid, zoom and pan, toolpaths, and the draft rectangle.
-	 * Everything a workspace draws or lets the operator grab comes from its
-	 * canvas layer, and what a press or a drawn rectangle does from its canvas
+	 * The 2D sheet: grid, zoom and pan, toolpaths, and the draft rectangle or
+	 * outline. Everything a workspace draws or lets the operator grab comes from
+	 * its canvas layer, and what a press or a drawn shape does from its canvas
 	 * controller.
 	 */
 	let { editor, tools }: { editor: EditorState; tools: ToolState } = $props();
@@ -47,6 +53,15 @@
 	const controller = $derived(ui.canvasController(editor, tools));
 	const screenUnit = $derived(1 / tools.scale);
 	const drawing = $derived(tools.tool !== 'select');
+	const armedPreset = $derived(
+		editor.workspace.tools
+			.find((tool) => tool.id === tools.tool)
+			?.presets.find((preset) => preset.id === tools.preset)
+	);
+	/** The armed preset is clicked out a vertex at a time rather than dragged as a box. */
+	const outlining = $derived(drawing && armedPreset?.gesture === 'outline');
+	/** How near the first vertex a click closes the outline, in sheet millimeters. */
+	const closeRadius = $derived(CLOSE_RADIUS_PX * screenUnit);
 
 	// ---- coordinate mapping ------------------------------------------------
 	// The drawing group is flipped once, so everything inside it is authored in
@@ -68,6 +83,19 @@
 	const pointsAttr = (path: DesignPath) => path.points.map((p) => `${p.x},${p.y}`).join(' ');
 	const pathClass = (path: DesignPath) =>
 		path.type === 'cut' ? 'cut' : path.foldDirection === 'up' ? 'score-up' : 'score-down';
+
+	/** The outline's last vertex to the cursor, landing on the first vertex when a click would close it. */
+	const outlineEdge = $derived.by(() => {
+		const last = tools.outline.at(-1);
+		if (!outlining || !last || !tools.cursor) return null;
+		const end = outlineCursor(tools.outline, controller.draftPoint(tools.cursor), closeRadius);
+		return { from: last, to: end };
+	});
+	const outlineClosing = $derived(
+		outlining &&
+			tools.cursor !== null &&
+			closesOutline(tools.outline, controller.draftPoint(tools.cursor), closeRadius)
+	);
 
 	const draftRect = $derived.by(() => {
 		if (!draft) return null;
@@ -107,6 +135,20 @@
 		}
 
 		event.preventDefault();
+		if (outlining) {
+			const step = addOutlineVertex(
+				tools.outline,
+				controller.draftPoint(pointerToStock(event)),
+				closeRadius
+			);
+			if (step.kind === 'open') {
+				tools.setOutline(step.points);
+				return;
+			}
+			controller.finishOutline?.(step.points);
+			tools.select();
+			return;
+		}
 		const start = controller.draftPoint(pointerToStock(event));
 		draft = { pointerId: event.pointerId, start, end: start };
 		svg?.setPointerCapture(event.pointerId);
@@ -187,6 +229,12 @@
 			event.preventDefault();
 		}
 		if (event.key === 'Escape') tools.select();
+		// While an outline is being drawn, deleting takes back its last vertex.
+		if ((event.key === 'Delete' || event.key === 'Backspace') && !typing && tools.outline.length) {
+			event.preventDefault();
+			tools.setOutline(tools.outline.slice(0, -1));
+			return;
+		}
 		if ((event.key === 'Delete' || event.key === 'Backspace') && !typing && !gesture) {
 			const selection = editor.selection;
 			if (!selection) return;
@@ -269,6 +317,32 @@
 					width={draftRect.w}
 					height={draftRect.h}
 				/>
+			{/if}
+
+			{#if outlining && tools.outline.length}
+				<polyline
+					class="draft-outline"
+					points={tools.outline.map((p) => `${p.x},${p.y}`).join(' ')}
+				/>
+				{#if outlineEdge}
+					<line
+						class="draft-outline"
+						x1={outlineEdge.from.x}
+						y1={outlineEdge.from.y}
+						x2={outlineEdge.to.x}
+						y2={outlineEdge.to.y}
+					/>
+				{/if}
+				{#each tools.outline as vertex, index (index)}
+					<circle
+						class="outline-vertex"
+						class:first={index === 0}
+						class:closing={index === 0 && outlineClosing}
+						cx={vertex.x}
+						cy={vertex.y}
+						r={(index === 0 ? 5 : 3) * screenUnit}
+					/>
+				{/each}
 			{/if}
 
 			{#if tools.cursor}

@@ -31,9 +31,14 @@ export type ToolPreset = {
 	readonly label: string;
 	readonly description: string;
 	readonly icon: IconName;
+	/**
+	 * How the preset is drawn: dragged out as a box (the default), or clicked
+	 * out as an outline, one vertex at a time, and closed on its first vertex.
+	 */
+	readonly gesture?: 'box' | 'outline';
 };
 
-/** A toolbar drawing tool: a menu of presets, drawn as a rectangle on the sheet. */
+/** A toolbar drawing tool: a menu of presets, each drawn as a box or an outline on the sheet. */
 export type WorkspaceTool = {
 	readonly id: string;
 	readonly label: string;

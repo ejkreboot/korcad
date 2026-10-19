@@ -51,7 +51,7 @@ describe('depth per pass', () => {
 	});
 
 	it('routes a closed contour in passes, plunging where the last pass ended', () => {
-		const design = withMachine(flatPartsDesign('router'), { cutDepth: 3.2, passDepth: 1.1 });
+		const design = withMachine(flatPartsDesign('router'), { cutPast: 0.2, passDepth: 1.1 });
 		const program = sheetProgram(design);
 		expect(program).toContain('; Cut in equal passes of at most 1.1 mm');
 		for (const section of sections(program)) {
@@ -115,7 +115,7 @@ describe('knife passes', () => {
 	});
 
 	it('cuts every knife path in the given number of passes, retracting between them', () => {
-		const program = knifeProgram({ knifePasses: 2, cutDepth: 3.2 });
+		const program = knifeProgram({ knifePasses: 2, cutPast: 0.2 });
 		expect(program).toContain('; Knife cuts in 2 equal passes');
 		for (const section of sections(program)) {
 			expect(plunges(section).map((line) => line.split(' ')[1])).toEqual(['Z-1.6', 'Z-3.2']);
@@ -147,8 +147,10 @@ describe('blade swivel', () => {
 		{ points: [point(100, 100), point(200, 100)], type: 'cut', closed: false, cam: intent('cut') },
 		{ points: [point(300, 100), point(300, 200)], type: 'cut', closed: false, cam: intent('cut') }
 	];
-	const program = (overrides: Partial<MachineSettings> = {}) => {
-		const design = withMachine(flatPartsDesign('knife'), { ...settings, ...overrides });
+	const program = (overrides: Partial<MachineSettings> = {}, material?: number) => {
+		const knife = withMachine(flatPartsDesign('knife'), { ...settings, ...overrides });
+		const design =
+			material === undefined ? knife : { ...knife, stock: { ...knife.stock, material } };
 		return generateGcode(paths, { ...sheetView(design, 'sheet'), toolpathOrder: 'design' }, 'cut');
 	};
 	const xy = (line: string) => {
@@ -203,7 +205,7 @@ describe('blade swivel', () => {
 	});
 
 	it('swivels each pass that has to turn, never deeper than the pass', () => {
-		const text = program({ knifePasses: 4, cutDepth: 1 });
+		const text = program({ knifePasses: 4, cutPast: 0.2 }, 0.8);
 		for (const section of sections(text)) {
 			expect(section.filter((line) => line === 'G1 Z-0.25 F250 ; swivel')).toHaveLength(1);
 		}

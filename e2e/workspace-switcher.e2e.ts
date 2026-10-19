@@ -16,7 +16,7 @@ async function switchTo(page: Page, label: RegExp): Promise<void> {
 }
 
 type Draft = {
-	machineProfiles: { id: string; name: string; cutDepth: number; fabricationMode: string }[];
+	machineProfiles: { id: string; name: string; cutPast: number; fabricationMode: string }[];
 	sheets: { id: string; name: string; workspace: string; machineProfileId: string }[];
 };
 const draft = async (page: Page) => (await readDraft(page)) as unknown as Draft;
@@ -113,11 +113,11 @@ test('adds, duplicates, assigns, and deletes machine profiles', async ({ page })
 	const panel = page.getByRole('group', { name: 'Tools', exact: true });
 	await expect(panel.getByRole('button', { name: 'Delete' })).toBeDisabled();
 
-	await page.getByLabel(/^Cut depth/).fill('0.1');
+	await page.getByLabel(/^Cut past material/).fill('0.01');
 	await panel.getByRole('button', { name: 'Duplicate' }).click();
 	await expect(page.getByLabel('Tool name')).toHaveValue('Drag knife copy');
 	// The copy carries every setting, and the deck is now cut on it.
-	await expect(page.getByLabel(/^Cut depth/)).toHaveValue('0.1');
+	await expect(page.getByLabel(/^Cut past material/)).toHaveValue('0.01');
 	await expect(page.getByLabel('Cut with')).toHaveValue((await draft(page)).machineProfiles[1]!.id);
 
 	await panel.getByRole('button', { name: 'New tool' }).click();

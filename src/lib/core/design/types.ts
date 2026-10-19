@@ -107,7 +107,13 @@ export type Geometry = {
 export type MachineSettings = {
 	readonly fabricationMode: FabricationMode;
 	readonly safeZ: number;
-	readonly cutDepth: number;
+	/**
+	 * How far a through cut goes past the material's underside, into the mat or
+	 * spoilboard under it. Every cut goes through, so its depth is the material's
+	 * thickness plus this (`SheetView.cutDepth`), and stays right when the
+	 * material changes.
+	 */
+	readonly cutPast: number;
 	/**
 	 * The deepest a router cuts in one pass. A deeper cut is split into equal
 	 * passes, none deeper than this; a knife always cuts in one.
@@ -230,4 +236,7 @@ export type DesignFile = {
  */
 export type SheetView = StockSettings &
 	MachineSettings &
-	Pick<DesignState, 'toolpathOrder' | 'sheets' | 'activeSheetId'>;
+	Pick<DesignState, 'toolpathOrder' | 'sheets' | 'activeSheetId'> & {
+		/** How deep a through cut goes: the material's thickness plus the tool's `cutPast`. */
+		readonly cutDepth: number;
+	};

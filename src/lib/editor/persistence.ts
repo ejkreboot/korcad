@@ -1,4 +1,10 @@
-import { STORAGE_KEY } from '$lib/core/constants.js';
+import { PROBE_SETTINGS_KEY, STORAGE_KEY, SURFACE_MAP_KEY } from '$lib/core/constants.js';
+import {
+	parseProbeSettings,
+	serializeProbeSettings,
+	type ProbeSettings
+} from '$lib/core/grbl/probing.js';
+import { parseSurfaceMap, serializeSurfaceMap, type SurfaceMap } from '$lib/core/cam/surface.js';
 import { serializeDesign } from '$lib/core/export/design-file.js';
 import { parseDesign } from '$lib/features/document.js';
 import type { DesignState } from '$lib/core/design/types.js';
@@ -25,6 +31,41 @@ export function loadDraft(): DesignState | null {
 export function saveDraft(design: DesignState): void {
 	try {
 		localStorage.setItem(STORAGE_KEY, serializeDesign(design));
+	} catch {
+		// A full or blocked storage quota must not interrupt editing.
+	}
+}
+
+/** The table's surface map, kept in this browser apart from any design. */
+export function loadSurfaceMap(): SurfaceMap | null {
+	try {
+		const stored = localStorage.getItem(SURFACE_MAP_KEY);
+		return stored ? parseSurfaceMap(stored) : null;
+	} catch {
+		return null;
+	}
+}
+
+export function saveSurfaceMap(map: SurfaceMap): void {
+	try {
+		localStorage.setItem(SURFACE_MAP_KEY, serializeSurfaceMap(map));
+	} catch {
+		// A full or blocked storage quota must not interrupt editing.
+	}
+}
+
+export function loadProbeSettings(): ProbeSettings | null {
+	try {
+		const stored = localStorage.getItem(PROBE_SETTINGS_KEY);
+		return stored ? parseProbeSettings(stored) : null;
+	} catch {
+		return null;
+	}
+}
+
+export function saveProbeSettings(settings: ProbeSettings): void {
+	try {
+		localStorage.setItem(PROBE_SETTINGS_KEY, serializeProbeSettings(settings));
 	} catch {
 		// A full or blocked storage quota must not interrupt editing.
 	}

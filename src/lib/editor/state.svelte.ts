@@ -6,7 +6,8 @@ import type {
 	StockSettings
 } from '$lib/core/design/types.js';
 import type { Selection, WorkspaceId } from '$lib/core/design/workspace.js';
-import { machineProfileFor, sheetView } from '$lib/core/design/machine.js';
+import { machineProfileFor, referencedProfiles, sheetView } from '$lib/core/design/machine.js';
+import { createSurfaceMap, surfaceMapErrors, type SurfaceMap } from '$lib/core/cam/surface.js';
 import {
 	addProfile,
 	addStockProfile,
@@ -54,6 +55,9 @@ export type { Selection };
 export function createEditorState(initial: DesignState = createDefaultDesign()) {
 	let design = $state<DesignState>(clone(initial));
 	let selected = $state<Selection | null>(null);
+	// The table's surface belongs to the CNC, not the document: like the
+	// selection it is never in a design file or an undo step.
+	let surfaceMap = $state<SurfaceMap>(createSurfaceMap());
 	const history = createHistory(initial);
 	// History lives outside the reactive graph, so its availability is mirrored
 	// here whenever a command runs.
@@ -63,7 +67,11 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 	/** The workspace the active sheet is drawn in. */
 	const workspace = $derived(activeWorkspace(design));
 	const geometry = $derived(workspace.geometry(design));
-	const diagnostics = $derived(validateDocument(design));
+	/** Export and simulation are gated on these, so a map that is on is checked with the design. */
+	const diagnostics = $derived([
+		...validateDocument(design),
+		...surfaceMapErrors(surfaceMap, referencedProfiles(design))
+	]);
 	/**
 	 * The active sheet's document view: stock plus the machine settings of the
 	 * profile that sheet is cut on. CAM and export are answered per sheet, so
@@ -148,6 +156,13 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 		},
 		get selection() {
 			return selection;
+		},
+		/** The table's measured surface, which programs follow when it is on. */
+		get surfaceMap() {
+			return surfaceMap;
+		},
+		setSurfaceMap(next: SurfaceMap) {
+			surfaceMap = next;
 		},
 
 		/** Changes the document as one undo step. */

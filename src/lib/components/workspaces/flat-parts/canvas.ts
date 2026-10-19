@@ -15,6 +15,7 @@ import {
 	type Corner
 } from '$lib/features/flat-parts/manipulation.js';
 import {
+	createEntityFromOutline,
 	createEntityFromPreset,
 	flatPartsPreset,
 	TOOL_KINDS
@@ -100,6 +101,13 @@ export function createFlatPartsCanvas(editor: EditorState, tools: ToolState): Ca
 			if (!kind || !preset || rect.w < MIN_FLAT_PARTS_DRAG || rect.h < MIN_FLAT_PARTS_DRAG) return;
 			const index = actions.view.entities.filter((entity) => entity.kind === kind).length + 1;
 			actions.addEntity(createEntityFromPreset(kind, preset.id, rect, crypto.randomUUID(), index));
+		},
+		finishOutline(points) {
+			const kind = TOOL_KINDS[tools.tool];
+			if (!kind) return;
+			const index = actions.view.entities.filter((entity) => entity.kind === kind).length + 1;
+			const entity = createEntityFromOutline(kind, points, crypto.randomUUID(), index);
+			if (entity) actions.addEntity(entity);
 		}
 	};
 }

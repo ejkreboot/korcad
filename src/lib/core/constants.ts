@@ -12,6 +12,10 @@ export const SHEET = 24 * MM_PER_IN;
 export const SNAP = MM_PER_IN / 4;
 
 export const STORAGE_KEY = 'korcad-draft';
+/** The table's surface map, kept apart from the draft because it belongs to the CNC. */
+export const SURFACE_MAP_KEY = 'korcad-surface-map';
+/** How the table is probed: plate thickness and travel height, which belong to the CNC too. */
+export const PROBE_SETTINGS_KEY = 'korcad-probe-settings';
 export const DESIGN_FORMAT = 'korcad-design';
 /**
  * The document version this build writes, and the only one it reads. There are

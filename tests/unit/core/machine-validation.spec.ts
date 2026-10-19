@@ -50,8 +50,11 @@ describe('machine settings validation', () => {
 	);
 
 	it('rejects values that are not finite', () => {
-		expect(validateMachineSettings(partsOnOwnProfile({ cutDepth: Number.NaN }))).toEqual([
-			'Parts router: cut depth must be positive'
+		expect(validateMachineSettings(partsOnOwnProfile({ safeZ: Number.NaN }))).toEqual([
+			'Parts router: safe Z must be positive'
+		]);
+		expect(validateMachineSettings(partsOnOwnProfile({ cutPast: Number.NaN }))).toEqual([
+			'Parts router: cut past material must be zero or more'
 		]);
 		expect(validateMachineSettings(partsOnOwnProfile({ overcut: -1 }))).toEqual([
 			'Parts router: overcut must be zero or more'
@@ -70,8 +73,9 @@ describe('machine settings validation', () => {
 	it('refuses a knife swivel as deep as its first pass, which would tear as before', () => {
 		const knife = (settings: Partial<MachineSettings>) =>
 			validateMachineSettings(partsOnOwnProfile({ fabricationMode: 'knife', ...settings }));
-		expect(knife({ cutDepth: 3, knifePasses: 2, swivelDepth: 1.4 })).toEqual([]);
-		expect(knife({ cutDepth: 3, knifePasses: 2, swivelDepth: 1.5 })).toEqual([
+		// 3 mm of material cut exactly through, in two passes of 1.5 mm.
+		expect(knife({ cutPast: 0, knifePasses: 2, swivelDepth: 1.4 })).toEqual([]);
+		expect(knife({ cutPast: 0, knifePasses: 2, swivelDepth: 1.5 })).toEqual([
 			'Parts router: swivel depth must be shallower than one pass of the cut depth'
 		]);
 		expect(knife({ swivelDepth: -0.1 })).toEqual([

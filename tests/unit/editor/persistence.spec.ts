@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DESIGN_FORMAT, DESIGN_VERSION, STORAGE_KEY } from '$lib/core/constants.js';
-import { loadDraft, saveDraft } from '$lib/editor/persistence.js';
+import { createSurfaceMap } from '$lib/core/cam/surface.js';
+import {
+	DESIGN_FORMAT,
+	DESIGN_VERSION,
+	STORAGE_KEY,
+	SURFACE_MAP_KEY
+} from '$lib/core/constants.js';
+import { loadDraft, loadSurfaceMap, saveDraft, saveSurfaceMap } from '$lib/editor/persistence.js';
 import { foldedDesign } from '../../support/designs.js';
 
 /**
@@ -52,5 +58,22 @@ describe('drafts', () => {
 		expect(loadDraft()).toBeNull();
 		localStorage.setItem(STORAGE_KEY, JSON.stringify({ hello: 'world' }));
 		expect(loadDraft()).toBeNull();
+	});
+});
+
+describe('the table surface map', () => {
+	it('is kept under its own key, apart from the draft', () => {
+		const map = { ...createSurfaceMap(2, 2), enabled: true, heights: [0, 0.1, -0.2, 0.3] };
+		saveSurfaceMap(map);
+		saveDraft(foldedDesign());
+		expect(loadSurfaceMap()).toEqual(map);
+		expect(localStorage.getItem(STORAGE_KEY)).not.toContain('heights');
+		expect(JSON.parse(localStorage.getItem(SURFACE_MAP_KEY)!).format).toBe('korcad-surface-map');
+	});
+
+	it('is absent when nothing, or nothing readable, was saved', () => {
+		expect(loadSurfaceMap()).toBeNull();
+		localStorage.setItem(SURFACE_MAP_KEY, '{"format":"korcad-surface-map","version":0}');
+		expect(loadSurfaceMap()).toBeNull();
 	});
 });

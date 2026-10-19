@@ -375,16 +375,28 @@ test('folds the once-per-job settings away, above the selection panel', async ({
 
 	const material = page.getByRole('button', { name: 'Material' });
 	const machine = page.getByRole('button', { name: 'Tool', exact: true });
+	const surface = page.getByRole('button', { name: 'Table surface', exact: true });
+	const run = page.getByRole('button', { name: 'Run', exact: true });
 
-	// Both sit at the top of the sidebar, ahead of the contextual panel.
+	// They sit at the top of the sidebar, ahead of the contextual panel.
 	const order = await page
 		.locator('.sidebar h2')
 		.evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim()));
-	expect(order.slice(0, 3)).toEqual(['Material', 'Tool', 'Stock and top deck']);
+	expect(order.slice(0, 6)).toEqual([
+		'Material',
+		'Tool',
+		'Machine',
+		'Table surface',
+		'Run',
+		'Stock and top deck'
+	]);
 
 	// Collapsed by default: the headers are there, the fields are not.
 	await expect(material).toHaveAttribute('aria-expanded', 'false');
 	await expect(machine).toHaveAttribute('aria-expanded', 'false');
+	await expect(surface).toHaveAttribute('aria-expanded', 'false');
+	await expect(run).toHaveAttribute('aria-expanded', 'false');
+	await expect(page.getByLabel('Cut following this map')).toHaveCount(0);
 	await expect(page.getByLabel('Board appearance')).toHaveCount(0);
 	await expect(page.getByLabel('Fabrication')).toHaveCount(0);
 	// The panel the operator actually works in stays open.

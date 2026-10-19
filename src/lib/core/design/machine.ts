@@ -4,7 +4,7 @@ import type { DesignState, MachineProfile, MachineSettings, SheetView } from './
 export const MACHINE_SETTING_KEYS = [
 	'fabricationMode',
 	'safeZ',
-	'cutDepth',
+	'cutPast',
 	'passDepth',
 	'knifePasses',
 	'swivelDepth',
@@ -37,12 +37,17 @@ export function machineProfileFor(design: DesignState, sheetId: string): Machine
 	return profile;
 }
 
+/** How deep a through cut goes in `material` with a tool that cuts `cutPast` beyond it. */
+export function cutDepth(material: number, cutPast: number): number {
+	return material + cutPast;
+}
+
 /** Only the machine settings of a profile, without its identity. */
 export function machineSettings(profile: MachineProfile): MachineSettings {
 	return {
 		fabricationMode: profile.fabricationMode,
 		safeZ: profile.safeZ,
-		cutDepth: profile.cutDepth,
+		cutPast: profile.cutPast,
 		passDepth: profile.passDepth,
 		knifePasses: profile.knifePasses,
 		swivelDepth: profile.swivelDepth,
@@ -63,9 +68,11 @@ export function machineSettings(profile: MachineProfile): MachineSettings {
 
 /** The document as seen from one sheet; see `SheetView`. */
 export function sheetView(design: DesignState, sheetId: string = design.activeSheetId): SheetView {
+	const profile = machineProfileFor(design, sheetId);
 	return {
 		...design.stock,
-		...machineSettings(machineProfileFor(design, sheetId)),
+		...machineSettings(profile),
+		cutDepth: cutDepth(design.stock.material, profile.cutPast),
 		toolpathOrder: design.toolpathOrder,
 		sheets: design.sheets,
 		activeSheetId: sheetId

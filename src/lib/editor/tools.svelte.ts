@@ -25,6 +25,8 @@ export function createToolState() {
 	/** The preset of the drawing tool, meaningless while selecting. */
 	let preset = $state('');
 	let cursor = $state<Point | null>(null);
+	/** The vertices clicked so far by a tool that draws an outline; empty otherwise. */
+	let outline = $state<readonly Point[]>([]);
 	let view = $state<View>(fitView());
 	let panArmed = $state(false);
 	let viewMode = $state<ViewMode>('flat');
@@ -44,6 +46,9 @@ export function createToolState() {
 		},
 		get cursor() {
 			return cursor;
+		},
+		get outline() {
+			return outline;
 		},
 		get view() {
 			return view;
@@ -68,13 +73,19 @@ export function createToolState() {
 			return box;
 		},
 
+		/** Disarms the drawing tool, dropping any outline it had begun. */
 		select() {
 			tool = 'select';
+			outline = [];
 		},
 		/** Arms a workspace drawing tool with one of its presets. */
 		draw(toolId: string, presetId: string) {
 			tool = toolId;
 			preset = presetId;
+			outline = [];
+		},
+		setOutline(points: readonly Point[]) {
+			outline = points;
 		},
 		setCursor(next: Point | null) {
 			cursor = next;

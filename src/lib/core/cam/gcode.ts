@@ -87,6 +87,28 @@ export function pathsForOperation(
 }
 
 /**
+ * What a program for `operation` cuts with, in words, as its header states it.
+ * Two programs naming different tools need a tool change between them.
+ */
+export function programTool(
+	settings: Pick<GcodeSettings, 'fabricationMode' | 'bitWidth' | 'scoreTool'>,
+	operation: Operation
+): string {
+	if (settings.fabricationMode === 'router') return `${round(settings.bitWidth)} mm router bit`;
+	return operation === 'crease' && settings.scoreTool === 'crease'
+		? 'creasing wheel'
+		: 'drag knife';
+}
+
+/** Whether a program for `operation` runs the spindle: only a router cutting does. */
+export function programSpindle(
+	settings: Pick<GcodeSettings, 'fabricationMode'>,
+	operation: Operation
+): boolean {
+	return settings.fabricationMode === 'router' && operation !== 'crease';
+}
+
+/**
  * Emits a G-code program for one operation.
  *
  * Postprocessor assumptions, also stated in the emitted header:
@@ -130,13 +152,8 @@ export function generateGcode(
 	const sourcePaths = pathsForOperation(paths, operation);
 	const geometry = plannedToolpaths(sourcePaths, settings, operation).paths;
 	const router = settings.fabricationMode === 'router';
-	const creasing = operation === 'crease';
-	const routing = router && !creasing;
-	const toolDescription = router
-		? `${round(settings.bitWidth)} mm router bit`
-		: creasing && settings.scoreTool === 'crease'
-			? 'creasing wheel'
-			: 'drag knife';
+	const routing = programSpindle(settings, operation);
+	const toolDescription = programTool(settings, operation);
 
 	const bridged = routing && geometry.some(({ path }) => bridgeTabs(path));
 	const knifePasses = !router && settings.knifePasses > 1 && geometry.some(isCut);

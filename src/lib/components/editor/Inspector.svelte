@@ -4,9 +4,13 @@
 	import { profileDeletion } from '$lib/core/design/profiles.js';
 	import { workspaceUi } from '$lib/components/workspaces/index.js';
 	import CollapsiblePanel from './CollapsiblePanel.svelte';
+	import MachinePanel from './MachinePanel.svelte';
+	import RunPanel from './RunPanel.svelte';
+	import SurfaceMapPanel from './SurfaceMapPanel.svelte';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
+	import type { MachineLink } from '$lib/editor/machine-link.svelte.js';
 
-	let { editor }: { editor: EditorState } = $props();
+	let { editor, link }: { editor: EditorState; link: MachineLink } = $props();
 
 	const design = $derived(editor.design);
 	/** The active sheet's workspace supplies its own panels. */
@@ -225,14 +229,19 @@
 					oninput={(e) => setMachine('safeZ', e.currentTarget.value)}
 				/>
 			</label>
-			<label class="field">
-				Cut depth ({unitLabel})
+			<label
+				class="field"
+				title="How far cuts go past the material's underside, into the mat or spoilboard. Cut depth is the material's thickness plus this, so it follows the material."
+			>
+				Cut past material ({unitLabel})
 				<input
 					type="number"
+					min="0"
 					step="0.001"
-					value={mm(machine.cutDepth)}
-					oninput={(e) => setMachine('cutDepth', e.currentTarget.value)}
+					value={mm(machine.cutPast)}
+					oninput={(e) => setMachine('cutPast', e.currentTarget.value)}
 				/>
+				<span class="field-note">Cuts {mm(editor.view.cutDepth)} {unitLabel} deep</span>
 			</label>
 			<label class="field">
 				Score depth ({unitLabel})
@@ -283,8 +292,11 @@
 						oninput={(e) => setMachine('bladeOffset', e.currentTarget.value)}
 					/>
 				</label>
-				<label class="field">
-					Overcut ({unitLabel})
+				<label
+					class="field"
+					title="How far a closed cut runs on past where it started, so its ends meet"
+				>
+					Closing overcut ({unitLabel})
 					<input
 						type="number"
 						step="0.001"
@@ -384,6 +396,12 @@
 			{/if}
 		</div>
 	</CollapsiblePanel>
+
+	<MachinePanel {editor} {link} />
+
+	<SurfaceMapPanel {editor} {link} />
+
+	<RunPanel {editor} {link} />
 
 	<ui.Inspector {editor} />
 </aside>
