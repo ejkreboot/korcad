@@ -16,6 +16,10 @@ export const STORAGE_KEY = 'korcad-draft';
 export const SURFACE_MAP_KEY = 'korcad-surface-map';
 /** How the table is probed: plate thickness and travel height, which belong to the CNC too. */
 export const PROBE_SETTINGS_KEY = 'korcad-probe-settings';
+/** The surface file the map was last opened from or saved to, and what it held. */
+export const SURFACE_FILE_KEY = 'korcad-surface-file';
+/** The material preset file last opened or saved, and what it held. */
+export const MATERIAL_FILE_KEY = 'korcad-material-file';
 export const DESIGN_FORMAT = 'korcad-design';
 /**
  * The document version this build writes, and the only one it reads. There are

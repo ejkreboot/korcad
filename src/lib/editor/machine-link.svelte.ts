@@ -206,6 +206,10 @@ export function createMachineLink(units: () => Units) {
 				unread = unread.filter((point) => point.index !== index);
 			}
 		},
+		/** Forgets the points a run did not reach, once the map they belong to is replaced. */
+		forgetUnread() {
+			unread = [];
+		},
 		async probeEach(
 			points: readonly ProbePoint[],
 			onReading: (index: number, reading: number) => void

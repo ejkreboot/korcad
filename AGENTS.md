@@ -61,7 +61,7 @@ src/lib/
     constants.ts, units.ts
     geometry/    primitives, outline (shapes, holding-tab splitting), contour (distance, containment)
     design/      types, workspace (WorkspaceDataMap), machine (SheetView), profiles, defaults,
-                 normalize, validation (tool settings)
+                 normalize, validation (tool settings), material (preset files)
     cam/         stages, compensation, routing, tabs (router bridges), gcode, simulation,
                  surface (the table's surface map)
     export/      svg, design-file (envelope)
@@ -80,14 +80,14 @@ src/lib/
     flat-parts/    types, view, actions, geometry, validation, manipulation, presets,
                    import (SVG outlines to parts and holes by nesting depth)
   editor/        state.svelte.ts (sole owner of the document), tools, outline-draft, history,
-                 viewport, persistence,
+                 viewport, persistence, text-files (open and save linked files),
                  serial (the Web Serial link), machine-link.svelte.ts (the controller and job for
                  the UI), programs (a sheet's programs, shared by export and Run)
   viewer/        assembly-scene.ts: the only module that imports Three.js
   components/
     editor/      the shell: Canvas, Inspector, Toolbar, SheetTabs, WorkspaceSwitcher,
                  AssemblyViewer, SimulationDialog, CollapsiblePanel, MachinePanel,
-                 SurfaceMapPanel, RunPanel
+                 SurfaceMapPanel, RunPanel, FileLink
     workspaces/  index.ts (UI registry), packaging/, flat-parts/: inspectors, canvas layers, controllers
     icons/       vendored Material Symbols path data, Icon.svelte, and MaskIcon.svelte
 routes/+page.svelte  the editor page
@@ -168,6 +168,17 @@ type DesignState = {
   design. The editor holds it beside the selection, outside the document and undo, and the
   page saves it under its own key (`SURFACE_MAP_KEY`), so a shared design never carries one
   table's shape to another.
+- **Linked files.** The Material and Table surface panels save to and open files of their own
+  (`FileLink.svelte`, `editor/text-files.ts`: the File System Access pickers where present, so
+  Save writes in place, else a file input and a download). A material preset
+  (`core/design/material.ts`, `korcad-material` v1) holds `MaterialSettings` (stock less units
+  and `tabCount`) plus a section per workspace that has a `Workspace.material` hook (packaging:
+  fold allowance); `materialPreset`, `readMaterialFile`, `applyMaterialPreset` are in
+  `features/document.ts`. A surface file (`korcad-table-surface` v1) holds the `SurfaceGrid`,
+  never `enabled`, and opening one keeps the operator's choice. The editor keeps each link
+  (`LinkedFile`: name, handle, what was saved) outside the document and undo, and is unsaved
+  when the current values differ from it; the page stores links under `MATERIAL_FILE_KEY` and
+  `SURFACE_FILE_KEY`, without the handle.
 - A support's height is relational: it names an anchor (`box-floor`, `deck-top`,
   `deck-underside`, or `support-top`) plus an offset, and its height is `fixed` or `span`.
   `resolveSupportHeights` runs in packaging's `reconcile` on every mutation and on import. A drop

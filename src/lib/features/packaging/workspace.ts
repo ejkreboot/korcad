@@ -17,6 +17,7 @@ import { packagingHeaderNotes } from './gcode.js';
 import { resolveSupportHeights } from './levels.js';
 import { allGeometry } from './model.js';
 import { importSvgOpenings } from './import.js';
+import { PACKAGING_MATERIAL } from './material.js';
 import { normalizePackaging } from './normalize.js';
 import { CUTOUT_PRESETS, SUPPORT_PRESETS } from './presets.js';
 import { pocketSheetId } from './regions.js';
@@ -138,6 +139,7 @@ export const PACKAGING_WORKSPACE: Workspace<'packaging'> = {
 	capabilities: { folding: true, assembly: true },
 	// Board is creased and cut with a drag knife; supports cannot be routed.
 	fabricationMode: 'knife',
+	material: PACKAGING_MATERIAL,
 	imports: [
 		{
 			id: 'svg',

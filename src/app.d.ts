@@ -28,6 +28,27 @@ declare global {
 	interface Navigator {
 		readonly serial?: Serial;
 	}
+
+	/**
+	 * The file pickers of the File System Access API, which hand back a file
+	 * that can be written again in place. Only Chromium browsers have them, so
+	 * they are optional and a download stands in elsewhere.
+	 */
+	type FilePickerType = {
+		readonly description: string;
+		readonly accept: Readonly<Record<string, readonly string[]>>;
+	};
+
+	interface Window {
+		showOpenFilePicker?(options?: {
+			readonly types?: readonly FilePickerType[];
+			readonly multiple?: false;
+		}): Promise<FileSystemFileHandle[]>;
+		showSaveFilePicker?(options?: {
+			readonly suggestedName?: string;
+			readonly types?: readonly FilePickerType[];
+		}): Promise<FileSystemFileHandle>;
+	}
 }
 
 export {};

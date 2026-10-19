@@ -1,5 +1,6 @@
 import type { Assembly } from '$lib/core/assembly/model.js';
 import type { GcodeOptions } from '$lib/core/cam/gcode.js';
+import type { MaterialValues } from '$lib/core/design/material.js';
 import type { WorkspaceReader } from '$lib/core/design/normalize.js';
 import { validateMachineSettings } from '$lib/core/design/validation.js';
 import type {
@@ -72,6 +73,20 @@ export type WorkspaceImport = {
 	): { design: DesignState; selection: Selection | null; notice: string };
 };
 
+/**
+ * A workspace's settings that belong to the material rather than the design,
+ * such as how a board's folds are allowed for. They are saved with the
+ * Material panel's own settings in a material preset.
+ */
+export type WorkspaceMaterial = {
+	/** The settings as a preset saves them, or `null` when the document has no data for this workspace. */
+	read(design: DesignState): MaterialValues | null;
+	/** Narrows a preset's section for this workspace. Throws with a message when it is malformed. */
+	parse(value: unknown): MaterialValues;
+	/** The document with a parsed section applied. The workspace's data must be present. */
+	apply(design: DesignState, values: MaterialValues): DesignState;
+};
+
 /** Behaviour a workspace has or lacks outright; absent features are hidden, not disabled. */
 export type WorkspaceCapabilities = {
 	/** Board is creased and folded, so there is a crease program and fold UI. */
@@ -96,6 +111,8 @@ export type Workspace<Id extends WorkspaceId = WorkspaceId> = WorkspaceReader & 
 	readonly fabricationMode: FabricationMode;
 	readonly tools: readonly WorkspaceTool[];
 	readonly imports: readonly WorkspaceImport[];
+	/** Settings of this workspace's that a material preset carries, when it has any. */
+	readonly material?: WorkspaceMaterial;
 	/** The name a sheet added in this workspace gets. */
 	newSheetName(design: DesignState): string;
 	/** The data a document gains when it first uses this workspace, on the sheet `sheetId`. */

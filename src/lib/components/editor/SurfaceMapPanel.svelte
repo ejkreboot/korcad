@@ -2,10 +2,13 @@
 	import { MM_PER_IN } from '$lib/core/constants.js';
 	import {
 		MAX_SURFACE_INSET,
+		parseSurfaceFile,
 		resizeSurfaceMap,
+		serializeSurfaceFile,
 		SURFACE_GRID_MAX,
 		SURFACE_GRID_MIN,
 		surfaceGridPoint,
+		surfaceGrid,
 		surfaceInsetValid,
 		surfaceRange
 	} from '$lib/core/cam/surface.js';
@@ -19,7 +22,15 @@
 	import { round } from '$lib/core/units.js';
 	import type { EditorState } from '$lib/editor/state.svelte.js';
 	import type { MachineLink } from '$lib/editor/machine-link.svelte.js';
+	import {
+		fileNameFor,
+		fileStem,
+		openTextFile,
+		saveTextFile,
+		type TextFileKind
+	} from '$lib/editor/text-files.js';
 	import CollapsiblePanel from './CollapsiblePanel.svelte';
+	import FileLink from './FileLink.svelte';
 
 	let { editor, link }: { editor: EditorState; link: MachineLink } = $props();
 
@@ -41,6 +52,47 @@
 	const axis = (mm: number) => (units === 'in' ? round(mm / MM_PER_IN, 1) : round(mm, 1));
 	const columnX = (column: number) => axis(surfaceGridPoint(map, column, 0).x);
 	const rowY = (row: number) => axis(surfaceGridPoint(map, 0, row).y);
+
+	const SURFACE_FILE: TextFileKind = {
+		description: 'Table surface',
+		suffix: '.korcad-surface.json'
+	};
+	const surfaceStatus = $derived(
+		editor.surfaceFile ? fileStem(editor.surfaceFile.name, SURFACE_FILE) : ''
+	);
+
+	/**
+	 * Measurements are outside undo, so heights that are in no file are only
+	 * replaced once the operator says so.
+	 */
+	async function openSurface(): Promise<void> {
+		const opened = await openTextFile(SURFACE_FILE);
+		if (!opened) return;
+		const grid = parseSurfaceFile(opened.text);
+		const unkept = editor.surfaceFile
+			? editor.surfaceUnsaved
+			: map.heights.some((height) => height !== 0);
+		if (
+			unkept &&
+			!confirm(
+				`Replace the table's heights with those in ${opened.name}? The heights here are not saved to a file.`
+			)
+		) {
+			return;
+		}
+		editor.openSurfaceFile(grid, { name: opened.name, handle: opened.handle });
+		link.forgetUnread();
+	}
+
+	async function saveSurface(saveAs: boolean): Promise<void> {
+		const grid = surfaceGrid(map);
+		const target = editor.surfaceFile ?? {
+			name: fileNameFor('table-surface', SURFACE_FILE),
+			handle: null
+		};
+		const saved = await saveTextFile(serializeSurfaceFile(grid), target, SURFACE_FILE, saveAs);
+		if (saved) editor.setSurfaceFile({ ...saved, saved: grid });
+	}
 
 	/** Moves the grid in from the edges, re-reading each point from the map as it stands. */
 	function setInset(input: HTMLInputElement): void {
@@ -131,7 +183,19 @@
 	}
 </script>
 
-<CollapsiblePanel title="Table surface">
+<CollapsiblePanel
+	title="Table surface"
+	status={surfaceStatus}
+	badge={editor.surfaceUnsaved ? 'unsaved' : ''}
+>
+	<FileLink
+		label="Table surface file"
+		file={editor.surfaceFile}
+		unsaved={editor.surfaceUnsaved}
+		empty="No surface file. Save the heights to keep them, or to use them in another browser."
+		onOpen={openSurface}
+		onSave={saveSurface}
+	/>
 	<label class="check surface-toggle" class:on={map.enabled}>
 		<input
 			type="checkbox"
@@ -218,7 +282,8 @@
 		Programs follow the table relative to X0 Y0 at the bottom left, so set Z zero there before
 		cutting; between the outer points and the sheet's edges they hold the nearest point's height.
 		This table runs from {shown(range.low)} to {shown(range.high)}
-		{unitLabel} against X0 Y0. The map is kept in this browser, not in the design.
+		{unitLabel} against X0 Y0. The map is kept in this browser, not in the design; save it to a file to
+		keep it safe or move it to another browser. Opening one leaves following it on or off as it was.
 	</p>
 
 	{#if snapshot}

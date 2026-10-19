@@ -2,8 +2,18 @@
 	import { display, parseDisplay } from '$lib/core/units.js';
 	import type { MachineSettings, StockSettings } from '$lib/core/design/types.js';
 	import { profileDeletion } from '$lib/core/design/profiles.js';
+	import { serializeMaterialPreset } from '$lib/core/design/material.js';
+	import { readMaterialFile } from '$lib/features/document.js';
+	import {
+		fileNameFor,
+		fileStem,
+		openTextFile,
+		saveTextFile,
+		type TextFileKind
+	} from '$lib/editor/text-files.js';
 	import { workspaceUi } from '$lib/components/workspaces/index.js';
 	import CollapsiblePanel from './CollapsiblePanel.svelte';
+	import FileLink from './FileLink.svelte';
 	import MachinePanel from './MachinePanel.svelte';
 	import RunPanel from './RunPanel.svelte';
 	import SurfaceMapPanel from './SurfaceMapPanel.svelte';
@@ -26,6 +36,39 @@
 	const mm = (value: number) => display(value, units);
 
 	type NumericKey<T> = { [K in keyof T]: T[K] extends number ? K : never }[keyof T];
+
+	const MATERIAL_FILE: TextFileKind = {
+		description: 'Material preset',
+		suffix: '.korcad-material.json'
+	};
+	const materialStatus = $derived(
+		editor.materialFile ? fileStem(editor.materialFile.name, MATERIAL_FILE) : ''
+	);
+
+	/** Opening a preset is one undo step, so it asks nothing first. */
+	async function openMaterial(): Promise<void> {
+		const opened = await openTextFile(MATERIAL_FILE);
+		if (!opened) return;
+		editor.openMaterialPreset(readMaterialFile(opened.text), {
+			name: opened.name,
+			handle: opened.handle
+		});
+	}
+
+	async function saveMaterial(saveAs: boolean): Promise<void> {
+		const preset = editor.material;
+		const target = editor.materialFile ?? {
+			name: fileNameFor(`material-${mm(design.stock.material)}${unitLabel}`, MATERIAL_FILE),
+			handle: null
+		};
+		const saved = await saveTextFile(
+			serializeMaterialPreset(preset),
+			target,
+			MATERIAL_FILE,
+			saveAs
+		);
+		if (saved) editor.setMaterialFile({ ...saved, saved: preset });
+	}
 
 	function setStock(key: NumericKey<StockSettings>, raw: string): void {
 		const value = parseDisplay(raw, units);
@@ -93,7 +136,19 @@
 		</h1>
 	</header>
 
-	<CollapsiblePanel title="Material">
+	<CollapsiblePanel
+		title="Material"
+		status={materialStatus}
+		badge={editor.materialUnsaved ? 'unsaved' : ''}
+	>
+		<FileLink
+			label="Material preset file"
+			file={editor.materialFile}
+			unsaved={editor.materialUnsaved}
+			empty="No preset file. Save these settings to use them in other designs."
+			onOpen={openMaterial}
+			onSave={saveMaterial}
+		/>
 		<div class="form-grid">
 			<label class="field">
 				Thickness ({unitLabel})

@@ -12,11 +12,15 @@
 		designFileText,
 		download,
 		loadDraft,
+		loadMaterialFile,
 		loadProbeSettings,
+		loadSurfaceFile,
 		loadSurfaceMap,
 		readDesignFile,
 		saveDraft,
+		saveMaterialFile,
 		saveProbeSettings,
+		saveSurfaceFile,
 		saveSurfaceMap,
 		slugify
 	} from '$lib/editor/persistence.js';
@@ -55,6 +59,8 @@
 	onMount(() => {
 		const surfaceMap = loadSurfaceMap();
 		if (surfaceMap) editor.setSurfaceMap(surfaceMap);
+		editor.setSurfaceFile(loadSurfaceFile());
+		editor.setMaterialFile(loadMaterialFile());
 		const probeSettings = loadProbeSettings();
 		if (probeSettings) link.setProbeSettings(probeSettings);
 		const draft = loadDraft();
@@ -70,6 +76,14 @@
 
 	$effect(() => {
 		saveSurfaceMap(editor.surfaceMap);
+	});
+
+	$effect(() => {
+		saveSurfaceFile(editor.surfaceFile);
+	});
+
+	$effect(() => {
+		saveMaterialFile(editor.materialFile);
 	});
 
 	$effect(() => {

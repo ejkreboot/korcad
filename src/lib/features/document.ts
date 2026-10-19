@@ -3,6 +3,13 @@ import {
 	createStockMachineProfile,
 	DEFAULT_MACHINE_PROFILE_ID
 } from '$lib/core/design/defaults.js';
+import {
+	materialSettings,
+	unwrapMaterialFile,
+	withMaterialSettings,
+	type MaterialPreset,
+	type MaterialValues
+} from '$lib/core/design/material.js';
 import { normalizeDocument } from '$lib/core/design/normalize.js';
 import type { DesignState, Sheet } from '$lib/core/design/types.js';
 import type { WorkspaceId } from '$lib/core/design/workspace.js';
@@ -74,4 +81,52 @@ export function normalizeState(raw: unknown): DesignState {
 /** Reads a saved design file of the current version. */
 export function parseDesign(text: string): DesignState {
 	return normalizeState(unwrapDesignFile(text));
+}
+
+/**
+ * The design's material as a preset would save it. A section of `carried`, the
+ * preset last opened or saved, for a workspace this design has no data for is
+ * kept as it was, so saving a preset from a design without that workspace
+ * never drops what the file said about it.
+ */
+export function materialPreset(
+	design: DesignState,
+	carried: MaterialPreset | null
+): MaterialPreset {
+	const workspaces: Record<string, MaterialValues> = { ...carried?.workspaces };
+	for (const workspace of WORKSPACES) {
+		const values = workspace.material?.read(design);
+		if (values) workspaces[workspace.id] = values;
+	}
+	return { stock: materialSettings(design.stock), workspaces };
+}
+
+/** Reads a material preset file, each workspace's section by that workspace. */
+export function readMaterialFile(text: string): MaterialPreset {
+	const file = unwrapMaterialFile(text);
+	const workspaces: Record<string, MaterialValues> = {};
+	for (const [id, section] of Object.entries(file.workspaces)) {
+		const workspace = WORKSPACES.find((candidate) => candidate.id === id);
+		if (!workspace?.material) {
+			throw new Error(`Material preset: this build has no ${id} material settings.`);
+		}
+		workspaces[id] = workspace.material.parse(section);
+	}
+	return { stock: file.stock, workspaces };
+}
+
+/**
+ * The design cut from a preset's material. A section for a workspace the
+ * design does not use has nowhere to go, so it is left out, not invented.
+ */
+export function applyMaterialPreset(design: DesignState, preset: MaterialPreset): DesignState {
+	return WORKSPACES.reduce(
+		(next, workspace) => {
+			const values = preset.workspaces[workspace.id];
+			return values && workspace.material && next.workspaces[workspace.id] !== undefined
+				? workspace.material.apply(next, values)
+				: next;
+		},
+		{ ...design, stock: withMaterialSettings(design.stock, preset.stock) }
+	);
 }

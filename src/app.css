@@ -21,6 +21,8 @@
 	--ok-ink: #2f5c4a;
 	--error-bg: #f7e6e0;
 	--error-ink: #8a3427;
+	--warn-bg: #f5ecd2;
+	--warn-ink: #6f5310;
 
 	--cut: #cc4b37;
 	--score-down: #1673a3;
@@ -936,4 +938,66 @@ input[type='number'] {
 	.drawing {
 		min-height: 380px;
 	}
+}
+
+/* ---- linked files (material presets, table surfaces) ---- */
+
+.file-link {
+	margin-bottom: 14px;
+	padding-bottom: 14px;
+	border-bottom: 1px solid var(--line);
+}
+
+.file-link-name {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 4px 8px;
+	margin: 0 0 8px;
+	font-size: 12px;
+}
+
+/* A long file name is cut short rather than widening the sidebar; its title holds it whole. */
+.file-link-file {
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	font-family: var(--mono);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.file-link-none {
+	color: var(--ink-soft);
+}
+
+.file-link-unsaved,
+.panel-badge {
+	padding: 1px 6px;
+	border-radius: 999px;
+	background: var(--warn-bg);
+	color: var(--warn-ink);
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.file-link-error {
+	margin-top: 8px;
+	background: var(--error-bg);
+	color: var(--error-ink);
+}
+
+.panel-badge {
+	flex: none;
+	padding: 0 6px;
+}
+
+.panel-status {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--ink-soft);
+	font-size: 11px;
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }

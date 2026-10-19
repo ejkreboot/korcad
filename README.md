@@ -58,6 +58,8 @@ UPDATE_GOLDEN=1 npm run test:unit
 ## Features
 
 - design files: versioned, validated on import, with local drafts
+- material presets and table surfaces saved to files of their own and opened
+  again, with the file named and unsaved changes flagged
 - Folded Packaging: fold allowance and bend deduction; pocket, perimeter (plain,
   folded, joist), tray, riser, and platform geometry; supports anchored to real
   surfaces; a Three.js assembly preview
@@ -174,7 +176,8 @@ inset from 0 to 2 in, and programs hold the outer points' heights out to the
 edges. With the map on, every depth in an exported or
 simulated program follows the table relative to X0 Y0, so set Z zero there
 before cutting; cuts are split into short moves so their depth follows the table
-between points. The map is kept in the browser rather than in the design, and
+between points. The map is kept in the browser rather than in the design (save it to a file to
+keep it; see below), and
 export is blocked if it spans more than 3 mm, which is likelier a typo than a
 table, or if the table rises into a tool's safe Z.
 
@@ -214,7 +217,21 @@ Feeds, plunge feed, and spindle speed are set in the Tool
 panel, in the document's units per minute. Cuts go through the material: the
 Tool panel sets how far past it they reach (Cut past material, into the mat or
 spoilboard), so cut depth follows the material thickness set in the Material
-panel. A
+panel.
+
+The Material panel can save its settings to a preset file (`.korcad-material.json`)
+and open one into any design: thickness, minimum web, tab width and thickness,
+grain, and, for packaging, board appearance and fold allowance. Display units
+are left as they are. The panel names the preset it was last opened from or
+saved to, and its header says **unsaved** once the settings differ from it;
+opening a preset is one undo step. In Chrome or Edge, Save writes back to that
+same file; elsewhere it downloads a copy. The Table surface panel saves and
+opens its grid and heights the same way (`.korcad-surface.json`), to keep a
+measured table safe or use it in another browser. Opening one asks first if the
+heights it replaces are in no file, and leaves following the map on or off as
+it was.
+
+A
 sheet gets a separate crease program only when something on it is creased from
 the back. Export is blocked while validation reports a problem, including an
 unsafe setting on any tool a sheet uses. A preview is not proof

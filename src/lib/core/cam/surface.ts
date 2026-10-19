@@ -295,28 +295,13 @@ export function serializeSurfaceMap(map: SurfaceMap): string {
 	return JSON.stringify({ format: SURFACE_MAP_FORMAT, version: SURFACE_MAP_VERSION, ...map });
 }
 
-/**
- * A stored map, or `null` when the text is not one this build writes. A map
- * that cannot be read is dropped rather than repaired, so the operator
- * measures again instead of cutting on a guess.
- */
-export function parseSurfaceMap(text: string): SurfaceMap | null {
-	let value: unknown;
-	try {
-		value = JSON.parse(text);
-	} catch {
-		return null;
-	}
-	if (typeof value !== 'object' || value === null) return null;
-	const record: Record<string, unknown> = { ...value };
-	const { format, version, enabled, columns, rows, inset, heights } = record;
-	if (format !== SURFACE_MAP_FORMAT || version !== SURFACE_MAP_VERSION) return null;
-	if (
-		typeof enabled !== 'boolean' ||
-		typeof columns !== 'number' ||
-		typeof rows !== 'number' ||
-		typeof inset !== 'number'
-	) {
+/** The measured part of a map: its grid and heights, without whether programs follow it. */
+export type SurfaceGrid = Omit<SurfaceMap, 'enabled'>;
+
+/** The grid of a stored map or a surface file, or `null` when it is not one this build can use. */
+function readGrid(record: Readonly<Record<string, unknown>>): SurfaceGrid | null {
+	const { columns, rows, inset, heights } = record;
+	if (typeof columns !== 'number' || typeof rows !== 'number' || typeof inset !== 'number') {
 		return null;
 	}
 	if (!gridSize(columns) || !gridSize(rows) || !surfaceInsetValid(inset)) return null;
@@ -326,5 +311,81 @@ export function parseSurfaceMap(text: string): SurfaceMap | null {
 		(height): height is number => typeof height === 'number' && Number.isFinite(height)
 	);
 	if (numbers.length !== columns * rows || numbers.length !== readings.length) return null;
-	return { enabled, columns, rows, inset, heights: numbers };
+	return { columns, rows, inset, heights: numbers };
+}
+
+function readRecord(text: string): Readonly<Record<string, unknown>> | null {
+	let value: unknown;
+	try {
+		value = JSON.parse(text);
+	} catch {
+		return null;
+	}
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+	return { ...value };
+}
+
+/**
+ * A stored map, or `null` when the text is not one this build writes. A map
+ * that cannot be read is dropped rather than repaired, so the operator
+ * measures again instead of cutting on a guess.
+ */
+export function parseSurfaceMap(text: string): SurfaceMap | null {
+	const record = readRecord(text);
+	if (!record) return null;
+	if (record.format !== SURFACE_MAP_FORMAT || record.version !== SURFACE_MAP_VERSION) return null;
+	if (typeof record.enabled !== 'boolean') return null;
+	const grid = readGrid(record);
+	return grid && { enabled: record.enabled, ...grid };
+}
+
+/**
+ * A table's measurements saved to a file, to keep or to share between
+ * browsers driving the same machine. Whether programs follow the map is the
+ * operator's choice at the machine, so it is not in the file, and opening one
+ * never switches following on or off.
+ */
+export const SURFACE_FILE_FORMAT = 'korcad-table-surface';
+export const SURFACE_FILE_VERSION = 1;
+
+export function surfaceGrid(map: SurfaceGrid): SurfaceGrid {
+	return { columns: map.columns, rows: map.rows, inset: map.inset, heights: [...map.heights] };
+}
+
+export function serializeSurfaceFile(map: SurfaceGrid, savedAt = new Date().toISOString()): string {
+	return JSON.stringify(
+		{ format: SURFACE_FILE_FORMAT, version: SURFACE_FILE_VERSION, savedAt, ...surfaceGrid(map) },
+		null,
+		2
+	);
+}
+
+/** Reads a surface file, refusing one it cannot use whole rather than cutting on part of it. */
+export function parseSurfaceFile(text: string): SurfaceGrid {
+	const record = readRecord(text);
+	if (!record || record.format !== SURFACE_FILE_FORMAT) {
+		throw new Error('This is not a KorCad table surface file.');
+	}
+	if (record.version !== SURFACE_FILE_VERSION) {
+		throw new Error(
+			`This table surface file is version ${String(record.version)}; this build reads version ${SURFACE_FILE_VERSION}.`
+		);
+	}
+	const grid = readGrid(record);
+	if (!grid) {
+		throw new Error(
+			`This table surface file needs a ${SURFACE_GRID_MIN} to ${SURFACE_GRID_MAX} point grid each way, an inset of 0 to ${MAX_SURFACE_INSET} mm, and a height at every point.`
+		);
+	}
+	return grid;
+}
+
+export function sameSurfaceGrid(a: SurfaceGrid, b: SurfaceGrid): boolean {
+	return (
+		a.columns === b.columns &&
+		a.rows === b.rows &&
+		a.inset === b.inset &&
+		a.heights.length === b.heights.length &&
+		a.heights.every((height, index) => height === b.heights[index])
+	);
 }

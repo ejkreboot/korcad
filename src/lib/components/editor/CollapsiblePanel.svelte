@@ -11,9 +11,19 @@
 	 */
 	let {
 		title,
+		status = '',
+		badge = '',
 		initiallyOpen = false,
 		children
-	}: { title: string; initiallyOpen?: boolean; children: Snippet } = $props();
+	}: {
+		title: string;
+		/** A word on the panel's state, shown beside its title so it is seen while folded. */
+		status?: string;
+		/** A short flag after the status, such as "unsaved", that is never cut short. */
+		badge?: string;
+		initiallyOpen?: boolean;
+		children: Snippet;
+	} = $props();
 
 	// The panel owns its open state from here on: the prop is a starting point,
 	// not a binding, so a re-render never folds a panel the operator opened.
@@ -31,6 +41,9 @@
 			<Icon name="expand_more" size={18} />
 			<span>{title}</span>
 		</button>
+		<!-- Beside the toggle rather than in it, so the toggle keeps the panel's name. -->
+		{#if status}<span class="panel-status">{status}</span>{/if}
+		{#if badge}<span class="panel-badge">{badge}</span>{/if}
 	</h2>
 	{#if expanded}
 		<div class="panel-body">{@render children()}</div>
@@ -40,6 +53,9 @@
 <style>
 	/* A collapsed panel is just its header, so it loses the body's spacing. */
 	.collapsible h2 {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
 		margin: 0;
 	}
 
@@ -50,8 +66,10 @@
 	.collapse-toggle {
 		display: flex;
 		align-items: center;
+		/* The toggle takes what the status leaves, so the status is only cut short when it must be. */
+		flex: 1 1 0;
 		gap: 6px;
-		width: 100%;
+		min-width: max-content;
 		padding: 0;
 		border: 0;
 		background: none;

@@ -6,9 +6,14 @@ import {
 	createSurfaceMap,
 	DEFAULT_SURFACE_INSET,
 	MAX_SURFACE_SPREAD,
+	parseSurfaceFile,
 	parseSurfaceMap,
 	resizeSurfaceMap,
+	sameSurfaceGrid,
+	serializeSurfaceFile,
 	serializeSurfaceMap,
+	SURFACE_FILE_FORMAT,
+	surfaceGrid,
 	SURFACE_STEP,
 	surfaceGridPoint,
 	surfaceHeight,
@@ -266,5 +271,41 @@ describe('storing a surface map', () => {
 		]) {
 			expect(parseSurfaceMap(text)).toBeNull();
 		}
+	});
+});
+
+describe('a surface file', () => {
+	it('reads back the grid it wrote, without whether programs follow it', () => {
+		const map = { ...mapOf(tilted, 4, 2, 10), enabled: true };
+		const text = serializeSurfaceFile(map);
+		const file = JSON.parse(text) as Record<string, unknown>;
+		expect(file.format).toBe(SURFACE_FILE_FORMAT);
+		expect(file).not.toHaveProperty('enabled');
+		expect(parseSurfaceFile(text)).toEqual(surfaceGrid(map));
+	});
+
+	it('is refused whole when it is not one this build can cut on', () => {
+		const good = JSON.parse(serializeSurfaceFile(mapOf(tilted))) as Record<string, unknown>;
+		for (const [text, message] of [
+			['not json', /not a KorCad table surface file/],
+			[serializeSurfaceMap(mapOf(tilted)), /not a KorCad table surface file/],
+			[JSON.stringify({ ...good, version: 2 }), /version 2; this build reads version 1/],
+			[JSON.stringify({ ...good, columns: 9 }), /point grid each way/],
+			[JSON.stringify({ ...good, inset: -1 }), /point grid each way/],
+			[JSON.stringify({ ...good, heights: [1, 2, 3] }), /height at every point/]
+		] as const) {
+			expect(() => parseSurfaceFile(text)).toThrow(message);
+		}
+	});
+
+	it('matches a map exactly when every height does, whether or not it is followed', () => {
+		const map = mapOf(tilted);
+		expect(sameSurfaceGrid(map, { ...surfaceGrid(map) })).toBe(true);
+		const followed: SurfaceMap = { ...map, enabled: !map.enabled };
+		expect(sameSurfaceGrid(followed, surfaceGrid(map))).toBe(true);
+		const heights = [...map.heights];
+		heights[4] = (heights[4] ?? 0) + 0.001;
+		expect(sameSurfaceGrid(map, { ...map, heights })).toBe(false);
+		expect(sameSurfaceGrid(map, resizeSurfaceMap(map, 3, 3, 20))).toBe(false);
 	});
 });

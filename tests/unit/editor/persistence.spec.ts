@@ -6,7 +6,17 @@ import {
 	STORAGE_KEY,
 	SURFACE_MAP_KEY
 } from '$lib/core/constants.js';
-import { loadDraft, loadSurfaceMap, saveDraft, saveSurfaceMap } from '$lib/editor/persistence.js';
+import {
+	loadDraft,
+	loadMaterialFile,
+	loadSurfaceFile,
+	loadSurfaceMap,
+	saveDraft,
+	saveMaterialFile,
+	saveSurfaceFile,
+	saveSurfaceMap
+} from '$lib/editor/persistence.js';
+import { materialPreset } from '$lib/features/document.js';
 import { foldedDesign } from '../../support/designs.js';
 
 /**
@@ -21,7 +31,8 @@ beforeEach(() => {
 	const store = new Map<string, string>();
 	vi.stubGlobal('localStorage', {
 		getItem: (key: string) => store.get(key) ?? null,
-		setItem: (key: string, value: string) => store.set(key, value)
+		setItem: (key: string, value: string) => store.set(key, value),
+		removeItem: (key: string) => store.delete(key)
 	});
 });
 
@@ -75,5 +86,34 @@ describe('the table surface map', () => {
 		expect(loadSurfaceMap()).toBeNull();
 		localStorage.setItem(SURFACE_MAP_KEY, '{"format":"korcad-surface-map","version":0}');
 		expect(loadSurfaceMap()).toBeNull();
+	});
+});
+
+describe('linked files', () => {
+	it('remember the file a material or surface came from, and what it held', () => {
+		const preset = materialPreset(foldedDesign(), null);
+		saveMaterialFile({ name: 'birch.korcad-material.json', handle: null, saved: preset });
+		expect(loadMaterialFile()).toEqual({
+			name: 'birch.korcad-material.json',
+			handle: null,
+			saved: preset
+		});
+		const grid = { columns: 2, rows: 2, inset: 10, heights: [0, 0.1, -0.2, 0.05] };
+		saveSurfaceFile({ name: 'table.korcad-surface.json', handle: null, saved: grid });
+		expect(loadSurfaceFile()).toEqual({
+			name: 'table.korcad-surface.json',
+			handle: null,
+			saved: grid
+		});
+	});
+
+	it('forget it once unlinked, and drop what they cannot read', () => {
+		saveMaterialFile({ name: 'a.json', handle: null, saved: materialPreset(foldedDesign(), null) });
+		saveMaterialFile(null);
+		expect(loadMaterialFile()).toBeNull();
+		localStorage.setItem('korcad-surface-file', JSON.stringify({ name: 'a.json', text: '{}' }));
+		expect(loadSurfaceFile()).toBeNull();
+		localStorage.setItem('korcad-material-file', 'not json');
+		expect(loadMaterialFile()).toBeNull();
 	});
 });

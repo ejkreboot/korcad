@@ -7,7 +7,15 @@ import type {
 } from '$lib/core/design/types.js';
 import type { Selection, WorkspaceId } from '$lib/core/design/workspace.js';
 import { machineProfileFor, referencedProfiles, sheetView } from '$lib/core/design/machine.js';
-import { createSurfaceMap, surfaceMapErrors, type SurfaceMap } from '$lib/core/cam/surface.js';
+import {
+	createSurfaceMap,
+	sameSurfaceGrid,
+	surfaceGrid,
+	surfaceMapErrors,
+	type SurfaceGrid,
+	type SurfaceMap
+} from '$lib/core/cam/surface.js';
+import { sameMaterialPreset, type MaterialPreset } from '$lib/core/design/material.js';
 import {
 	addProfile,
 	addStockProfile,
@@ -16,7 +24,11 @@ import {
 	duplicateProfile,
 	setFabricationMode
 } from '$lib/core/design/profiles.js';
-import { createDefaultDesign } from '$lib/features/document.js';
+import {
+	applyMaterialPreset,
+	createDefaultDesign,
+	materialPreset
+} from '$lib/features/document.js';
 import {
 	activeSheet,
 	activeWorkspace,
@@ -27,6 +39,7 @@ import {
 	workspaceById
 } from '$lib/features/workspaces.js';
 import { createHistory } from './history.js';
+import type { LinkedFile, SavedFile } from './text-files.js';
 
 const newId = () => crypto.randomUUID();
 
@@ -58,6 +71,11 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 	// The table's surface belongs to the CNC, not the document: like the
 	// selection it is never in a design file or an undo step.
 	let surfaceMap = $state<SurfaceMap>(createSurfaceMap());
+	// The files the material and the table's surface were last opened from or
+	// saved to. They name a file on this computer, so they are kept beside the
+	// selection rather than in the document, and undo leaves them be.
+	let materialFile = $state.raw<LinkedFile<MaterialPreset> | null>(null);
+	let surfaceFile = $state.raw<LinkedFile<SurfaceGrid> | null>(null);
 	const history = createHistory(initial);
 	// History lives outside the reactive graph, so its availability is mirrored
 	// here whenever a command runs.
@@ -78,6 +96,8 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 	 * this is what they are handed.
 	 */
 	const view = $derived(sheetView(design));
+	/** The material as a preset would save it, carrying the linked file's sections this design has no use for. */
+	const material = $derived(materialPreset(design, materialFile?.saved ?? null));
 	const machine = $derived(machineProfileFor(design, design.activeSheetId));
 	/**
 	 * A selection is only reported while the thing it names exists, so an undo
@@ -163,6 +183,50 @@ export function createEditorState(initial: DesignState = createDefaultDesign()) 
 		},
 		setSurfaceMap(next: SurfaceMap) {
 			surfaceMap = next;
+		},
+		/** The surface file the map was last opened from or saved to. */
+		get surfaceFile() {
+			return surfaceFile;
+		},
+		/** Whether the map's measurements differ from the file they were last opened from or saved to. */
+		get surfaceUnsaved() {
+			return surfaceFile !== null && !sameSurfaceGrid(surfaceMap, surfaceFile.saved);
+		},
+		setSurfaceFile(next: LinkedFile<SurfaceGrid> | null) {
+			surfaceFile = next;
+		},
+		/**
+		 * Takes a surface file's measurements. Whether programs follow the map
+		 * stays as the operator left it.
+		 */
+		openSurfaceFile(grid: SurfaceGrid, file: SavedFile) {
+			surfaceMap = { enabled: surfaceMap.enabled, ...surfaceGrid(grid) };
+			surfaceFile = { ...file, saved: surfaceGrid(grid) };
+		},
+
+		/** The design's material as a preset would save it. */
+		get material() {
+			return material;
+		},
+		get materialFile() {
+			return materialFile;
+		},
+		/** Whether the material differs from the preset file it was last opened from or saved to. */
+		get materialUnsaved() {
+			return materialFile !== null && !sameMaterialPreset(material, materialFile.saved);
+		},
+		setMaterialFile(next: LinkedFile<MaterialPreset> | null) {
+			materialFile = next;
+		},
+		/**
+		 * Cuts the design from a preset's material, as one undo step. What the
+		 * file is then said to hold is the material as it now stands, so a
+		 * design with a workspace the file had no settings for does not open
+		 * already unsaved.
+		 */
+		openMaterialPreset(preset: MaterialPreset, file: SavedFile) {
+			apply(applyMaterialPreset(design, preset));
+			materialFile = { ...file, saved: materialPreset(design, preset) };
 		},
 
 		/** Changes the document as one undo step. */
